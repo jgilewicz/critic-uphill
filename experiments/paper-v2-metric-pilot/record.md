@@ -1,6 +1,6 @@
 # paper-v2 pilot metryki: champion populacji vs aktor RL
 
-- **Status:** 18 runów wysłane 2026-11-14 (commit `da290cd`). Dodane `pop/champion_fitness`, test zgodności PASS ponownie.
+- **Status:** done, 18/18 COMPLETED (2026-11-15). Raport: https://claude.ai/code/artifact/6cc607bc-67ff-44cd-b9c5-1aee7043a9c0. Decyzja o kroku B czeka na użytkownika.
 - **Account:** `hpc-jakgil6519-1780267238`
 - **Prerejestracja:** 2026-11-14, przed pierwszym runem pilota
 - **Spec:** `experiment.toml`
@@ -48,3 +48,25 @@
 - Raport: eval_rl, eval_champion, eval_best w czasie i na końcu, udział ewaluacji z champion > RL, porównanie z td3 w obu metrykach (td3: `eval_rl` z istniejących runów).
 - Wynik główny: `eval_rl` i `eval_champion` osobno. `eval_best` tylko jako odpowiednik metryki z literatury, z adnotacją: maksimum z dwóch zaszumionych ocen (5 epizodów aktora, 10 championa), więc zawyżone względem td3 z jedną oceną.
 - Trafność wyboru championa: obok `eval_champion` fitness treningowy championa z tej samej generacji (`pop/champion_fitness`), per warunek.
+
+## Wyniki (2026-11-15)
+
+- 18/18 COMPLETED, exit 0. Koszt 38.3 GPU-h, 153.1 CPU-h (szacunek ~25 / ~100, champion oceniany co generację w erl).
+- Raport: https://claude.ai/code/artifact/6cc607bc-67ff-44cd-b9c5-1aee7043a9c0 (`fetch.py`, `analyze.py`, `report_template.html`).
+- Średnie z 900k-1M kroków, seedy 0-2:
+
+| env | warunek | eval_rl | eval_champion | różnica | seedy | fitness championa | ρ | eval_best* | werdykt |
+|---|---|---|---|---|---|---|---|---|---|
+| Swimmer | erl | 116.9 | 185.7 | +59% | 2/3 | 190.6 | 0.94 | 187.4 | niejednoznaczne |
+| Swimmer | prefix-h200 | 104.5 | 107.5 | +3% | 2/3 | 53.6 (200 kroków) | 0.72 | 109.3 | ≈ |
+| Swimmer | sc_erl-random | 90.5 | 88.9 | −2% | 0/3 | 146.8 | 0.69 | 91.3 | ≈ |
+| Ant | erl | 2840 | 2475 | −13% | 0/3 | 2714 | 0.92 | 2987 | champion < RL |
+| Ant | prefix-h200 | 4747 | 4682 | −1% | 1/3 | 960 (200 kroków) | 0.92 | 4871 | ≈ |
+| Ant | sc_erl-random | 3463 | 3433 | −1% | 0/3 | 5048 | 0.81 | 3547 | ≈ |
+
+- \* eval_best = max z dwóch zaszumionych ocen, zawyżone względem td3. Tylko jako odpowiednik metryki z literatury.
+- td3 (eval_rl, te same seedy): Swimmer 105.3, Ant 3707.5.
+- Swimmer erl: reguła „wyraźnie >” formalnie niespełniona (2/3). s0 remis (129.4 vs 129.6), s1 264.8 vs 66.2.
+- Ant: champion nie przewyższa RL w żadnym wariancie, wyniki grupy łatwej zostają ważne.
+- sc_erl-random: fitness championa powyżej jego oceny (Swimmer 146.8 vs 88.9, Ant 5048 vs 3433), krytyk zawyża.
+- Ten sam seed i kod, inna realizacja na GPU: erl Swimmer eval_rl 116.9 vs 139.0 (etap A), erl Ant 2840 vs 3417, prefix-h200 Ant 4747 vs 4192.

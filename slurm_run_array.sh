@@ -7,7 +7,8 @@
 #   core             erl, sc_erl-random, prefix-h200, prefix-td, hboot-td  array 0-49
 #   controls         td3 (rl_only, no population), sc_erl-always             array 0-19
 #   ablation-horizon prefix-h100, prefix-h400, prefix-h800                  array 0-29
-#   all              core + controls + ablation-horizon                     array 0-99
+#   config-check     erl-evorainbow (pop 5, ea_tau 0.3, RL->EA every gen)    array 0-9
+#   all              core + controls + ablation-horizon (not config-check)  array 0-99
 #
 # Example usage:
 #   TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
@@ -49,13 +50,18 @@ ABLATION_HORIZON=(
   "prefix-h400|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=400"
   "prefix-h800|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=800"
 )
+# EvoRainbow-style gene flow on full ERL; gamma kept at 0.99 for td3 parity
+CONFIG_CHECK=(
+  "erl-evorainbow|algorithm=erl algorithm.eval_mode=full algorithm.pop_size=5 algorithm.ea_tau=0.3 algorithm.rl_to_ea_sync_period=1"
+)
 case "${SUITE}" in
 core) CONDITIONS=("${CORE[@]}") ;;
 controls) CONDITIONS=("${CONTROLS[@]}") ;;
 ablation-horizon) CONDITIONS=("${ABLATION_HORIZON[@]}") ;;
+config-check) CONDITIONS=("${CONFIG_CHECK[@]}") ;;
 all) CONDITIONS=("${CORE[@]}" "${CONTROLS[@]}" "${ABLATION_HORIZON[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose from: core, controls, ablation-horizon, all" >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose from: core, controls, ablation-horizon, config-check, all" >&2
   exit 1
   ;;
 esac
