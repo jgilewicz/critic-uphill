@@ -9,11 +9,11 @@ shift
 }
 
 case "${suite}" in
-core) array=0-49 ;;
+core) array=0-29 ;;
 controls) array=0-19 ;;
 ablation-horizon) array=0-29 ;;
 config-check) array=0-9 ;;
-all) array=0-99 ;;
+all) array=0-79 ;;
 *)
   echo "unknown suite '${suite}'" >&2
   exit 1

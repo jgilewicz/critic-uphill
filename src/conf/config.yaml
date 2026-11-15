@@ -2,7 +2,10 @@ defaults:
   - algorithm: erl
   - _self_
 
+# metric protocol, logged with the run: 3 = refactor-b knobs + div/* metrics
+protocol: 3
 seed: 0
+
 total_steps: 1_000_000
 n_envs: 1
 device: auto

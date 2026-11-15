@@ -93,24 +93,8 @@ def heads_policy(
     return jax.vmap(lambda head, zi: head(zi))(heads, z)
 
 
-def evaluate_heads(
-    vec_env: gym.vector.VectorEnv,
-    key: jax.Array,
-    embedding: SharedStateEmbedding,
-    heads: ActorHead,
-    horizon: int,
-) -> np.ndarray:
-    # heads: (n,)-stacked ActorHead; vec_env holds n * episodes envs, one
-    # deterministic episode per env, grouped by head
-    n_heads = jax.tree.leaves(heads)[0].shape[0]
-    episodes = vec_env.num_envs // n_heads
-    repeated = jax.tree.map(
-        lambda x: jnp.repeat(x, episodes, axis=0) if eqx.is_array(x) else x,
-        heads,
-    )
-
-    def policy(act_key: jax.Array, states: jnp.ndarray) -> jnp.ndarray:
-        return heads_policy(embedding, repeated, states)
-
-    returns, _ = collect_parallel_episode(vec_env, key, policy, None, horizon)
-    return np.asarray(returns).reshape(n_heads, episodes).mean(axis=1)
+@eqx.filter_jit
+def stacked_policy(
+    embeddings: SharedStateEmbedding, heads: ActorHead, states: jnp.ndarray
+) -> jnp.ndarray:
+    return jax.vmap(lambda e, h, s: h(e(s)))(embeddings, heads, states)

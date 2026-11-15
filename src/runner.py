@@ -8,95 +8,50 @@ import wandb
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.callbacks import CallbackList, EvalCallback
 
-from algos.erl import ERLConfig
-from algos.erl import evaluate_actor as evaluate_erl_actor
+from algos.erl import (
+    CEMConfig,
+    EAToRLConfig,
+    ERLConfig,
+    EvalConfig,
+    RLConfig,
+    RLToEAConfig,
+    evaluate_policy,
+)
 from algos.erl import train as train_erl
 from baselines.agents import build_agent
 from baselines.envs import build_vec_env
 from baselines.wandb_logging import WandbLoggingCallback
 
 
-def _erl_kwargs(cfg: DictConfig) -> dict[str, Any]:
-    algo_cfg = cfg.algorithm
-    horizon = int(algo_cfg.horizon)
-    pop_size = int(algo_cfg.pop_size)
-    kwargs = dict(
+def _erl_config(cfg: DictConfig) -> ERLConfig:
+    # unknown keys raise TypeError in the dataclass constructors
+    algo = cast(
+        "dict[str, Any]", OmegaConf.to_container(cfg.algorithm, resolve=True)
+    )
+    algo.pop("name")
+    rl = algo.pop("rl")
+    rl["critic_hidden_dims"] = tuple(rl["critic_hidden_dims"])
+    return ERLConfig(
         env_name=cfg.env.id,
         seed=cfg.seed,
         step_budget=int(cfg.total_steps),
-        horizon=horizon,
-        async_env=algo_cfg.async_env,
-        pop_size=pop_size,
-        embedding_dim=algo_cfg.embedding_dim,
-        sigma_init=algo_cfg.sigma_init,
-        damp=algo_cfg.damp,
-        damp_limit=algo_cfg.damp_limit,
-        elitism=algo_cfg.elitism,
-        critic_hidden_dims=tuple(algo_cfg.critic_hidden_dims),
-        gamma=algo_cfg.gamma,
-        tau=algo_cfg.tau,
-        policy_noise=algo_cfg.policy_noise,
-        noise_clip=algo_cfg.noise_clip,
-        policy_freq=algo_cfg.policy_freq,
-        exploration_noise=algo_cfg.exploration_noise,
-        actor_lr=algo_cfg.actor_lr,
-        critic_lr=algo_cfg.critic_lr,
-        batch_size=algo_cfg.batch_size,
-        buffer_capacity=algo_cfg.buffer_capacity,
-        warmup_steps=algo_cfg.warmup_steps,
-        train_ratio=algo_cfg.train_ratio,
-        rl_to_ea_sync_period=algo_cfg.rl_to_ea_sync_period,
-        ea_tau=algo_cfg.ea_tau,
-        eval_mode=str(algo_cfg.get("eval_mode", "full")),
-        prefix_steps=int(algo_cfg.prefix_steps)
-        if algo_cfg.get("prefix_steps") is not None
-        else None,
-        omega=float(algo_cfg.get("omega", 0.79)),
-        k_ensembles=int(algo_cfg.get("k_ensembles", 5)),
-        surrogate_batch=int(algo_cfg.get("surrogate_batch", 1024)),
-        epsilon=float(algo_cfg.get("epsilon", 0.142)),
-        mad_k=float(algo_cfg.get("mad_k", 2.483)),
-        beta=float(algo_cfg.get("beta", 0.432)),
-        beta_lr=float(algo_cfg.get("beta_lr", 1e-3)),
-        semarl_alpha=float(algo_cfg.get("semarl_alpha", 1.0)),
-        semarl_beta=float(algo_cfg.get("semarl_beta", 1.0)),
-        semarl_p_min=float(algo_cfg.get("semarl_p_min", 0.0)),
-        semarl_p_max=float(algo_cfg.get("semarl_p_max", 0.9)),
-        semarl_ema_decay=float(algo_cfg.get("semarl_ema_decay", 0.1)),
-        shadow_interval=int(algo_cfg.get("shadow_interval", 10)),
-        eval_env_name=cfg.eval_env.id,
-        eval_interval=int(cfg.eval.interval),
-        eval_episodes=int(cfg.eval.episodes),
+        cem=CEMConfig(**algo.pop("cem")),
+        rl=RLConfig(**rl),
+        rl_to_ea=RLToEAConfig(**algo.pop("rl_to_ea")),
+        ea_to_rl=EAToRLConfig(**algo.pop("ea_to_rl")),
+        eval=EvalConfig(**algo.pop("eval")),
+        perf_env=cfg.eval_env.id,
+        perf_interval=int(cfg.eval.interval),
+        perf_episodes=int(cfg.eval.episodes),
+        **algo,
     )
-    # Filter against ERLConfig fields
-    valid_fields = set(ERLConfig.__dataclass_fields__.keys())
-    return {k: v for k, v in kwargs.items() if k in valid_fields}
 
 
 def _run_erl(cfg: DictConfig) -> float:
-    td3_state = train_erl(
-        ERLConfig(**_erl_kwargs(cfg)), on_generation=wandb.log
-    )
-    return evaluate_erl_actor(
+    policy = train_erl(_erl_config(cfg), on_generation=wandb.log)
+    return evaluate_policy(
         cfg.eval_env.id,
-        td3_state,
-        episodes=cfg.eval.episodes,
-        seed=cfg.seed + 10_000,
-    )
-
-
-def _run_sc_erl(cfg: DictConfig) -> float:
-    # Maps sc_erl mode config into the unified erl runner
-    mode = cfg.algorithm.get("mode", "random")
-    mapped_eval_mode = (
-        f"sc_erl_{mode}" if mode in ("random", "always") else mode
-    )
-    kwargs = _erl_kwargs(cfg)
-    kwargs["eval_mode"] = mapped_eval_mode
-    td3_state = train_erl(ERLConfig(**kwargs), on_generation=wandb.log)
-    return evaluate_erl_actor(
-        cfg.eval_env.id,
-        td3_state,
+        *policy,
         episodes=cfg.eval.episodes,
         seed=cfg.seed + 10_000,
     )
@@ -137,7 +92,7 @@ def run_training(cfg: DictConfig) -> float:
             "dict[str, Any]", OmegaConf.to_container(cfg, resolve=True)
         ),
     )
-    dispatch = {"erl": _run_erl, "sc_erl": _run_sc_erl}
+    dispatch = {"erl": _run_erl}
     if cfg.algorithm.name in dispatch:
         # x-axis is interaction, not iteration: generation cost varies by algorithm
         wandb.define_metric("env_steps")

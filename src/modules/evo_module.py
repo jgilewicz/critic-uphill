@@ -44,7 +44,7 @@ def _cem_tell(
 class CEM:
     def __init__(
         self,
-        num_params: int,
+        mean: jax.Array,
         key: jax.Array,
         scale: float = 1.0,
         sigma_init: float = 1e-3,
@@ -53,8 +53,9 @@ class CEM:
         damp_limit: float = 1e-5,
         tau: float = 0.95,
         parents: int | None = None,
-        elitisim: bool = False,
+        elitism: bool = False,
     ) -> None:
+        num_params = int(mean.shape[0])
         self.num_params = num_params
         self.scale = scale
         self.sigma_init = sigma_init
@@ -62,13 +63,13 @@ class CEM:
         self.damp = damp
         self.damp_limit = damp_limit
         self.parents = parents if parents else pop_size // 2
-        self.elitisim = elitisim
+        self.elitism = elitism
         self.tau = tau
 
-        self.mu = jnp.zeros(num_params)
+        self.mu = mean
         self.cov = jnp.ones(num_params) * sigma_init
 
-        self.elite = jnp.sqrt(sigma_init) * jax.random.normal(
+        self.elite = mean + jnp.sqrt(sigma_init) * jax.random.normal(
             key, (num_params,)
         )
 
@@ -82,19 +83,14 @@ class CEM:
 
         inds = _cem_ask(key, self.mu, self.cov, self.scale, pop_size)
 
-        if self.elitisim:
+        if self.elitism:
             inds = inds.at[-1].set(self.elite)
 
         return inds
 
     def tell(
-        self,
-        scores: jax.Array,
-        solutions: jax.Array,
-        elite_candidates: jax.Array | None = None,
+        self, scores: jax.Array, solutions: jax.Array
     ) -> tuple[jax.Array, jax.Array]:
-        # elite_candidates: only these may become the elite; with none of
-        # them in this generation the previous elite survives
         self.mu, self.cov, self.damp, elite_idx = _cem_tell(
             scores,
             solutions,
@@ -106,10 +102,5 @@ class CEM:
             self.tau,
             self.num_params,
         )
-        if elite_candidates is None:
-            self.elite = solutions[elite_idx]
-        elif bool(jnp.any(elite_candidates)):
-            masked = jnp.where(elite_candidates, scores, -jnp.inf)
-            self.elite = solutions[jnp.argmax(masked)]
-
+        self.elite = solutions[elite_idx]
         return (self.mu, self.cov)

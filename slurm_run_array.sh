@@ -4,14 +4,14 @@
 #   (DMC dog-* and MyoSuite myo* are registered too; myo* uses .venv-myosuite)
 #
 # Suites (SUITE env var, default core); task ID = condition_index * 10 + seed:
-#   core             erl, sc_erl-random, prefix-h200, prefix-td, hboot-td  array 0-49
+#   core             erl, sc_erl-random, prefix-h200                         array 0-29
 #   controls         td3 (rl_only, no population), sc_erl-always             array 0-19
 #   ablation-horizon prefix-h100, prefix-h400, prefix-h800                  array 0-29
-#   config-check     erl-evorainbow (pop 5, ea_tau 0.3, RL->EA every gen)    array 0-9
-#   all              core + controls + ablation-horizon (not config-check)  array 0-99
+#   config-check     erl-evorainbow (pop 5, ea_to_rl tau 0.3, RL->EA every gen) array 0-9
+#   all              core + controls + ablation-horizon (not config-check)  array 0-79
 #
 # Example usage:
-#   TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
+#   TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-29 slurm_run_array.sh
 #   SUITE=controls TARGET_ENV=Hopper-v5 TAG=paper-controls-v1 sbatch --array=0-19 slurm_run_array.sh
 #   ./scripts/submit_suite.sh ablation-horizon HalfCheetah-v5 Hopper-v5
 
@@ -35,24 +35,22 @@ SUITE="${SUITE:-core}"
 
 # Define condition suites: name|overrides
 CORE=(
-  "erl|algorithm=erl algorithm.eval_mode=full"
-  "sc_erl-random|algorithm=erl algorithm.eval_mode=sc_erl_random algorithm.omega=0.79"
-  "prefix-h200|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=200"
-  "prefix-td|algorithm=erl algorithm.eval_mode=prefix_td"
-  "hboot-td|algorithm=erl algorithm.eval_mode=hboot_td"
+  "erl|algorithm=erl algorithm.eval.mode=full"
+  "sc_erl-random|algorithm=erl algorithm.eval.mode=critic algorithm.eval.p_real=0.21"
+  "prefix-h200|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=200"
 )
 CONTROLS=(
-  "td3|algorithm=erl algorithm.eval_mode=rl_only"
-  "sc_erl-always|algorithm=erl algorithm.eval_mode=sc_erl_always"
+  "td3|algorithm=erl algorithm.eval.mode=rl_only"
+  "sc_erl-always|algorithm=erl algorithm.eval.mode=critic algorithm.eval.p_real=0"
 )
 ABLATION_HORIZON=(
-  "prefix-h100|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=100"
-  "prefix-h400|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=400"
-  "prefix-h800|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=800"
+  "prefix-h100|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=100"
+  "prefix-h400|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=400"
+  "prefix-h800|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=800"
 )
 # EvoRainbow-style gene flow on full ERL; gamma kept at 0.99 for td3 parity
 CONFIG_CHECK=(
-  "erl-evorainbow|algorithm=erl algorithm.eval_mode=full algorithm.pop_size=5 algorithm.ea_tau=0.3 algorithm.rl_to_ea_sync_period=1"
+  "erl-evorainbow|algorithm=erl algorithm.eval.mode=full algorithm.pop_size=5 algorithm.ea_to_rl.tau=0.3 algorithm.rl_to_ea.period=1"
 )
 case "${SUITE}" in
 core) CONDITIONS=("${CORE[@]}") ;;

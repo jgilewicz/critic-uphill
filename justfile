@@ -32,18 +32,18 @@ check: lint-check types
 
 # train one algorithm; extra tokens are Hydra overrides
 #   just train sac Hopper-v5
-#   just train sc_erl Swimmer-v5 algorithm.mode=ensemble
-#   just train sc_erl Swimmer-v5 seed=3   # seed sweeps: seed=N is a Hydra override
+#   just train erl Swimmer-v5 algorithm.eval.mode=critic algorithm.eval.p_real=0
+#   just train erl Swimmer-v5 seed=3   # seed sweeps: seed=N is a Hydra override
 #   N_ENVS=4 just train sac Hopper-v5   # override the detected core count
 train algo="sac" env="Swimmer-v5" *overrides:
     uv run python -m train \
       algorithm={{algo}} env.id={{env}} eval_env.id={{env}} \
       n_envs={{n_envs}} {{overrides}}
 
-# train every baseline + ERL/SC-ERL on one env, sequentially
+# train every baseline + ERL on one env, sequentially
 train-all env="Swimmer-v5" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
-    for algo in sac ppo td3 crossq erl sc_erl; do
+    for algo in sac ppo td3 crossq erl; do
       just train "$algo" "{{env}}" {{overrides}}
     done

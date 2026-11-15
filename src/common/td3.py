@@ -8,7 +8,6 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from common.critic_heads import CriticHead, plain_loss, plain_point
 from common.replay_buffer import BufferData, sample_batch
 from common.utils import genetic_soft_update
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
@@ -17,8 +16,7 @@ from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
 class TD3Networks(NamedTuple):
     embedding: SharedStateEmbedding
     actor: ActorHead
-    # Critic or a (K,)-stacked Critic ensemble
-    critic1: Any
+    critic1: Critic
     critic2: Critic
 
 
@@ -48,13 +46,30 @@ TrainFn = Callable[
 ]
 
 
+def critic_point(
+    critic: Critic, states: jax.Array, actions: jax.Array, key: jax.Array
+) -> jax.Array:
+    keys = jax.random.split(key, states.shape[0])
+    return jax.vmap(lambda s, a, k: critic(s, a, key=k))(states, actions, keys)
+
+
+def critic_loss(
+    critic: Critic,
+    states: jax.Array,
+    actions: jax.Array,
+    target: jax.Array,
+    key: jax.Array,
+) -> jax.Array:
+    return jnp.mean((critic_point(critic, states, actions, key) - target) ** 2)
+
+
 def init_td3(
     state_dim: int,
     action_dim: int,
     embedding_dim: int,
     *,
     key: jax.Array,
-    head: CriticHead,
+    hidden_dims: tuple[int, int],
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TD3State:
@@ -63,8 +78,8 @@ def init_td3(
         state_dim, embedding_dim=embedding_dim, key=ek
     )
     actor = ActorHead(embedding_dim, action_dim, key=ak)
-    critic1 = head.build(c1k)
-    critic2 = head.build_twin(c2k)
+    critic1 = Critic(state_dim, action_dim, key=c1k, hidden_dims=hidden_dims)
+    critic2 = Critic(state_dim, action_dim, key=c2k, hidden_dims=hidden_dims)
 
     online = TD3Networks(embedding, actor, critic1, critic2)
     return TD3State(
@@ -81,7 +96,6 @@ def init_td3(
 
 def _td_target(
     cfg: TD3Config,
-    head: CriticHead,
     state: TD3State,
     batch: Batch,
     key: jax.Array,
@@ -99,10 +113,9 @@ def _td_target(
         -cfg.action_limit,
         cfg.action_limit,
     )
-    # twin-min over point estimates: mean / mu for ensemble / evidential
     q_next = jnp.minimum(
-        head.point(target.critic1, batch["next_state"], next_action, q1_key),
-        plain_point(target.critic2, batch["next_state"], next_action, q2_key),
+        critic_point(target.critic1, batch["next_state"], next_action, q1_key),
+        critic_point(target.critic2, batch["next_state"], next_action, q2_key),
     )
     return jax.lax.stop_gradient(
         batch["reward"] + cfg.gamma * (1.0 - batch["done"]) * q_next
@@ -111,23 +124,22 @@ def _td_target(
 
 def _critic_update(
     cfg: TD3Config,
-    head: CriticHead,
     optimizer: optax.GradientTransformation,
     state: TD3State,
     batch: Batch,
     key: jax.Array,
 ) -> tuple[TD3State, jax.Array, jax.Array]:
     target_key, k1, k2, err_key = jax.random.split(key, 4)
-    target_q = _td_target(cfg, head, state, batch, target_key)
+    target_q = _td_target(cfg, state, batch, target_key)
     s, a = batch["state"], batch["action"]
 
     # Compute absolute Bellman TD error: delta = |r + gamma*Q_target - Q_online|
-    q1 = head.point(state.online.critic1, s, a, err_key)
+    q1 = critic_point(state.online.critic1, s, a, err_key)
     td_error = jnp.mean(jnp.abs(target_q - q1))
 
-    def loss_fn(critics: tuple[Any, Critic]) -> jax.Array:
+    def loss_fn(critics: tuple[Critic, Critic]) -> jax.Array:
         critic1, critic2 = critics
-        return head.loss(critic1, s, a, target_q, k1) + plain_loss(
+        return critic_loss(critic1, s, a, target_q, k1) + critic_loss(
             critic2, s, a, target_q, k2
         )
 
@@ -150,7 +162,6 @@ def _critic_update(
 
 def _actor_update(
     cfg: TD3Config,
-    head: CriticHead,
     optimizer: optax.GradientTransformation,
     state: TD3State,
     batch: Batch,
@@ -161,7 +172,7 @@ def _actor_update(
     ) -> jax.Array:
         embedding, actor = embedding_actor
         action = jax.vmap(actor)(jax.vmap(embedding)(batch["state"]))
-        q = head.point(state.online.critic1, batch["state"], action, key)
+        q = critic_point(state.online.critic1, batch["state"], action, key)
         return -jnp.mean(q)
 
     embedding_actor = (state.online.embedding, state.online.actor)
@@ -186,7 +197,6 @@ def _actor_update(
 
 def make_td3_train(
     cfg: TD3Config,
-    head: CriticHead,
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TrainFn:
@@ -206,9 +216,8 @@ def make_td3_train(
             dynamic, key, critic_sum, td_err_sum = carry
             key, sample_key, critic_key, actor_key = jax.random.split(key, 4)
             batch = sample_batch(data, size, sample_key, cfg.batch_size)
-            state, critic_loss, td_err = _critic_update(
+            state, loss, td_err = _critic_update(
                 cfg,
-                head,
                 critic_optimizer,
                 eqx.combine(dynamic, static),
                 batch,
@@ -218,7 +227,6 @@ def make_td3_train(
             def with_actor(dyn: Any) -> Any:
                 new_state = _actor_update(
                     cfg,
-                    head,
                     actor_optimizer,
                     eqx.combine(dyn, static),
                     batch,
@@ -235,7 +243,7 @@ def make_td3_train(
                 skip,
                 eqx.filter(state, eqx.is_array),
             )
-            return dynamic, key, critic_sum + critic_loss, td_err_sum + td_err
+            return dynamic, key, critic_sum + loss, td_err_sum + td_err
 
         dynamic, _, critic_sum, td_err_sum = jax.lax.fori_loop(
             0, num_updates, body, (dynamic, key, jnp.zeros(()), jnp.zeros(()))
