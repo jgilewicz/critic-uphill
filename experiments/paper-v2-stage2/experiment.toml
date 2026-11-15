@@ -1,0 +1,143 @@
+name = "paper-v2-stage2"
+question = "Where gradients are known to struggle (Swimmer, Humanoid, dog-*), does an ERL variant beat TD3, and does cheap evaluation beat full-episode ERL there?"
+
+# closed list, fixed before any stage-2 run; no envs added after results
+envs = [
+  "HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5",
+  "Swimmer-v5", "Humanoid-v5", "dog-walk", "dog-trot", "dog-run",
+]
+conditions = ["td3", "erl", "sc_erl-always", "sc_erl-random", "prefix-h200"]
+seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+total_steps = 1_000_000
+
+[groups]
+# easy cells already exist (paper-core-v1 + paper-v2 stage 1), not rerun
+easy = ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5"]
+# a priori weak for TD3: Swimmer (gamma=0.99 too short), the rest high action dim
+hard = ["Swimmer-v5", "Humanoid-v5", "dog-walk", "dog-trot", "dog-run"]
+
+[wandb]
+entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
+project = "h_boostrap_"
+tag = "paper-v2"
+join = ["paper-core-v1"]
+run_name = '^(?P<condition>.+)_(?P<env>[^_]+)_s(?P<seed>\d+)$'
+
+[metric]
+keys = ["perf/eval_rl"]
+x = ["env_steps"]
+label = "eval return"
+final_window = 0.1
+
+[gate]
+# step A seeds; an env goes to step B (seeds 3-9) when some ERL variant has
+# mean >= td3 mean + 10% of |td3 mean| and beats td3 on >= 2 of 3 paired seeds
+seeds = [0, 1, 2]
+reference = "td3"
+min_rel_gain = 0.10
+min_wins = 2
+
+[[hypotheses]]
+id = "H6"
+# 2026-11-15: step B only Swimmer, unpaired bootstrap (seed does not fix the GPU trajectory)
+question = "Swimmer: an ERL variant > td3, CI of the IQM difference (unpaired bootstrap) above 0 at seeds 0-9"
+# Bonferroni: level 1 - 0.05/k, k = 1 env x 4 ERL variants
+alpha = 0.05
+correction = "bonferroni"
+
+[[hypotheses]]
+id = "H7"
+question = "per cheap variant (prefix-h200, sc_erl-random, sc_erl-always): CI of IQM difference vs erl (unpaired) above 0 on Swimmer if H6 passes"
+# Bonferroni: k = 3 x H6 envs
+alpha = 0.05
+correction = "bonferroni"
+
+[report]
+url = "https://claude.ai/code/artifact/90ece3b6-f156-4bc0-a9c4-f56dbff5630e"
+
+[cluster]
+ssh_host = "wcss"
+
+[[cluster.jobs]]
+id = 6310811
+label = "A0 core Humanoid-v5 seed 0"
+
+[[cluster.jobs]]
+id = 6310812
+label = "A0 controls Humanoid-v5 seed 0"
+
+[[cluster.jobs]]
+id = 6310813
+label = "A0 core dog-walk seed 0"
+
+[[cluster.jobs]]
+id = 6310814
+label = "A0 controls dog-walk seed 0"
+
+[[cluster.jobs]]
+id = 6310815
+label = "A0 core dog-trot seed 0"
+
+[[cluster.jobs]]
+id = 6310816
+label = "A0 controls dog-trot seed 0"
+
+[[cluster.jobs]]
+id = 6310817
+label = "A0 core dog-run seed 0"
+
+[[cluster.jobs]]
+id = 6310818
+label = "A0 controls dog-run seed 0"
+
+[[cluster.jobs]]
+id = 6313907
+label = "A core Humanoid-v5"
+
+[[cluster.jobs]]
+id = 6313908
+label = "A controls Humanoid-v5"
+
+[[cluster.jobs]]
+id = 6313909
+label = "A core dog-walk"
+
+[[cluster.jobs]]
+id = 6313910
+label = "A controls dog-walk"
+
+[[cluster.jobs]]
+id = 6313911
+label = "A core dog-trot"
+
+[[cluster.jobs]]
+id = 6313912
+label = "A controls dog-trot"
+
+[[cluster.jobs]]
+id = 6313913
+label = "A core dog-run"
+
+[[cluster.jobs]]
+id = 6313914
+label = "A controls dog-run"
+
+[[cluster.jobs]]
+id = 6313915
+label = "A core Swimmer-v5"
+
+[[cluster.jobs]]
+id = 6313916
+label = "A controls Swimmer-v5"
+
+[[cluster.jobs]]
+id = 6329266
+label = "B core Swimmer-v5 seeds 3-9"
+
+[[cluster.jobs]]
+id = 6329267
+label = "B controls Swimmer-v5 seeds 3-9"
+
+[[cluster.jobs]]
+id = 6329268
+label = "config-check erl-evorainbow Swimmer-v5 seeds 0-4 (tag paper-v2-config)"

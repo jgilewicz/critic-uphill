@@ -1,0 +1,465 @@
+<title>Macierz ERL paper-v2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column of full-width bands, dashboard order summary -> matrix -> curves -> raw runs */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --seq: #2a78d6;
+  --focus: #2a78d6;
+  --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a;
+  --c3: #eda100; --c4: #e87ba4; --c5: #008300; --c6: #6250d6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --seq: #3987e5;
+    --focus: #3987e5;
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+    --c3: #c98500; --c4: #d55181; --c5: #008300; --c6: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --seq: #3987e5;
+  --focus: #3987e5;
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+  --c3: #c98500; --c4: #d55181; --c5: #008300; --c6: #9085e9;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 28px; }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+p { margin: 0; max-width: 70ch; }
+.num, td.n, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, input[type="search"] {
+  font: 13px var(--f-body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+}
+label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.legend button {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none;
+  color: var(--ink); font: inherit; cursor: pointer; padding: 2px 0;
+}
+.legend button[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.legend button[aria-pressed="false"] .sw { opacity: 0.3; }
+.sw { width: 14px; height: 4px; border-radius: 2px; display: inline-block; flex: none; }
+.rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.chart { position: relative; display: grid; gap: 4px; }
+.chart h3 { margin: 0; font: 600 13px var(--f-body); }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg .lbl { fill: var(--ink); font: 12px var(--f-body); }
+svg .val { fill: var(--ink-2); }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; z-index: 2;
+}
+.tip .row { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+.tip .row span:last-child { font-family: var(--f-mono); margin-left: 12px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 600; color: var(--ink-2); font-size: 12px; position: sticky; top: 0; background: var(--surface); }
+td.n, th.n { text-align: right; }
+.matrix td.n { min-width: 120px; }
+.matrix td.best { font-weight: 600; }
+.matrix .sd { color: var(--muted); font-size: 11px; }
+.runs th { cursor: pointer; user-select: none; }
+.runs th[aria-sort="ascending"]::after { content: " ↑"; }
+.runs th[aria-sort="descending"]::after { content: " ↓"; }
+.runs-wrap { max-height: 620px; overflow: auto; }
+.cond { display: inline-flex; align-items: center; gap: 6px; }
+a { color: var(--ink); }
+.method ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-width: 80ch; color: var(--ink-2); }
+.hint { font-size: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">usc_erl_jax · paper-core-v1 + paper-v2</div>
+    <h1>Macierz ERL paper-v2</h1>
+    <div class="facts" id="facts"></div>
+    <p class="note">6 warunków ERL plus kontrola <span class="mono">td3</span> (eval_mode=rl_only, TD3 bez populacji, tag paper-v2). Ranking normalizowany po wszystkich 7 warunkach.</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>Ranking IQM</h2>
+      <span class="hint">znormalizowany per env (0 = najgorsza średnia warunku, 1 = najlepsza), 95% CI z bootstrapu po (env, seed)</span>
+    </div>
+    <div class="rank-grid">
+      <div class="panel chart"><h3>Wynik końcowy (ostatnie 10% budżetu)</h3><svg id="rank-final"></svg></div>
+      <div class="panel chart"><h3>AUC eval_rl</h3><svg id="rank-auc"></svg></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Env × warunek</h2>
+      <div class="controls">
+        <label for="m-metric" class="hint">metryka</label>
+        <select id="m-metric"></select>
+      </div>
+    </div>
+    <div class="panel scroll"><table class="matrix" id="matrix"></table></div>
+    <p class="hint">Średnia ± odchylenie po seedach (okno ostatnich 10% budżetu dla metryk logowanych w czasie). Cieniowanie: wielkość w wierszu. Pogrubienie: najlepszy warunek dla metryk wyniku.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Krzywe</h2>
+      <div class="controls">
+        <label for="c-metric" class="hint">metryka</label>
+        <select id="c-metric"></select>
+        <label class="chk"><input type="checkbox" id="c-log"> skala log</label>
+        <label class="chk"><input type="checkbox" id="c-band" checked> 95% CI</label>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="charts" id="charts"></div>
+    <p class="hint">Średnia po 10 seedach na siatce co 20k env_steps, pasmo = 95% CI średniej.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Wszystkie runy</h2>
+      <div class="controls">
+        <select id="r-cond" aria-label="warunek"></select>
+        <select id="r-env" aria-label="env"></select>
+        <input type="search" id="r-q" placeholder="szukaj nazwy" aria-label="szukaj nazwy">
+        <span class="hint" id="r-count"></span>
+      </div>
+    </div>
+    <div class="panel runs-wrap"><table class="runs" id="runs"></table></div>
+  </section>
+
+  <section class="method">
+    <h2>Metoda</h2>
+    <ul>
+      <li>Wynik końcowy: średnia perf/eval_rl dla env_steps ≥ 900k. AUC: pole pod krzywą eval_rl podzielone przez zakres kroków.</li>
+      <li>Pozostałe metryki w tabelach: średnia z tego samego okna (ostatnie 10% budżetu). Generacje i czas: wartość końcowa runu.</li>
+      <li>Normalizacja po 7 warunkach (6 ERL + td3) w każdym env. IQM po 40 parach (env, seed), 10k próbek bootstrapu, te same losowania dla każdego warunku.</li>
+      <li>p_surr logują tylko warianty sc_erl, prefix/h tylko prefix-td i hboot-td, metryk populacji brak w td3. Puste komórki = metryka nie istnieje w tym warunku.</li>
+      <li>Czas runu = _runtime z wandb (1 H100, 4 rdzenie). Źródło: cache wandb w experiments/paper-v2/cache/full, skrypt summary.py.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+const D = /*DATA*/null;
+const CONDS = D.conditions;
+const color = (c) => `var(--c${CONDS.indexOf(c)})`;
+const HIGHER = new Set(["perf/eval_rl", "auc", "max_eval"]);
+const TABLE_METRICS = [
+  ["perf/eval_rl", "eval_rl końcowy"],
+  ["auc", "AUC eval_rl"],
+  ["max_eval", "max eval_rl"],
+  ["cost/real_frac", "cost/real_frac"],
+  ["p_surr", "p_surr"],
+  ["prefix/h", "prefix/h"],
+  ["screen/cem_std", "screen/cem_std"],
+  ["train/critic_loss", "train/critic_loss"],
+  ["train/td_error", "train/td_error"],
+  ["train/td_error_ema", "train/td_error_ema"],
+  ["generations", "generacje"],
+  ["runtime_h", "czas runu [h]"],
+];
+const CURVE_METRICS = [
+  "perf/eval_rl", "cost/real_frac", "p_surr", "prefix/h", "screen/cem_std",
+  "train/critic_loss", "train/td_error", "train/td_error_ema",
+];
+const NS = "http://www.w3.org/2000/svg";
+
+function fmt(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "n/d";
+  const a = Math.abs(v);
+  if (a >= 1000) return v.toFixed(0);
+  if (a >= 100) return v.toFixed(1);
+  if (a >= 1) return v.toFixed(2);
+  if (a === 0) return "0";
+  return v.toPrecision(3);
+}
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function h(tag, html, parent) {
+  const e = document.createElement(tag);
+  if (html !== undefined) e.innerHTML = html;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo || 1;
+  const step0 = span / n;
+  const mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n);
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + step * 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+function mean(xs) { return xs.reduce((a, b) => a + b, 0) / xs.length; }
+function std(xs) {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1));
+}
+
+function renderFacts() {
+  const rt = D.runs.map((r) => r.summary.runtime_h).filter((v) => v != null);
+  const items = [
+    ["runy", D.runs.length],
+    ["warunki", CONDS.length],
+    ["envy", D.envs.length],
+    ["seedy", new Set(D.runs.map((r) => r.seed)).size],
+    ["budżet", "1M env_steps"],
+    ["Σ czasu runów", `${mean(rt) * rt.length | 0} GPU-h`],
+    ["dane z", `${D.generated} UTC`],
+  ];
+  document.getElementById("facts").innerHTML = items
+    .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+}
+
+function renderRanking(id, rows) {
+  const svg = document.getElementById(id);
+  const W = 520, rowH = 30, L = 118, R = 70, T = 8, B = 24;
+  const H = T + rowH * rows.length + B;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const lo = Math.min(0, ...rows.map((r) => r.lo)), hi = Math.max(1, ...rows.map((r) => r.hi));
+  const x = (v) => L + ((v - lo) / (hi - lo)) * (W - L - R);
+  for (const t of niceTicks(lo, hi, 5)) {
+    el("line", { x1: x(t), x2: x(t), y1: T, y2: H - B, stroke: "var(--grid)" }, svg);
+    el("text", { x: x(t), y: H - 8, "text-anchor": "middle" }, svg).textContent = t;
+  }
+  el("line", { x1: x(0), x2: x(0), y1: T, y2: H - B, stroke: "var(--line)" }, svg);
+  rows.forEach((r, i) => {
+    const y = T + rowH * i + rowH / 2;
+    el("text", { x: 0, y: y + 4, class: "lbl" }, svg).textContent = r.condition;
+    el("line", { x1: x(r.lo), x2: x(r.hi), y1: y, y2: y, stroke: color(r.condition), "stroke-width": 2, "stroke-linecap": "round" }, svg);
+    el("circle", { cx: x(r.iqm), cy: y, r: 5, fill: color(r.condition), stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    el("text", { x: W - R + 10, y: y + 4, class: "val" }, svg).textContent = r.iqm.toFixed(2);
+    const t = el("title", {}, svg.lastChild);
+    t.textContent = `${r.condition}: IQM ${r.iqm.toFixed(2)} [${r.lo.toFixed(2)}, ${r.hi.toFixed(2)}]`;
+    const hit = el("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent" }, svg);
+    el("title", {}, hit).textContent = t.textContent;
+  });
+}
+
+function cellValues(env, cond, key) {
+  return D.runs.filter((r) => r.env === env && r.condition === cond)
+    .map((r) => r.summary[key]).filter((v) => v != null && !Number.isNaN(v));
+}
+
+function renderMatrix() {
+  const key = document.getElementById("m-metric").value;
+  const tbl = document.getElementById("matrix");
+  let html = `<thead><tr><th>env</th>${CONDS.map((c) =>
+    `<th class="n"><span class="cond"><span class="sw" style="background:${color(c)}"></span>${c}</span></th>`).join("")}</tr></thead><tbody>`;
+  for (const env of D.envs) {
+    const cells = CONDS.map((c) => cellValues(env, c, key));
+    const means = cells.map((v) => (v.length ? mean(v) : null));
+    const present = means.filter((m) => m != null);
+    const lo = Math.min(...present), hi = Math.max(...present);
+    const best = HIGHER.has(key) ? hi : null;
+    html += `<tr><td>${env}</td>`;
+    cells.forEach((v, i) => {
+      if (!v.length) { html += `<td class="n"><span class="sd">n/d</span></td>`; return; }
+      const f = hi > lo ? (means[i] - lo) / (hi - lo) : 0;
+      const bg = `color-mix(in oklab, var(--seq) ${Math.round(4 + f * 30)}%, var(--surface))`;
+      const cls = means[i] === best ? "n best" : "n";
+      html += `<td class="${cls}" style="background:${bg}" title="${CONDS[i]}, ${env}: n=${v.length}">${fmt(means[i])} <span class="sd">± ${fmt(std(v))}</span></td>`;
+    });
+    html += "</tr>";
+  }
+  tbl.innerHTML = html + "</tbody>";
+}
+
+const hidden = new Set();
+function renderLegend() {
+  const box = document.getElementById("legend");
+  box.innerHTML = "";
+  for (const c of CONDS) {
+    const b = h("button", `<span class="sw" style="background:${color(c)}"></span>${c}`, box);
+    b.type = "button";
+    b.setAttribute("aria-pressed", hidden.has(c) ? "false" : "true");
+    b.onclick = () => { hidden.has(c) ? hidden.delete(c) : hidden.add(c); renderLegend(); renderCurves(); };
+  }
+}
+
+function renderCurves() {
+  const key = document.getElementById("c-metric").value;
+  const logY = document.getElementById("c-log").checked;
+  const band = document.getElementById("c-band").checked;
+  const box = document.getElementById("charts");
+  box.innerHTML = "";
+  const G = D.grid;
+  for (const env of D.envs) {
+    const series = CONDS.filter((c) => !hidden.has(c) && D.curves[env]?.[c]?.[key])
+      .map((c) => ({ c, ...D.curves[env][c][key] }));
+    const wrap = h("div", undefined, box);
+    wrap.className = "panel chart";
+    h("h3", env, wrap);
+    if (!series.length) { h("p", "Ta metryka nie jest logowana w widocznych warunkach.", wrap).className = "hint"; continue; }
+    const W = 520, H = 260, L = 52, R = 12, T = 10, B = 26;
+    const tr = (v) => (logY ? (v > 0 ? Math.log10(v) : null) : v);
+    const vals = [];
+    for (const s of series) s.mean.forEach((m, i) => {
+      if (m == null) return;
+      const ci = band && s.ci[i] != null ? s.ci[i] : 0;
+      for (const v of [m - ci, m + ci]) { const t = tr(v); if (t != null) vals.push(t); }
+    });
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (lo === hi) { lo -= 1; hi += 1; }
+    const pad = (hi - lo) * 0.04; lo -= pad; hi += pad;
+    const x = (v) => L + (v / G[G.length - 1]) * (W - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${key}, ${env}` }, wrap);
+    for (const t of niceTicks(lo, hi, 5)) {
+      el("line", { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: "var(--grid)" }, svg);
+      el("text", { x: L - 6, y: y(t) + 3.5, "text-anchor": "end" }, svg).textContent = logY ? fmt(10 ** t) : fmt(t);
+    }
+    for (const t of [0, 250e3, 500e3, 750e3, 1e6]) {
+      el("text", { x: x(t), y: H - 8, "text-anchor": "middle" }, svg).textContent = t ? `${t / 1e3}k` : "0";
+    }
+    el("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--line)" }, svg);
+    for (const s of series) {
+      const pts = s.mean.map((m, i) => [i, m]).filter(([, m]) => m != null && tr(m) != null);
+      if (band) {
+        const up = pts.map(([i, m]) => [x(G[i]), y(tr(m + (s.ci[i] || 0)))]);
+        const dn = pts.map(([i, m]) => [x(G[i]), tr(m - (s.ci[i] || 0))]).reverse()
+          .map(([px, v]) => [px, v == null ? y(lo) : y(Math.max(v, lo))]);
+        el("path", { d: "M" + [...up, ...dn].map((p) => p.join(",")).join("L") + "Z", fill: color(s.c), "fill-opacity": 0.12, stroke: "none" }, svg);
+      }
+      el("path", { d: "M" + pts.map(([i, m]) => `${x(G[i])},${y(tr(m))}`).join("L"), fill: "none", stroke: color(s.c), "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    }
+    const cross = el("line", { y1: T, y2: H - B, stroke: "var(--muted)", "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+    const dots = series.map((s) => el("circle", { r: 4, fill: color(s.c), stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg));
+    const hit = el("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent" }, svg);
+    const tip = h("div", undefined, wrap); tip.className = "tip"; tip.hidden = true;
+    const move = (ev) => {
+      const r = svg.getBoundingClientRect();
+      const px = ((ev.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(G.length - 1, Math.round(((px - L) / (W - L - R)) * (G.length - 1))));
+      cross.setAttribute("x1", x(G[i])); cross.setAttribute("x2", x(G[i]));
+      cross.setAttribute("visibility", "visible");
+      let rows = `<div class="row"><b>${G[i] / 1e3}k env_steps</b></div>`;
+      series.forEach((s, k) => {
+        const m = s.mean[i];
+        const ok = m != null && tr(m) != null;
+        dots[k].setAttribute("visibility", ok ? "visible" : "hidden");
+        if (ok) { dots[k].setAttribute("cx", x(G[i])); dots[k].setAttribute("cy", y(tr(m))); }
+        rows += `<div class="row"><span class="cond"><span class="sw" style="background:${color(s.c)}"></span>${s.c}</span><span>${ok ? fmt(m) : "n/d"}${ok && s.ci[i] != null ? " ± " + fmt(s.ci[i]) : ""}</span></div>`;
+      });
+      tip.innerHTML = rows; tip.hidden = false;
+      const wr = wrap.getBoundingClientRect();
+      const left = ev.clientX - wr.left + 14;
+      tip.style.left = `${Math.min(left, wr.width - tip.offsetWidth - 8)}px`;
+      tip.style.top = `${ev.clientY - wr.top + 12}px`;
+    };
+    hit.addEventListener("pointermove", move);
+    hit.addEventListener("pointerleave", () => {
+      tip.hidden = true; cross.setAttribute("visibility", "hidden");
+      dots.forEach((d) => d.setAttribute("visibility", "hidden"));
+    });
+  }
+}
+
+const RUN_COLS = [
+  ["condition", "warunek", false], ["env", "env", false], ["seed", "seed", true],
+  ...TABLE_METRICS.map(([k, label]) => [k, label, true]),
+  ["commit", "commit", false],
+];
+let sortKey = "perf/eval_rl", sortDir = -1;
+function runVal(r, k) { return k in r ? r[k] : r.summary[k]; }
+function renderRuns() {
+  const cond = document.getElementById("r-cond").value;
+  const env = document.getElementById("r-env").value;
+  const q = document.getElementById("r-q").value.trim().toLowerCase();
+  const rows = D.runs.filter((r) => (!cond || r.condition === cond) && (!env || r.env === env) && (!q || r.name.toLowerCase().includes(q)));
+  rows.sort((a, b) => {
+    const va = runVal(a, sortKey), vb = runVal(b, sortKey);
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va > vb ? 1 : va < vb ? -1 : 0) * sortDir;
+  });
+  const tbl = document.getElementById("runs");
+  let html = "<thead><tr>" + RUN_COLS.map(([k, label, n]) =>
+    `<th class="${n ? "n" : ""}" data-k="${k}" tabindex="0" aria-sort="${k === sortKey ? (sortDir > 0 ? "ascending" : "descending") : "none"}">${label}</th>`).join("") + "</tr></thead><tbody>";
+  for (const r of rows) {
+    html += "<tr>" + RUN_COLS.map(([k, , n]) => {
+      const v = runVal(r, k);
+      if (k === "condition") return `<td><span class="cond"><span class="sw" style="background:${color(v)}"></span><a href="${r.url}" target="_blank" rel="noopener">${v}</a></span></td>`;
+      if (k === "commit") return `<td class="mono">${v || ""}</td>`;
+      return `<td class="${n ? "n" : ""}">${n && k !== "seed" ? fmt(v) : v}</td>`;
+    }).join("") + "</tr>";
+  }
+  tbl.innerHTML = html + "</tbody>";
+  document.getElementById("r-count").textContent = `${rows.length} z ${D.runs.length}`;
+  tbl.querySelectorAll("th").forEach((th) => {
+    const go = () => {
+      const k = th.dataset.k;
+      if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = RUN_COLS.find((c) => c[0] === k)[2] ? -1 : 1; }
+      renderRuns();
+    };
+    th.onclick = go;
+    th.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+  });
+}
+
+function options(id, items, all) {
+  const s = document.getElementById(id);
+  s.innerHTML = (all ? `<option value="">${all}</option>` : "") + items.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+}
+
+renderFacts();
+renderRanking("rank-final", D.ranking.final);
+renderRanking("rank-auc", D.ranking.auc);
+options("m-metric", TABLE_METRICS);
+options("c-metric", CURVE_METRICS.map((k) => [k, k]));
+options("r-cond", CONDS.map((c) => [c, c]), "wszystkie warunki");
+options("r-env", D.envs.map((e) => [e, e]), "wszystkie envy");
+document.getElementById("m-metric").onchange = renderMatrix;
+for (const id of ["c-metric", "c-log", "c-band"]) document.getElementById(id).onchange = renderCurves;
+for (const id of ["r-cond", "r-env"]) document.getElementById(id).onchange = renderRuns;
+document.getElementById("r-q").oninput = renderRuns;
+renderMatrix();
+renderLegend();
+renderCurves();
+renderRuns();
+</script>

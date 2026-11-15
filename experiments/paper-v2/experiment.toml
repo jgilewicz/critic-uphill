@@ -1,8 +1,10 @@
 name = "paper-v2"
-question = "Does the population help over TD3 alone, and does truncated evaluation work because of how it splits the budget rather than how well it ranks?"
+question = "Within ERL, does truncated evaluation work because of how it splits the budget rather than how well it ranks, and does it transfer to Swimmer and Humanoid?"
 
 envs = ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5", "Swimmer-v5", "Humanoid-v5"]
-conditions = ["prefix-h200", "td3", "sc_erl-always", "erl", "sc_erl-random", "prefix-td", "hboot-td"]
+# td3 (rl_only) runs exist for the first 4 envs but are out of scope for now:
+# the comparison stays within ERL variants
+conditions = ["prefix-h200", "sc_erl-always", "erl", "sc_erl-random", "prefix-td", "hboot-td"]
 seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 total_steps = 1_000_000
 
@@ -26,13 +28,9 @@ thresholds = [0.25, 0.5, 0.75, 0.9]
 
 [[comparisons]]
 a = "prefix-h200"
-b = "td3"
-question = "H1: does the population help over TD3 alone"
-
-[[comparisons]]
-a = "prefix-h200"
 b = "sc_erl-always"
 question = "H2: prefix vs surrogate on every individual (equivalence, |dIQM| < 0.1)"
+equivalence_margin = 0.1
 
 [[comparisons]]
 a = "prefix-h200"
@@ -52,5 +50,21 @@ note = "evaluation horizon actually used"
 [cluster]
 ssh_host = "wcss"
 
+[[cluster.jobs]]
+id = 6306493
+label = "etap1 controls HalfCheetah-v5"
+
+[[cluster.jobs]]
+id = 6306494
+label = "etap1 controls Hopper-v5"
+
+[[cluster.jobs]]
+id = 6306495
+label = "etap1 controls Walker2d-v5"
+
+[[cluster.jobs]]
+id = 6306496
+label = "etap1 controls Ant-v5"
+
 [report]
-url = ""
+url = "https://claude.ai/code/artifact/09137686-778a-4d46-a1fa-811dd9ab5ea6"

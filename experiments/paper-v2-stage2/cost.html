@@ -1,0 +1,296 @@
+<title>Koszt oceny vs wynik</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, cost-vs-score scatter per group -> pairwise table -> population dominance -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --bar: #2a78d6;
+  --bar-bg: #e6ecf3;
+  --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a; --c3: #eda100; --c6: #6250d6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --bar: #3987e5; --bar-bg: #1f2831;
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70; --c3: #c98500; --c6: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --bar: #3987e5; --bar-bg: #1f2831;
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70; --c3: #c98500; --c6: #9085e9;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+.mono, td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 82ch; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.sub { font-size: 12px; color: var(--muted); }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg text.lab { fill: var(--ink); font: 600 11px var(--f-body); }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.card .tablewrap { border: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+td .ci { color: var(--muted); font-size: 11.5px; }
+td.hi { color: var(--pos); font-weight: 600; } td.lo { color: var(--neg); font-weight: 600; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.bar { display: inline-block; vertical-align: middle; width: 90px; height: 8px; background: var(--bar-bg); border-radius: 4px; position: relative; margin-left: 8px; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--bar); border-radius: 4px; }
+.bar b { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 1px; background: var(--muted); }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: 12px var(--f-mono); color: var(--ink); box-shadow: 0 2px 10px rgb(0 0 0 / 0.12); display: grid; gap: 2px; z-index: 2; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+details summary { cursor: pointer; font-weight: 600; }
+details summary:focus-visible, circle.pt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+details .tablewrap { border: 0; margin-top: 8px; }
+.method { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; max-width: 82ch; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">paper-v2 etap 2 · bez nowych runów</div>
+    <h1>Koszt oceny populacji vs wynik końcowy</h1>
+    <p class="note">Czy tańsza ocena populacji (mniej kroków środowiska na fitness) daje lepszy wynik końcowy przy stałym budżecie 1M kroków? I jak często champion populacji jest lepszy od aktora RL?</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Wynik końcowy vs cost/real_frac</h2>
+    <p class="note">Punkt = IQM wyniku końcowego (eval_rl, 900k-1M kroków), pionowa kreska = 95% CI z bootstrapu bez parowania. Oś x: średnie cost/real_frac po warmupie, czyli jaka część populacji jest oceniana w środowisku. Najedź na punkt, żeby zobaczyć liczby.</p>
+    <div class="pair" id="scatters"></div>
+  </section>
+
+  <section>
+    <h2>Porównania P(A &gt; B)</h2>
+    <p class="note">Prawdopodobieństwo, że niezależna realizacja A ma wyższy wynik końcowy niż niezależna realizacja B, średnio po envach. 0.5 = brak różnicy. Wyróżnione, gdy 95% CI nie zawiera 0.5.</p>
+    <div class="pair" id="pairs"></div>
+  </section>
+
+  <section>
+    <h2>Dominacja populacji: odsetek ewaluacji z championem &gt; aktorem RL</h2>
+    <p class="note">Runy z eval_champion: pilot metryki (seedy 0-2, Swimmer i Ant) i krok B (Swimmer, seedy 3-9). Około 50% oznacza brak systematycznej różnicy: champion i aktor mają po jednej zaszumionej ocenie (10 i 5 epizodów).</p>
+    <div class="tablewrap" id="dominance"></div>
+  </section>
+
+  <section>
+    <h2>Wyniki per env</h2>
+    <div id="raw"></div>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method">
+      <p>Wynik końcowy runu: średnia perf/eval_rl z ostatnich 10% budżetu (900k-1M kroków).</p>
+      <p>Łatwe MuJoCo: HalfCheetah, Hopper, Walker2d, Ant, 10 seedów (paper-core-v1 i etap 1). Normalizacja per env: 0 = najgorsza średnia warunku, 1 = najlepsza. IQM liczony z wszystkich par env × seed. Swimmer: surowy wynik, seedy 0-9 (krok A + krok B).</p>
+      <p>Bootstrap bez parowania: seedy losowane ze zwracaniem niezależnie dla każdej pary (env, warunek), 10 000 powtórzeń. Seed nie ustala trajektorii na GPU, więc runy o tym samym seedzie traktuję jako niezależne realizacje.</p>
+      <p>P(A &gt; B): w każdym env odsetek wszystkich par seedów (A, B) z A &gt; B (remis = 0.5), potem średnia po envach. CI z tego samego bootstrapu.</p>
+      <p>cost/real_frac: odsetek populacji oceniany w środowisku w generacji (prefix-h200: 200/1000). Udział budżetu na populację = 10·f / (1 + 10·f) przy pop 10 i jednym epizodzie RL na generację.</p>
+      <p>Dominacja: odsetek punktów ewaluacji, w których eval_champion &gt; eval_rl, w całym runie i w oknie 900k-1M.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const DATA = {"conditions": ["td3", "erl", "sc_erl-always", "sc_erl-random", "prefix-h200"], "easy": {"envs": ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5"], "n_seeds": {"td3": 10, "erl": 10, "sc_erl-always": 10, "sc_erl-random": 10, "prefix-h200": 10}, "ranking": {"td3": {"iqm": 0.9608807280613514, "ci": [0.80789641218639, 1.0985632382308623]}, "erl": {"iqm": 0.08007518362520774, "ci": [-0.18532634552319957, 0.34306327257255803]}, "sc_erl-always": {"iqm": 1.0040491813936134, "ci": [0.7472194026476092, 1.128916055141689]}, "sc_erl-random": {"iqm": 0.7985546892367117, "ci": [0.6179370755218788, 0.9413604813480413]}, "prefix-h200": {"iqm": 0.7222677490870231, "ci": [0.5692813580289565, 0.8325909010396517]}}, "pairs": {"td3|erl": {"p": 0.855, "ci": [0.76, 0.94]}, "td3|sc_erl-always": {"p": 0.515, "ci": [0.385, 0.6475]}, "td3|sc_erl-random": {"p": 0.62, "ci": [0.4949375, 0.7375]}, "td3|prefix-h200": {"p": 0.6950000000000001, "ci": [0.5724374999999999, 0.8099999999999999]}, "erl|td3": {"p": 0.145, "ci": [0.0625, 0.2375]}, "erl|sc_erl-always": {"p": 0.1675, "ci": [0.07500000000000001, 0.27]}, "erl|sc_erl-random": {"p": 0.24249999999999997, "ci": [0.15749999999999997, 0.33006249999999915]}, "erl|prefix-h200": {"p": 0.225, "ci": [0.1225, 0.33499999999999996]}, "sc_erl-always|td3": {"p": 0.485, "ci": [0.355, 0.6125]}, "sc_erl-always|erl": {"p": 0.8325, "ci": [0.725, 0.925]}, "sc_erl-always|sc_erl-random": {"p": 0.5900000000000001, "ci": [0.4724375, 0.7075]}, "sc_erl-always|prefix-h200": {"p": 0.6599999999999999, "ci": [0.5325, 0.7825]}, "sc_erl-random|td3": {"p": 0.38, "ci": [0.26, 0.505]}, "sc_erl-random|erl": {"p": 0.7575000000000001, "ci": [0.6699999999999999, 0.845]}, "sc_erl-random|sc_erl-always": {"p": 0.41000000000000003, "ci": [0.295, 0.5325]}, "sc_erl-random|prefix-h200": {"p": 0.5475, "ci": [0.42, 0.6725]}, "prefix-h200|td3": {"p": 0.305, "ci": [0.1925, 0.43]}, "prefix-h200|erl": {"p": 0.775, "ci": [0.665, 0.8775]}, "prefix-h200|sc_erl-always": {"p": 0.33999999999999997, "ci": [0.2175, 0.4674999999999999]}, "prefix-h200|sc_erl-random": {"p": 0.4525, "ci": [0.3325, 0.5775]}}, "cost": {"td3": {"real_frac": 0.0, "pop_budget": 0.0}, "erl": {"real_frac": 1.0, "pop_budget": 0.9090909090909091}, "sc_erl-always": {"real_frac": 0.00101010101010101, "pop_budget": 0.009999999999999998}, "sc_erl-random": {"real_frac": 0.21512721685075298, "pop_budget": 0.6826678412631021}, "prefix-h200": {"real_frac": 0.20241691842900306, "pop_budget": 0.6693306693306693}}, "raw": {"HalfCheetah-v5": {"td3": [10539.920675472638, 10188.349216987017, 9093.857919878064, 11371.645011911782, 6841.586726695537, 8408.026204251843, 9183.023580847479, 11241.703632927654, 7223.842979681875, 11076.905258825207], "erl": [9069.41879489293, 9189.741644002152, 9558.809107368334, 7631.949408812044, 7499.10353940628, 8492.516599175424, 7822.520302268759, 8806.13746655349, 9477.88609609805, 9452.879800507226], "sc_erl-always": [8263.20185790701, 11143.115646878645, 11426.432967933208, 10148.64204187391, 7729.269957063815, 9748.017588721528, 10140.741997670713, 10215.923495460585, 7252.486727366952, 10585.923295429186], "sc_erl-random": [7543.624752738053, 9018.8465170755, 8459.695960937534, 8183.211347617632, 7256.053140709032, 7151.46707798157, 8590.118087767554, 9889.315451485714, 6599.421292621012, 8722.431152149264], "prefix-h200": [9488.074117893719, 7813.891292689572, 7757.813133800082, 9215.828855344454, 9165.400465594885, 9603.109902443786, 6475.608349751706, 9008.70968710634, 10261.219607626132, 9547.576498112758]}, "Hopper-v5": {"td3": [3199.6616454341593, 3275.8092422988598, 3147.6651391019473, 3320.761443428621, 2910.476812441537, 3195.2065986300813, 3243.9128211859725, 3344.76773395727, 2386.782575834261, 2838.696266581619], "erl": [2604.510033709104, 1341.1182702576061, 944.5380229463669, 1298.7902284196673, 713.8210408614711, 1543.2822594075897, 3357.4173892141453, 2720.4121085848337, 720.5017289944897, 2336.955627670345], "sc_erl-always": [3349.107516711771, 3071.4332084970815, 3310.657223446644, 3068.1143804909216, 3123.1352727333997, 596.4662398318802, 3330.2682081025673, 3218.032815529693, 3035.4540013984015, 1414.252142140274], "sc_erl-random": [3191.102055936044, 3167.6073359791476, 3154.4497661199457, 3266.6394174592674, 3260.322042988287, 3246.223399808467, 3159.636672495469, 2819.389147089342, 3454.993643764116, 3244.7965975755465], "prefix-h200": [2370.120929961632, 3145.6018540806836, 3195.278655610937, 2359.9864855939613, 1549.9890826851774, 3167.2752438226576, 2702.410096745173, 2972.5145687084573, 3304.4538416188407, 3198.162729673561]}, "Walker2d-v5": {"td3": [4338.013527822075, 5327.112604035473, 3530.830488649243, 3707.163665716411, 4407.030691194765, 4078.8662284421493, 4510.758963441692, 4042.3805112204404, 4094.5453820740195, 3762.083785182493], "erl": [605.5862045025591, 3412.376822240361, 646.8057599568803, 3975.574377526832, 3514.852947142591, 3247.609922996582, 778.1099026609794, 3342.8434126846755, 527.4980603220599, 974.0809508097531], "sc_erl-always": [5387.322728220533, 4716.6635235848935, 4204.273436449007, 4007.3387811786934, 3824.62774238735, 3684.78498760367, 825.5594816494773, 3641.0351073270062, 3981.4264363202146, 800.0935504760477], "sc_erl-random": [4393.918629840486, 3700.326678554065, 4227.168770243488, 4198.363013992309, 3817.6775290597543, 3578.6648402259816, 2521.6835997085773, 3780.456999286098, 4613.548370636938, 4279.046346808254], "prefix-h200": [3896.4528759412865, 4211.618234412874, 713.3400335365395, 3594.782304124171, 4729.319423054621, 2300.1886667309354, 3846.0777001526044, 3467.316184127009, 3686.317379837198, 3904.5789732579406]}, "Ant-v5": {"td3": [3685.4352776973074, 3874.930896898611, 3561.9975481029182, 5621.913561477365, 5451.087253801935, 5704.3013088810185, 5803.850799488415, 5692.610534985926, 4589.790477648381, 3840.9342655218893], "erl": [2475.2333243030776, 2876.7166488346656, 4898.240094358689, 3170.088543222945, 2876.749183716637, 2726.1728076256572, 2216.7623037410644, 3841.1378236812175, 2066.2665281117097, 2298.7864439802806], "sc_erl-always": [5491.525879607397, 3501.5381424897582, 3875.5355622373067, 5900.546622587082, 4928.677454150009, 3845.901622488745, 5669.403377932789, 5887.920653293323, 5474.7123421263805, 5916.300377327793], "sc_erl-random": [5122.82170116432, 3221.1199085505345, 3200.377546776229, 5433.031708747444, 4133.308963759863, 5462.939517547295, 3181.878641178439, 4964.141401612724, 3551.4299009262513, 5479.581951335844], "prefix-h200": [4584.379690860461, 3559.635732084969, 4430.79650856306, 3610.471702942249, 3824.9599516682183, 4252.525288299135, 3464.0600694353566, 4860.28314066803, 4256.268872352069, 5590.4370682930075]}}}, "swimmer": {"envs": ["Swimmer-v5"], "n_seeds": {"td3": 10, "erl": 10, "sc_erl-always": 10, "sc_erl-random": 10, "prefix-h200": 10}, "ranking": {"td3": {"iqm": 120.28569705017284, "ci": [82.72890428051012, 127.75376908671981]}, "erl": {"iqm": 129.29804575102025, "ci": [111.38862078303596, 139.20606467178595]}, "sc_erl-always": {"iqm": 99.918584123747, "ci": [51.42394303497211, 126.66686549101215]}, "sc_erl-random": {"iqm": 119.02903872998326, "ci": [78.53895783915696, 134.49366522017334]}, "prefix-h200": {"iqm": 138.0549364656736, "ci": [126.05660435369597, 149.66350917467707]}}, "pairs": {"td3|erl": {"p": 0.32, "ci": [0.1, 0.59]}, "td3|sc_erl-always": {"p": 0.63, "ci": [0.37, 0.87]}, "td3|sc_erl-random": {"p": 0.44, "ci": [0.18, 0.71]}, "td3|prefix-h200": {"p": 0.2, "ci": [0.0, 0.44]}, "erl|td3": {"p": 0.68, "ci": [0.42, 0.9002499999999963]}, "erl|sc_erl-always": {"p": 0.75, "ci": [0.51, 0.94]}, "erl|sc_erl-random": {"p": 0.64, "ci": [0.37, 0.87]}, "erl|prefix-h200": {"p": 0.29, "ci": [0.07, 0.54]}, "sc_erl-always|td3": {"p": 0.37, "ci": [0.13, 0.6302499999999963]}, "sc_erl-always|erl": {"p": 0.25, "ci": [0.06, 0.49]}, "sc_erl-always|sc_erl-random": {"p": 0.35, "ci": [0.12, 0.61]}, "sc_erl-always|prefix-h200": {"p": 0.14, "ci": [0.0, 0.34]}, "sc_erl-random|td3": {"p": 0.56, "ci": [0.29, 0.83]}, "sc_erl-random|erl": {"p": 0.36, "ci": [0.13, 0.62]}, "sc_erl-random|sc_erl-always": {"p": 0.65, "ci": [0.38, 0.87]}, "sc_erl-random|prefix-h200": {"p": 0.23, "ci": [0.04, 0.46]}, "prefix-h200|td3": {"p": 0.8, "ci": [0.56, 1.0]}, "prefix-h200|erl": {"p": 0.71, "ci": [0.46, 0.93]}, "prefix-h200|sc_erl-always": {"p": 0.86, "ci": [0.66, 1.0]}, "prefix-h200|sc_erl-random": {"p": 0.77, "ci": [0.54, 0.96]}}, "cost": {"td3": {"real_frac": 0.0, "pop_budget": 0.0}, "erl": {"real_frac": 1.0, "pop_budget": 0.9090909090909091}, "sc_erl-always": {"real_frac": 0.00101010101010101, "pop_budget": 0.009999999999999998}, "sc_erl-random": {"real_frac": 0.21512721685075298, "pop_budget": 0.6826678412631021}, "prefix-h200": {"real_frac": 0.20241691842900306, "pop_budget": 0.6693306693306693}}, "raw": {"Swimmer-v5": {"td3": [140.513788885254, 52.768178488199844, 122.65879048564297, 123.46152688928954, 87.18782892132798, 126.85573357356859, 128.71196078837778, 69.35213035805654, 108.28704962920376, 126.7354211965551], "erl": [154.02473001377157, 119.79766431602329, 143.09727637487327, 135.60413958881418, 131.6864264952165, 111.38862078303596, 107.3451013643487, 133.25588204240967, 132.45221015043163, 65.37656887823617], "sc_erl-always": [47.0830510240933, 53.21826105420396, 137.40150742900403, 110.25527679324416, 49.88655177538449, 121.24397086874643, 114.95682777879341, 50.9100895156837, 129.9530008958755, 126.09217739728166], "sc_erl-random": [100.77079922294314, 50.79918217364889, 137.41209801451305, 129.39547001901704, 56.28346898837012, 111.93401484883758, 130.09552585272039, 133.77430210956018, 140.19453459239594, 104.69114419935805], "prefix-h200": [144.21253978051303, 118.72556348044169, 52.25784384085165, 136.1649434485817, 133.39832986876254, 156.48464604193038, 138.1366265840357, 154.73761638410156, 133.70563604956394, 145.96807013704498]}}}, "dominance": [{"condition": "prefix-h200", "env": "Ant-v5", "seed": 2, "share_all": 0.35678391959798994, "share_final": 0.19047619047619047, "n": 199}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 0, "share_all": 0.19597989949748743, "share_final": 0.2857142857142857, "n": 199}, {"condition": "erl", "env": "Swimmer-v5", "seed": 1, "share_all": 0.9120879120879121, "share_final": 1.0, "n": 91}, {"condition": "erl", "env": "Ant-v5", "seed": 2, "share_all": 0.4175824175824176, "share_final": 0.2, "n": 91}, {"condition": "prefix-h200", "env": "Ant-v5", "seed": 0, "share_all": 0.35175879396984927, "share_final": 0.38095238095238093, "n": 199}, {"condition": "sc_erl-random", "env": "Ant-v5", "seed": 2, "share_all": 0.33534743202416917, "share_final": 0.34375, "n": 331}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 0, "share_all": 0.2939297124600639, "share_final": 0.3125, "n": 313}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 1, "share_all": 0.36451612903225805, "share_final": 0.20689655172413793, "n": 310}, {"condition": "erl", "env": "Ant-v5", "seed": 1, "share_all": 0.45054945054945056, "share_final": 0.0, "n": 91}, {"condition": "erl", "env": "Swimmer-v5", "seed": 0, "share_all": 0.5274725274725275, "share_final": 0.4, "n": 91}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 2, "share_all": 0.4471299093655589, "share_final": 0.59375, "n": 331}, {"condition": "sc_erl-random", "env": "Ant-v5", "seed": 0, "share_all": 0.43769968051118213, "share_final": 0.375, "n": 313}, {"condition": "erl", "env": "Ant-v5", "seed": 0, "share_all": 0.4945054945054945, "share_final": 0.3, "n": 91}, {"condition": "prefix-h200", "env": "Ant-v5", "seed": 1, "share_all": 0.41708542713567837, "share_final": 0.47619047619047616, "n": 199}, {"condition": "erl", "env": "Swimmer-v5", "seed": 2, "share_all": 0.7472527472527473, "share_final": 0.9, "n": 91}, {"condition": "sc_erl-random", "env": "Ant-v5", "seed": 1, "share_all": 0.45483870967741935, "share_final": 0.3793103448275862, "n": 310}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 2, "share_all": 0.6733668341708543, "share_final": 0.7142857142857143, "n": 199}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 1, "share_all": 0.4723618090452261, "share_final": 0.7619047619047619, "n": 199}, {"condition": "erl", "env": "Swimmer-v5", "seed": 7, "share_all": 0.5054945054945055, "share_final": 0.6, "n": 91}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 3, "share_all": 0.4778481012658228, "share_final": 0.6129032258064516, "n": 316}, {"condition": "erl", "env": "Swimmer-v5", "seed": 8, "share_all": 0.7142857142857143, "share_final": 0.7, "n": 91}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 7, "share_all": 0.4527687296416938, "share_final": 0.5161290322580645, "n": 307}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 5, "share_all": 0.5077881619937694, "share_final": 0.6285714285714286, "n": 321}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 7, "share_all": 0.5050505050505051, "share_final": 0.5148514851485149, "n": 990}, {"condition": "erl", "env": "Swimmer-v5", "seed": 9, "share_all": 0.5164835164835165, "share_final": 0.7, "n": 91}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 7, "share_all": 0.6532663316582915, "share_final": 0.9047619047619048, "n": 199}, {"condition": "erl", "env": "Swimmer-v5", "seed": 3, "share_all": 0.4835164835164835, "share_final": 0.4, "n": 91}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 8, "share_all": 0.5376884422110553, "share_final": 0.7142857142857143, "n": 199}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 6, "share_all": 0.4325153374233129, "share_final": 0.5, "n": 326}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 4, "share_all": 0.39692307692307693, "share_final": 0.5, "n": 325}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 8, "share_all": 0.48383838383838385, "share_final": 0.5346534653465347, "n": 990}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 6, "share_all": 0.7336683417085427, "share_final": 0.6666666666666666, "n": 199}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 9, "share_all": 0.6834170854271356, "share_final": 0.6190476190476191, "n": 199}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 3, "share_all": 0.4472361809045226, "share_final": 0.23809523809523808, "n": 199}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 5, "share_all": 0.3768844221105528, "share_final": 0.0, "n": 199}, {"condition": "erl", "env": "Swimmer-v5", "seed": 4, "share_all": 0.5494505494505495, "share_final": 0.6, "n": 91}, {"condition": "erl", "env": "Swimmer-v5", "seed": 5, "share_all": 0.45054945054945056, "share_final": 0.2, "n": 91}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 4, "share_all": 0.46060606060606063, "share_final": 0.42574257425742573, "n": 990}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 6, "share_all": 0.5777777777777777, "share_final": 0.5742574257425742, "n": 990}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 3, "share_all": 0.6777777777777778, "share_final": 0.9504950495049505, "n": 990}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 8, "share_all": 0.5097402597402597, "share_final": 0.5161290322580645, "n": 308}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 9, "share_all": 0.5464646464646464, "share_final": 0.5544554455445545, "n": 990}, {"condition": "sc_erl-random", "env": "Swimmer-v5", "seed": 9, "share_all": 0.6049382716049383, "share_final": 0.7714285714285715, "n": 324}, {"condition": "sc_erl-always", "env": "Swimmer-v5", "seed": 5, "share_all": 0.5313131313131313, "share_final": 0.5841584158415841, "n": 990}, {"condition": "erl", "env": "Swimmer-v5", "seed": 6, "share_all": 0.46153846153846156, "share_final": 0.4, "n": 91}, {"condition": "prefix-h200", "env": "Swimmer-v5", "seed": 4, "share_all": 0.5628140703517588, "share_final": 0.7619047619047619, "n": 199}]};
+const C = DATA.conditions;
+const COLOR = { "prefix-h200": "var(--c0)", "sc_erl-always": "var(--c1)", erl: "var(--c2)", "sc_erl-random": "var(--c3)", td3: "var(--c6)" };
+const GROUPS = [
+  { key: "easy", title: "Łatwe MuJoCo", unit: "znormalizowany wynik (0 = najgorszy, 1 = najlepszy warunek)", digits: 2 },
+  { key: "swimmer", title: "Swimmer-v5", unit: "zwrot epizodu", digits: 1 },
+];
+const fmt = (v, d) => Number.isFinite(v) ? v.toFixed(d) : "n/a";
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.innerHTML = html;
+  return e;
+};
+const dot = c => `<span class="dot" style="background:${COLOR[c]}"></span>${c}`;
+
+document.getElementById("facts").innerHTML = [
+  ["warunki", C.length],
+  ["łatwe", `4 envy × ${DATA.easy.n_seeds.erl} seedów`],
+  ["Swimmer", `${DATA.swimmer.n_seeds.erl} seedy`],
+  ["budżet", "1M kroków"],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const E = DATA.easy, S = DATA.swimmer;
+const dom = {};
+for (const r of DATA.dominance) (dom[`${r.env}|${r.condition}`] ??= []).push(r);
+const domMean = (env, c, k = "share_all") => { const rs = dom[`${env}|${c}`] || []; return rs.reduce((s, r) => s + r[k], 0) / rs.length; };
+const domOther = Object.keys(dom).filter(k => k !== "Swimmer-v5|erl").map(k => domMean(...k.split("|")));
+const domRange = [Math.min(...domOther), Math.max(...domOther)];
+const p = (g, a, b) => g.pairs[`${a}|${b}`];
+document.getElementById("findings").innerHTML = [
+  `Łatwe MuJoCo: koszt i wynik idą w przeciwnych kierunkach. erl (real_frac 1.0) ma IQM ${fmt(E.ranking.erl.iqm, 2)}, a sc_erl-always (0.001) ${fmt(E.ranking["sc_erl-always"].iqm, 2)}, na poziomie td3 (${fmt(E.ranking.td3.iqm, 2)}).`,
+  `Łatwe MuJoCo: każdy tańszy wariant bije erl. P(&gt; erl): sc_erl-always ${fmt(p(E, "sc_erl-always", "erl").p, 2)}, prefix-h200 ${fmt(p(E, "prefix-h200", "erl").p, 2)}, sc_erl-random ${fmt(p(E, "sc_erl-random", "erl").p, 2)}. Żaden nie bije td3: P(&gt; td3) najwyżej ${fmt(p(E, "sc_erl-always", "td3").p, 2)} (sc_erl-always, CI ${fmt(p(E, "sc_erl-always", "td3").ci[0], 2)}-${fmt(p(E, "sc_erl-always", "td3").ci[1], 2)}).`,
+  `Swimmer (${S.n_seeds.erl} seedów): różnice znikają. IQM od ${fmt(S.ranking["sc_erl-always"].iqm, 1)} (sc_erl-always) do ${fmt(S.ranking["prefix-h200"].iqm, 1)} (prefix-h200), td3 ${fmt(S.ranking.td3.iqm, 1)}. P(prefix-h200 &gt; td3) ${fmt(p(S, "prefix-h200", "td3").p, 2)} (CI ${fmt(p(S, "prefix-h200", "td3").ci[0], 2)}-${fmt(p(S, "prefix-h200", "td3").ci[1], 2)}, 95% bez korekty), P(erl &gt; td3) ${fmt(p(S, "erl", "td3").p, 2)}. Prerejestrowany test H6 (różnica IQM, Bonferroni k = 4) nie przechodzi dla żadnego wariantu. Przewaga erl z seedów 0-2 się nie utrzymała.`,
+  `Dominacja populacji: champion bije aktora RL w ${fmt(domMean("Swimmer-v5", "erl") * 100, 0)}% ewaluacji w Swimmer erl, w pozostałych komórkach ${fmt(domRange[0] * 100, 0)}-${fmt(domRange[1] * 100, 0)}%. Przy około 50% champion i aktor to w praktyce ta sama polityka (wstrzyknięcie RL→EA i soft update EA→RL).`,
+  "Tańsza ocena przesuwa ERL w stronę td3: przy real_frac ≈ 0 populacja prawie nie dostaje kroków, a wynik zależy od aktora RL. Na łatwych MuJoCo to pomaga, na Swimmerze nie zmienia wyniku w sposób wykrywalny.",
+].map(f => `<li>${f}</li>`).join("");
+
+function scatter(g) {
+  const d = DATA[g.key];
+  const card = el("div", { class: "card" });
+  card.append(el("h3", {}, g.title));
+  card.append(el("div", { class: "sub" }, `oś y: IQM, ${g.unit}`));
+  const W = 420, H = 270, M = { l: 46, r: 96, t: 12, b: 34 };
+  const pts = C.map(c => ({ c, x: d.cost[c].real_frac, y: d.ranking[c].iqm, lo: d.ranking[c].ci[0], hi: d.ranking[c].ci[1] }));
+  let ymin = Math.min(...pts.map(q => q.lo)), ymax = Math.max(...pts.map(q => q.hi));
+  const pad = (ymax - ymin) * 0.06; ymin -= pad; ymax += pad;
+  const X = v => M.l + v * (W - M.l - M.r);
+  const Y = v => H - M.b - (v - ymin) / (ymax - ymin) * (H - M.t - M.b);
+  const span = ymax - ymin, raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${g.title}: IQM wyniku końcowego vs cost/real_frac">`;
+  for (let v = Math.ceil(ymin / step) * step; v <= ymax; v += step) {
+    svg += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/>`;
+    svg += `<text x="${M.l - 6}" y="${Y(v) + 3.5}" text-anchor="end">${+v.toFixed(3)}</text>`;
+  }
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+    svg += `<line x1="${X(t)}" x2="${X(t)}" y1="${H - M.b}" y2="${H - M.b + 4}" stroke="var(--muted)"/>`;
+    svg += `<text x="${X(t)}" y="${H - M.b + 15}" text-anchor="middle">${t}</text>`;
+  }
+  svg += `<text x="${(M.l + W - M.r) / 2}" y="${H - 4}" text-anchor="middle">cost/real_frac</text>`;
+  // labels: within a near-x cluster the higher point labels above, the lower below
+  for (const q of pts) {
+    const near = pts.filter(o => o !== q && Math.abs(o.x - q.x) < 0.06);
+    q.dy = near.length && near.every(o => o.y < q.y) ? -9 : near.length ? 15 : 4;
+  }
+  for (const q of pts) {
+    svg += `<line x1="${X(q.x)}" x2="${X(q.x)}" y1="${Y(q.lo)}" y2="${Y(q.hi)}" stroke="${COLOR[q.c]}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>`;
+  }
+  for (const q of pts) {
+    svg += `<circle class="pt" data-c="${q.c}" cx="${X(q.x)}" cy="${Y(q.y)}" r="5.5" fill="${COLOR[q.c]}" stroke="var(--surface)" stroke-width="2" tabindex="0"/>`;
+    svg += `<text class="lab" x="${X(q.x) + 10}" y="${Y(q.y) + q.dy}">${q.c}</text>`;
+  }
+  svg += `</svg>`;
+  card.insertAdjacentHTML("beforeend", svg);
+  const tip = el("div", { class: "tip" }); tip.hidden = true; card.append(tip);
+  card.querySelectorAll("circle.pt").forEach(c => {
+    const show = () => {
+      const q = pts.find(o => o.c === c.dataset.c);
+      tip.innerHTML = `<b>${q.c}</b><span>IQM ${fmt(q.y, g.digits)} [${fmt(q.lo, g.digits)}, ${fmt(q.hi, g.digits)}]</span><span>real_frac ${fmt(q.x, 3)}</span><span>budżet na populację ${fmt(d.cost[q.c].pop_budget * 100, 0)}%</span>`;
+      tip.hidden = false;
+      const bx = card.getBoundingClientRect(), r = c.getBoundingClientRect();
+      const left = r.left - bx.left + 14;
+      tip.style.left = (left + 200 > bx.width ? left - 220 : left) + "px";
+      tip.style.top = (r.top - bx.top - 8) + "px";
+    };
+    c.addEventListener("pointerenter", show); c.addEventListener("focus", show);
+    c.addEventListener("pointerleave", () => tip.hidden = true); c.addEventListener("blur", () => tip.hidden = true);
+  });
+  const order = [...C].sort((a, b) => d.cost[b].real_frac - d.cost[a].real_frac);
+  const rows = order.map(c => {
+    const r = d.ranking[c];
+    const vs = (b) => {
+      if (c === b) return `<td class="n">-</td>`;
+      const q = p(d, c, b);
+      const cls = q.ci[0] > 0.5 ? "hi" : q.ci[1] < 0.5 ? "lo" : "";
+      return `<td class="n ${cls}">${fmt(q.p, 2)} <span class="ci">[${fmt(q.ci[0], 2)}, ${fmt(q.ci[1], 2)}]</span></td>`;
+    };
+    return `<tr><td>${dot(c)}</td><td class="n">${fmt(d.cost[c].real_frac, 3)}</td><td class="n">${fmt(d.cost[c].pop_budget * 100, 0)}%</td><td class="n">${fmt(r.iqm, g.digits)} <span class="ci">[${fmt(r.ci[0], g.digits)}, ${fmt(r.ci[1], g.digits)}]</span></td>${vs("td3")}${vs("erl")}</tr>`;
+  }).join("");
+  const tw = el("div", { class: "tablewrap" });
+  tw.append(el("table", {}, `<tr><th>warunek</th><th>real_frac</th><th>budżet na<br>populację</th><th>IQM [95% CI]</th><th>P(&gt; td3)</th><th>P(&gt; erl)</th></tr>${rows}`));
+  card.append(tw);
+  return card;
+}
+const sc = document.getElementById("scatters");
+GROUPS.forEach(g => sc.append(scatter(g)));
+
+const pairs = document.getElementById("pairs");
+for (const g of GROUPS) {
+  const d = DATA[g.key];
+  const card = el("div", { class: "card" });
+  card.append(el("h3", {}, `${g.title}: P(wiersz &gt; kolumna)`));
+  let html = `<tr><th></th>${C.map(c => `<th>${c}</th>`).join("")}</tr>`;
+  for (const a of C) {
+    html += `<tr><td>${dot(a)}</td>` + C.map(b => {
+      if (a === b) return `<td class="n ci">-</td>`;
+      const q = p(d, a, b);
+      const cls = q.ci[0] > 0.5 ? "hi" : q.ci[1] < 0.5 ? "lo" : "";
+      return `<td class="n ${cls}" title="95% CI ${fmt(q.ci[0], 2)}-${fmt(q.ci[1], 2)}">${fmt(q.p, 2)}</td>`;
+    }).join("") + `</tr>`;
+  }
+  const tw = el("div", { class: "tablewrap" });
+  tw.append(el("table", {}, html));
+  card.append(tw);
+  pairs.append(card);
+}
+
+let dh = `<tr><th>env</th><th>warunek</th><th>cały run</th><th>okno 900k-1M</th><th>seedy</th><th>per seed (cały run)</th></tr>`;
+for (const env of ["Swimmer-v5", "Ant-v5"]) {
+  for (const c of C) {
+    const rs = (dom[`${env}|${c}`] || []).sort((a, b) => a.seed - b.seed);
+    if (!rs.length) continue;
+    const m = k => rs.reduce((s, r) => s + r[k], 0) / rs.length;
+    const bar = v => `<span class="bar"><i style="width:${(v * 100).toFixed(1)}%"></i><b></b></span>`;
+    dh += `<tr><td>${env}</td><td>${dot(c)}</td><td class="n">${fmt(m("share_all") * 100, 0)}%${bar(m("share_all"))}</td><td class="n">${fmt(m("share_final") * 100, 0)}%${bar(m("share_final"))}</td><td class="n">${rs.length}</td><td class="n">${rs.map(r => `s${r.seed} ${fmt(r.share_all * 100, 0)}%`).join(" · ")}</td></tr>`;
+  }
+}
+document.getElementById("dominance").append(el("table", {}, dh));
+
+const rawBox = document.getElementById("raw");
+for (const g of GROUPS) {
+  const d = DATA[g.key];
+  const det = el("details");
+  det.append(el("summary", {}, `${g.title}: średni wynik końcowy (surowy) i liczba seedów`));
+  let html = `<tr><th>env</th>${C.map(c => `<th>${c}</th>`).join("")}</tr>`;
+  for (const env of d.envs) {
+    html += `<tr><td>${env}</td>` + C.map(c => {
+      const v = d.raw[env][c];
+      return `<td class="n">${fmt(v.reduce((a, b) => a + b, 0) / v.length, 1)} <span class="ci">n=${v.length}</span></td>`;
+    }).join("") + `</tr>`;
+  }
+  const tw = el("div", { class: "tablewrap" });
+  tw.append(el("table", {}, html));
+  det.append(tw);
+  rawBox.append(det);
+}
+</script>

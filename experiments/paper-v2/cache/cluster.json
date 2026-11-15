@@ -1,0 +1,49 @@
+{
+ "checked": "2026-11-13T09:59",
+ "jobs": [
+  {
+   "id": 6306493,
+   "label": "etap1 controls HalfCheetah-v5",
+   "states": {
+    "COMPLETED": 20
+   },
+   "cpu_h": 223.69333333333333,
+   "gpu_h": 55.92333333333333,
+   "failed": [],
+   "pending_reasons": {}
+  },
+  {
+   "id": 6306494,
+   "label": "etap1 controls Hopper-v5",
+   "states": {
+    "COMPLETED": 20
+   },
+   "cpu_h": 187.24333333333337,
+   "gpu_h": 46.81083333333334,
+   "failed": [],
+   "pending_reasons": {}
+  },
+  {
+   "id": 6306495,
+   "label": "etap1 controls Walker2d-v5",
+   "states": {
+    "COMPLETED": 20
+   },
+   "cpu_h": 189.01555555555555,
+   "gpu_h": 47.25388888888889,
+   "failed": [],
+   "pending_reasons": {}
+  },
+  {
+   "id": 6306496,
+   "label": "etap1 controls Ant-v5",
+   "states": {
+    "COMPLETED": 20
+   },
+   "cpu_h": 252.44111111111113,
+   "gpu_h": 63.11027777777778,
+   "failed": [],
+   "pending_reasons": {}
+  }
+ ]
+}
