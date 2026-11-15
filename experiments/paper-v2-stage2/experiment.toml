@@ -52,6 +52,57 @@ question = "per cheap variant (prefix-h200, sc_erl-random, sc_erl-always): CI of
 alpha = 0.05
 correction = "bonferroni"
 
+# H6 and H7 as run by python -m analysis.compare (Holm replaces Bonferroni)
+[[comparisons]]
+family = "H6"
+a = "erl"
+b = "td3"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H6"
+a = "sc_erl-always"
+b = "td3"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H6"
+a = "sc_erl-random"
+b = "td3"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H6"
+a = "prefix-h200"
+b = "td3"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H7"
+requires = "H6"
+a = "prefix-h200"
+b = "erl"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H7"
+requires = "H6"
+a = "sc_erl-random"
+b = "erl"
+envs = ["Swimmer-v5"]
+[[comparisons]]
+family = "H7"
+requires = "H6"
+a = "sc_erl-always"
+b = "erl"
+envs = ["Swimmer-v5"]
+
+[analysis]
+alpha = 0.05
+caches = ["cache/full"]
+# runs that log perf/eval_champion: metric pilot (seeds 0-2) and step B
+champion_caches = ["../paper-v2-metric-pilot/cache/pilot", "cache/champion"]
+
+[cost]
+pop_size = 10
+warmup = 10_000
+groups = { easy = ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5"], swimmer = ["Swimmer-v5"] }
+
 [report]
 url = "https://claude.ai/code/artifact/90ece3b6-f156-4bc0-a9c4-f56dbff5630e"
 

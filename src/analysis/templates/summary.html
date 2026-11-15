@@ -1,4 +1,4 @@
-<title>Macierz ERL paper-v2</title>
+<title>Podsumowanie eksperymentu</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +15,7 @@
   --grid: #edf0f4;
   --seq: #2a78d6;
   --focus: #2a78d6;
+  --good: #0f7a4f;
   --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a;
   --c3: #eda100; --c4: #e87ba4; --c5: #008300; --c6: #6250d6;
   --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
@@ -26,7 +27,7 @@
     color-scheme: dark;
     --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
     --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --seq: #3987e5;
-    --focus: #3987e5;
+    --focus: #3987e5; --good: #3fbf87;
     --c0: #3987e5; --c1: #d95926; --c2: #199e70;
     --c3: #c98500; --c4: #d55181; --c5: #008300; --c6: #9085e9;
   }
@@ -74,6 +75,13 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px
 .legend button[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
 .legend button[aria-pressed="false"] .sw { opacity: 0.3; }
 .sw { width: 14px; height: 4px; border-radius: 2px; display: inline-block; flex: none; }
+.pill { display: inline-block; font: 600 11px var(--f-mono); letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; }
+.pill.pass { background: color-mix(in oklab, var(--good) 18%, var(--surface)); color: var(--good); }
+.pill.fail { background: var(--grid); color: var(--muted); }
+.gate td.hit { font-weight: 600; }
+.gate td.miss { color: var(--muted); }
+.group-row td { background: var(--bg); font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.group-title { font: 600 15px var(--f-display); margin: 4px 0 0; }
 .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
 .chart { position: relative; display: grid; gap: 4px; }
@@ -110,21 +118,27 @@ a { color: var(--ink); }
 
 <main>
   <header>
-    <div class="eyebrow">usc_erl_jax · paper-core-v1 + paper-v2</div>
-    <h1>Macierz ERL paper-v2</h1>
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="name"></h1>
     <div class="facts" id="facts"></div>
-    <p class="note">6 warunków ERL plus kontrola <span class="mono">td3</span> (eval_mode=rl_only, TD3 bez populacji, tag paper-v2). Ranking normalizowany po wszystkich 7 warunkach.</p>
+    <p class="note" id="question"></p>
   </header>
+
+  <section id="gate-section">
+    <div class="sec-head">
+      <h2>Bramka A → B</h2>
+      <span class="hint" id="gate-rule"></span>
+    </div>
+    <div class="panel scroll"><table class="gate" id="gate"></table></div>
+    <p class="hint">Wynik końcowy na seedach 0-2. Komórka: średnia wariantu, zysk względem td3, wygrane w parach seedów. Pogrubienie: wariant spełnia oba warunki bramki.</p>
+  </section>
 
   <section>
     <div class="sec-head">
       <h2>Ranking IQM</h2>
-      <span class="hint">znormalizowany per env (0 = najgorsza średnia warunku, 1 = najlepsza), 95% CI z bootstrapu po (env, seed)</span>
+      <span class="hint">znormalizowany per env po 5 warunkach (0 = najgorsza średnia, 1 = najlepsza), 95% CI z bootstrapu, każda grupa osobno</span>
     </div>
-    <div class="rank-grid">
-      <div class="panel chart"><h3>Wynik końcowy (ostatnie 10% budżetu)</h3><svg id="rank-final"></svg></div>
-      <div class="panel chart"><h3>AUC eval_rl</h3><svg id="rank-auc"></svg></div>
-    </div>
+    <div id="rankings"></div>
   </section>
 
   <section>
@@ -151,7 +165,7 @@ a { color: var(--ink); }
     </div>
     <div class="legend" id="legend"></div>
     <div class="charts" id="charts"></div>
-    <p class="hint">Średnia po 10 seedach na siatce co 20k env_steps, pasmo = 95% CI średniej.</p>
+    <p class="hint">Średnia po seedach (łatwe 10, trudne 3) na siatce co 20k env_steps, pasmo = 95% CI średniej. Przy 3 seedach pasmo jest szerokie.</p>
   </section>
 
   <section>
@@ -169,39 +183,25 @@ a { color: var(--ink); }
 
   <section class="method">
     <h2>Metoda</h2>
-    <ul>
-      <li>Wynik końcowy: średnia perf/eval_rl dla env_steps ≥ 900k. AUC: pole pod krzywą eval_rl podzielone przez zakres kroków.</li>
-      <li>Pozostałe metryki w tabelach: średnia z tego samego okna (ostatnie 10% budżetu). Generacje i czas: wartość końcowa runu.</li>
-      <li>Normalizacja po 7 warunkach (6 ERL + td3) w każdym env. IQM po 40 parach (env, seed), 10k próbek bootstrapu, te same losowania dla każdego warunku.</li>
-      <li>p_surr logują tylko warianty sc_erl, prefix/h tylko prefix-td i hboot-td, metryk populacji brak w td3. Puste komórki = metryka nie istnieje w tym warunku.</li>
-      <li>Czas runu = _runtime z wandb (1 H100, 4 rdzenie). Źródło: cache wandb w experiments/paper-v2/cache/full, skrypt summary.py.</li>
-    </ul>
+    <ul id="method"></ul>
   </section>
 </main>
 
 <script>
 const D = /*DATA*/null;
 const CONDS = D.conditions;
-const color = (c) => `var(--c${CONDS.indexOf(c)})`;
-const HIGHER = new Set(["perf/eval_rl", "auc", "max_eval"]);
+const color = (c) => `var(--c${CONDS.indexOf(c) % 7})`;
+const GROUP_LABEL = new Proxy({ easy: "MuJoCo łatwe", hard: "trudne dla gradientu", all: "wszystkie envy" }, { get: (o, k) => o[k] ?? k });
+const HIGHER = new Set([D.metrics[0], "auc", "max_eval"]);
 const TABLE_METRICS = [
-  ["perf/eval_rl", "eval_rl końcowy"],
-  ["auc", "AUC eval_rl"],
-  ["max_eval", "max eval_rl"],
-  ["cost/real_frac", "cost/real_frac"],
-  ["p_surr", "p_surr"],
-  ["prefix/h", "prefix/h"],
-  ["screen/cem_std", "screen/cem_std"],
-  ["train/critic_loss", "train/critic_loss"],
-  ["train/td_error", "train/td_error"],
-  ["train/td_error_ema", "train/td_error_ema"],
+  [D.metrics[0], `${D.metrics[0]} końcowy`],
+  ["auc", `AUC ${D.metrics[0]}`],
+  ["max_eval", `max ${D.metrics[0]}`],
+  ...D.metrics.slice(1).map((k) => [k, k]),
   ["generations", "generacje"],
   ["runtime_h", "czas runu [h]"],
 ];
-const CURVE_METRICS = [
-  "perf/eval_rl", "cost/real_frac", "p_surr", "prefix/h", "screen/cem_std",
-  "train/critic_loss", "train/td_error", "train/td_error_ema",
-];
+const CURVE_METRICS = D.metrics;
 const NS = "http://www.w3.org/2000/svg";
 
 function fmt(v) {
@@ -247,8 +247,10 @@ function renderFacts() {
     ["runy", D.runs.length],
     ["warunki", CONDS.length],
     ["envy", D.envs.length],
-    ["seedy", new Set(D.runs.map((r) => r.seed)).size],
-    ["budżet", "1M env_steps"],
+    ["seedy", Object.entries(D.ranking).map(([g, r]) => `${r.seeds} ${GROUP_LABEL[g]}`).join(" / ")],
+    ...(D.gate.length ? [["bramka", `${D.gate.filter((g) => g.pass).length} z ${D.gate.length} envów`]] : []),
+    ["budżet", `${D.total_steps / 1e6}M env_steps`],
+    ["protokół", D.protocol],
     ["Σ czasu runów", `${mean(rt) * rt.length | 0} GPU-h`],
     ["dane z", `${D.generated} UTC`],
   ];
@@ -281,6 +283,39 @@ function renderRanking(id, rows) {
   });
 }
 
+function renderGate() {
+  const R = D.gate_rule;
+  document.getElementById("gate-rule").textContent =
+    `zysk ≥ ${R.min_rel_gain * 100}% nad ${R.reference} i ≥ ${R.min_wins}/${R.seeds.length} wygranych`;
+  const variants = CONDS.filter((c) => c !== R.reference);
+  let html = `<thead><tr><th>env</th><th class="n">${R.reference}</th>${variants.map((c) =>
+    `<th class="n"><span class="cond"><span class="sw" style="background:${color(c)}"></span>${c}</span></th>`).join("")}<th>wynik</th></tr></thead><tbody>`;
+  for (const g of D.gate) {
+    html += `<tr><td>${g.env}</td><td class="n">${fmt(g.ref_mean)}</td>`;
+    for (const c of variants) {
+      const v = g.variants.find((x) => x.condition === c);
+      const sign = v.gain >= 0 ? "+" : "−";
+      html += `<td class="n ${v.pass ? "hit" : ""}">${fmt(v.mean)} <span class="sd">${sign}${Math.abs(v.gain * 100).toFixed(0)}% · ${v.wins}/${v.n}</span></td>`;
+    }
+    html += `<td><span class="pill ${g.pass ? "pass" : "fail"}">${g.pass ? "✓ krok B" : "✗ stop"}</span></td></tr>`;
+  }
+  document.getElementById("gate").innerHTML = html + "</tbody>";
+}
+
+function renderRankings() {
+  const box = document.getElementById("rankings");
+  box.style.display = "grid"; box.style.gap = "12px";
+  for (const [g, r] of Object.entries(D.ranking)) {
+    h("h3", `${GROUP_LABEL[g]} <span class="hint">${r.envs.length} envy × ${r.seeds} seedów</span>`, box).className = "group-title";
+    const grid = h("div", undefined, box); grid.className = "rank-grid";
+    for (const [k, title] of [["final", "Wynik końcowy (ostatnie 10% budżetu)"], ["auc", "AUC eval_rl"]]) {
+      const p = h("div", `<h3>${title}</h3>`, grid); p.className = "panel chart";
+      const svg = el("svg", { id: `rank-${g}-${k}` }, p);
+      renderRanking(svg.id, r[k]);
+    }
+  }
+}
+
 function cellValues(env, cond, key) {
   return D.runs.filter((r) => r.env === env && r.condition === cond)
     .map((r) => r.summary[key]).filter((v) => v != null && !Number.isNaN(v));
@@ -292,6 +327,9 @@ function renderMatrix() {
   let html = `<thead><tr><th>env</th>${CONDS.map((c) =>
     `<th class="n"><span class="cond"><span class="sw" style="background:${color(c)}"></span>${c}</span></th>`).join("")}</tr></thead><tbody>`;
   for (const env of D.envs) {
+    for (const [g, envs] of Object.entries(D.groups)) {
+      if (envs[0] === env) html += `<tr class="group-row"><td colspan="${CONDS.length + 1}">${GROUP_LABEL[g]}</td></tr>`;
+    }
     const cells = CONDS.map((c) => cellValues(env, c, key));
     const means = cells.map((v) => (v.length ? mean(v) : null));
     const present = means.filter((m) => m != null);
@@ -330,6 +368,9 @@ function renderCurves() {
   box.innerHTML = "";
   const G = D.grid;
   for (const env of D.envs) {
+    for (const [g, envs] of Object.entries(D.groups)) {
+      if (envs[0] === env) { const t = h("h3", GROUP_LABEL[g], box); t.className = "group-title"; t.style.gridColumn = "1 / -1"; }
+    }
     const series = CONDS.filter((c) => !hidden.has(c) && D.curves[env]?.[c]?.[key])
       .map((c) => ({ c, ...D.curves[env][c][key] }));
     const wrap = h("div", undefined, box);
@@ -447,9 +488,26 @@ function options(id, items, all) {
   s.innerHTML = (all ? `<option value="">${all}</option>` : "") + items.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
 }
 
+function renderHeader() {
+  document.title = D.name;
+  document.getElementById("name").textContent = D.name;
+  document.getElementById("eyebrow").textContent = `usc_erl_jax · ${D.tags.join(" + ")}`;
+  document.getElementById("question").textContent = D.question;
+  const k = D.metrics[0];
+  const items = [
+    `Wynik końcowy: średnia ${k} dla env_steps ≥ ${D.final_start / 1000}k. AUC: pole pod krzywą ${k} podzielone przez zakres kroków.`,
+    "Pozostałe metryki w tabelach: średnia z tego samego okna. Generacje i czas: wartość końcowa runu.",
+    "Normalizacja per env po warunkach obecnych w grupie (0 = najgorsza średnia, 1 = najlepsza). IQM po parach (env, seed), 95% CI z 10k próbek bootstrapu stratyfikowanego po envach, seedy losowane niezależnie dla każdego warunku.",
+    "Ranking to opis. Testy prerejestrowanych porównań liczy python -m analysis.compare.",
+    "Puste komórki = metryka nie jest logowana w tym warunku. Czas runu = _runtime z wandb.",
+  ];
+  document.getElementById("method").innerHTML = items.map((s) => `<li>${s}</li>`).join("");
+}
+
+renderHeader();
 renderFacts();
-renderRanking("rank-final", D.ranking.final);
-renderRanking("rank-auc", D.ranking.auc);
+if (D.gate.length) renderGate(); else document.getElementById("gate-section").hidden = true;
+renderRankings();
 options("m-metric", TABLE_METRICS);
 options("c-metric", CURVE_METRICS.map((k) => [k, k]));
 options("r-cond", CONDS.map((c) => [c, c]), "wszystkie warunki");

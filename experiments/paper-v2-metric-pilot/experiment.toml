@@ -9,6 +9,11 @@ total_steps = 1_000_000
 # td3 has no population: compared from existing runs (tag paper-v2 / paper-core-v1)
 controls = ["td3"]
 
+[analysis]
+caches = ["cache/pilot"]
+# td3 and pre-pilot runs of the same cells (tags paper-v2, paper-core-v1)
+reference_caches = ["../paper-v2-stage2/cache/full"]
+
 [wandb]
 entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
 project = "h_boostrap_"

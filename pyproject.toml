@@ -33,6 +33,7 @@ packages = [
     "src/common",
     "src/environments",
     "src/modules",
+    "src/analysis",
 ]
 
 [tool.ruff]

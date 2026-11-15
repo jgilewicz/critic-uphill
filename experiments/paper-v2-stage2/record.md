@@ -192,4 +192,4 @@ Saldo 2026-11-13 (`preflight.sh`): **5258.5 CPU-h, 1534.2 GPU-h**.
 - Champion w kroku B (seedy 3-9, okno 900k-1M): ≈ aktor RL we wszystkich warunkach (erl 115.4 vs 116.7), champion > RL w 48-57% ewaluacji. Duża przewaga championa z pilota (erl s1: 264.8) się nie powtórzyła
 - erl-evorainbow (seedy 0-4): champion 126.5 (max 160.2), eval_rl 121.6, champion > RL w 65% ewaluacji. Daleko od ~350 z literatury, więc konfiguracja gene flow nie tłumaczy luki
 - Raport kosztu odświeżony (Swimmer 10 seedów): https://claude.ai/code/artifact/a2b60a78-f45c-4295-803d-550ca8b32088
-- Analiza: `stepb.py` (cache w `cache/stepb.json`, `cache/champion/`)
+- Analiza: `stepb.py` (cache w `cache/stepb.json`, `cache/champion/`). Od refaktoru B: dominacja championa w `python -m analysis.cost`, H6/H7 w `python -m analysis.compare` (Holm zamiast Bonferroniego, te same werdykty)

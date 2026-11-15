@@ -1,0 +1,83 @@
+[
+ {
+  "a": "prefix-h200",
+  "b": "sc_erl-always",
+  "question": "H2: prefix vs surrogate on every individual (equivalence, |dIQM| < 0.1)",
+  "equivalence_margin": 0.1,
+  "envs": [
+   "HalfCheetah-v5",
+   "Hopper-v5",
+   "Walker2d-v5",
+   "Ant-v5"
+  ],
+  "normalized": true,
+  "diff": -0.2858349714433135,
+  "ci": [
+   -0.4858216541812964,
+   -0.001193017315444331
+  ],
+  "p": 0.9124087591240876,
+  "p_greater": {
+   "p": 0.33999999999999997,
+   "ci": [
+    0.22,
+    0.47
+   ]
+  },
+  "per_env": {
+   "HalfCheetah-v5": {
+    "prefix-h200": [
+     0.4542809782707793,
+     0.7071134091854966
+    ],
+    "sc_erl-always": [
+     0.9999999999999998,
+     0.8910260244351598
+    ]
+   },
+   "Hopper-v5": {
+    "prefix-h200": [
+     0.7219536649931596,
+     0.3681211414407496
+    ],
+    "sc_erl-always": [
+     0.6907468863664865,
+     0.624782007867431
+    ]
+   },
+   "Walker2d-v5": {
+    "prefix-h200": [
+     0.680139547728116,
+     0.5513142440482685
+    ],
+    "sc_erl-always": [
+     0.7170509792249068,
+     0.7331202872210193
+    ]
+   },
+   "Ant-v5": {
+    "prefix-h200": [
+     0.6171111324015841,
+     0.3004102219229589
+    ],
+    "sc_erl-always": [
+     1.0000000000000004,
+     0.4296556765598305
+    ]
+   }
+  },
+  "p_holm": 0.9124087591240876,
+  "verdict": "equivalence not shown",
+  "pass": false
+ },
+ {
+  "a": "prefix-h200",
+  "b": "erl",
+  "question": "H3: prefix vs full-episode ERL",
+  "envs": [
+   "Swimmer-v5",
+   "Humanoid-v5"
+  ],
+  "verdict": "not tested: no env has every condition"
+ }
+]

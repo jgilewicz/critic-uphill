@@ -7,6 +7,12 @@ envs = ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5", "Swimmer-v5", "H
 conditions = ["prefix-h200", "sc_erl-always", "erl", "sc_erl-random", "prefix-td", "hboot-td"]
 seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 total_steps = 1_000_000
+# shown on the summary page, outside the normalization and the comparisons
+controls = ["td3"]
+
+[analysis]
+alpha = 0.05
+caches = ["cache/full"]
 
 [wandb]
 entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
@@ -36,6 +42,8 @@ equivalence_margin = 0.1
 a = "prefix-h200"
 b = "erl"
 question = "H3: prefix vs full-episode ERL"
+# stage 2 was replaced by paper-v2-stage2 before any run: H3 stays untested
+envs = ["Swimmer-v5", "Humanoid-v5"]
 
 [[secondary]]
 key = "cost/real_frac"
