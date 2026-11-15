@@ -6,8 +6,9 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 JAX + Equinox ERL (TD3 + CEM population on a shared embedding) with every fitness
-estimator behind one `eval_mode` switch: full rollouts, truncated prefixes,
-critic bootstrap, TD-adaptive horizons, SC-ERL surrogates and a TD3-only control.
+estimator behind one `eval.mode` switch: full rollouts, truncated prefixes,
+SC-ERL critic surrogates and a TD3-only control. Gene flow, CEM and the RL
+side are Hydra knobs (protocol 3).
 
 Open work: [TODO.md](TODO.md).
 
@@ -29,9 +30,9 @@ Open work: [TODO.md](TODO.md).
 1. **Main comparison**: ERL vs SC-ERL vs prefix-h200, TD3 (`rl_only`) as reference.
 2. **Where the gain comes from**: `rl_only` (no population) and `sc_erl_always` controls.
 3. **Horizon tradeoff**: $h$ → generations → score (`ablation-horizon`: $h \in \{100, 200, 400, 800\}$).
-4. **Does the critic help selection**: `hboot_td` vs `prefix_td`; TD-error controller kept as a diagnosed negative result.
+4. **Does the critic help selection**: `critic` mode (`p_real` 0 or 0.21) vs `prefix`.
 
-Dropped as contributions: fixing the TD controller, `hboot_td` as the flagship method.
+Dropped: h-bootstrap and the TD-error horizon controller (negative results in `paper-core-v1`, code removed in protocol 3).
 
 ### Results so far (`paper-core-v1`, 4 envs × 10 seeds)
 - Normalized final score, IQM [95% CI]: SC-ERL 0.85 [0.67, 1.00], prefix-h200 0.84 [0.67, 0.95], prefix-td 0.81 [0.63, 0.99], hboot-td 0.73 [0.53, 0.92], ERL 0.08 [−0.23, 0.37].
@@ -55,8 +56,8 @@ Dropped as contributions: fixing the TD controller, `hboot_td` as the flagship m
                  ┌──────────────────────┴──────────────────────┐
                  ▼                                             ▼
      ┌───────────────────────┐                     ┌───────────────────────┐
-     │   TD3 Gradient Agent  │◄── soft merge (ea_tau) ──┤   CEM ES Population   │
-     │      (RL Actor)       │── periodic inject (5 gen)─►│ (10x ActorHead)       │
+     │   TD3 Gradient Agent  │◄─ ea_to_rl (soft, tau) ─┤   CEM ES Population   │
+     │      (RL Actor)       │─ rl_to_ea (every 5 gen) ►│ (10x ActorHead)       │
      └───────────┬───────────┘                     └───────────┬───────────┘
                  │ (1x VecEnv, full H)                         │ (10x VecEnv)
                  ▼                                             ▼
@@ -64,42 +65,43 @@ Dropped as contributions: fixing the TD controller, `hboot_td` as the flagship m
      │  Replay Buffer (1M)   │                     │ Fitness Evaluation:   │
      └───────────────────────┘                     │ • Full (H=1000)       │
                  ▲                                 │ • Prefix (h=100-800)  │
-                 │ updates (fused JAX JIT)         │ • H-Bootstrap         │
-     ┌───────────┴───────────┐                     │ • Adaptive TD Horizon │
-     │ Twin Critic Q1 / Q2   │────────────────────►│ • Gated Surrogates    │
+                 │ updates (fused JAX JIT)         │ • Critic surrogate    │
+     ┌───────────┴───────────┐                     │   (p_real gate)       │
+     │ Twin Critic Q1 / Q2   │────────────────────►│                       │
      └───────────────────────┘                     └───────────────────────┘
 ```
 
 ---
 
-## Fitness Evaluation Strategies (`eval_mode`)
-
-Selected via `algorithm.eval_mode`:
+## Fitness evaluation (`algorithm.eval.mode`)
 
 | Mode | Evaluation | Critic role | Real ES steps per gen |
 |---|---|---|---|
 | `full` | Full rollout ($H=1000$) | none | $P \times 1000$ |
-| `prefix` | Truncated rollout, fixed $h$ (`prefix_steps`) | none | $P \times h$ |
-| `prefix_random` | Random $h$ from `prefix_grid` per gen | none | ~42% on average |
-| `prefix_td` | Prefix with $h(\delta_{\text{ema}})$ | sets $h$ | dynamic |
-| `hboot` | Prefix + $\gamma^h \min(Q_1, Q_2)(s_h)$ | terminal bootstrap | $P \times h$ |
-| `hboot_td` | `hboot` with $h(\delta_{\text{ema}})$ | bootstrap + sets $h$ | dynamic |
-| `sc_erl_random` | Replay-batch critic scoring, random gate ($\omega=0.79$) | surrogate fitness | ~21% |
-| `sc_erl_always` | Surrogate fitness for all members after warmup | surrogate fitness | 0 |
-| `ensemble` | $K=5$ critic heads, MAD gate + LCB | surrogate + $\sigma$ gate | varies |
-| `semarl_td` | SEMARL TD-error surrogate schedule | surrogate gate | varies |
-| `rl_only` | No population, no gene flow: TD3 control | — | 0 (RL actor only) |
+| `prefix` | Truncated rollout, fixed $h$ (`eval.prefix_h`) | none | $P \times h$ |
+| `critic` | Real rollout with prob. `eval.p_real`, else calibrated $Q$ on a replay batch | surrogate fitness | $p_{\text{real}} \times P \times 1000$ |
+| `rl_only` | No population, no gene flow: TD3 control | none | 0 (RL actor only) |
 
+- `critic` with `p_real=0.21` = SC-ERL random gate, `p_real=0` = always surrogate (after warmup).
 - The RL actor always rolls out the full $H$ into the replay buffer (all modes).
-- `rl_only` trains TD3 with `train_ratio × H` updates per episode; same networks, budget and evaluation as ERL.
+- `rl_only` trains TD3 with `train_ratio × H` updates per episode, same networks, budget and evaluation as ERL.
 
-### Adaptive TD-error schedule (`resolve_adaptive_h`)
-```python
-ratio = 1.0 - math.exp(-max(beta * td_error_ema, 0.0))
-target_h = h_min + ratio * (h_max - h_min)
-h = min(grid, key=lambda g: abs(g - target_h))
-```
-- Uses raw (unnormalized) TD error, so `ratio → 1` as returns grow: the controller saturates at $h \approx 800$.
+## Knobs (`algorithm.*`, defaults = paper-v2 `erl`)
+
+| Key | Values | Default |
+|---|---|---|
+| `pop_size` | int ≥ 2 | 10 |
+| `evo_target` | `head` (CEM over ActorHead) · `policy` (embedding + head) | `head` |
+| `cem.sigma_init`, `cem.damp`, `cem.damp_limit` | float | 1e-3, 1e-3, 1e-5 |
+| `cem.mean_anchor` | `none` · `rl_actor` (CEM mean reset to the RL actor before every ask) | `none` |
+| `rl_to_ea.period` | generations between injections, 0 = never | 5 |
+| `ea_to_rl.mode` | `off` · `soft` · `soft_if_better` (only when the champion beats the RL actor under the same estimator) | `soft` |
+| `ea_to_rl.tau` | float | 0.005 |
+| `rl.enabled` | `false` = pure CEM, no TD3 (needs `rl_to_ea.period=0`, `ea_to_rl.mode=off`, `cem.mean_anchor=none`, `eval.mode` full or prefix) | `true` |
+| `rl.*` | TD3 hyperparameters (gamma, lr, batch, warmup, train_ratio, ...) | see `conf/algorithm/erl.yaml` |
+| `eval.mode`, `eval.prefix_h`, `eval.p_real` | see above | `full`, 200, 0.21 |
+
+- Unknown keys fail at startup (Hydra struct config + dataclass constructors).
 
 ---
 
@@ -115,20 +117,30 @@ h = min(grid, key=lambda g: abs(g - target_h))
 
 ## Metrics
 
-### Online (wandb, x-axis `env_steps`)
-- `perf/eval_rl`: deterministic RL-actor return, mean of `eval.episodes`.
-- `generation`, `env_steps`.
+### Online (wandb, x-axis `env_steps`, runs carry `config.protocol = 3`)
+- Diagnostics run outside the step budget, every `eval.interval` steps.
+- `perf/eval_rl`, `perf/eval_champion`, `perf/eval_best`: deterministic return of the RL actor, the CEM champion and the best of the two.
+- `div/action_dist`: RMS action gap, champion vs RL actor, on 1000 fixed buffer states.
+- `div/param_dist`: RMS parameter gap, CEM elite vs RL actor.
+- `div/elite_origin`: champion lineage, 0 = RL actor injected this gen, 1 = descendant of an injected actor, 2 = population.
+- `pop/std`, `pop/champion_fitness`: CEM dispersion and the champion's training fitness.
 - `cost/real_frac`: real-step fraction used by the population.
-- `prefix/h`: current prefix depth (adaptive / random modes).
-- `p_surr`: surrogate assignment probability (surrogate modes).
-- `train/critic_loss`, `train/td_error`, `train/td_error_ema`.
-- `screen/cem_std`: CEM population dispersion.
+- `gene/ea_to_rl`: 1 when the champion updated the RL actor this generation.
+- `train/critic_loss`, `train/td_error`.
 
-### Analysis (post-training)
-- Final score: mean `perf/eval_rl` over the last 10% of the budget.
-- Per-env normalization (0 = worst condition mean, 1 = best); IQM with stratified bootstrap CI over (env, seed).
-- P(A>B) per pair; Wilcoxon + Holm across envs (needs ≥ 6 envs).
-- AUC over $[0, 10^6]$; steps to threshold and speedup vs ERL.
+### Analysis (`src/analysis`, from `src/`)
+```bash
+python -m analysis.fetch   ../experiments/<name>/experiment.toml  # wandb -> cache
+python -m analysis.summary ../experiments/<name>/experiment.toml  # summary.html
+python -m analysis.compare ../experiments/<name>/experiment.toml  # compare.json
+python -m analysis.cost    ../experiments/<name>/experiment.toml  # cost.html ([cost])
+python -m analysis.pilot   ../experiments/<name>/experiment.toml  # report.html
+```
+- Final score: mean primary metric over the last `final_window` of the budget.
+- Per-env normalization (0 = worst condition mean, 1 = best) when > 1 env, IQM with a stratified bootstrap CI, seeds drawn independently per condition (no pairing).
+- P(A>B) over all seed pairs, two-sided bootstrap p (TOST for equivalence), Holm within a family, gatekeeping via `requires`.
+- Only runs of the toml `protocol` are loaded (default 2: `paper-core-v1`, `paper-v2`).
+- Preregistration template: `src/analysis/templates/experiment.toml`.
 
 ---
 
@@ -137,8 +149,8 @@ h = min(grid, key=lambda g: abs(g - target_h))
 ```bash
 uv sync
 just train erl HalfCheetah-v5                                        # full ERL
-just train erl HalfCheetah-v5 algorithm.eval_mode=prefix algorithm.prefix_steps=200
-just train erl HalfCheetah-v5 algorithm.eval_mode=rl_only            # TD3 control
+just train erl HalfCheetah-v5 algorithm.eval.mode=prefix algorithm.eval.prefix_h=200
+just train erl HalfCheetah-v5 algorithm.eval.mode=rl_only            # TD3 control
 just train sac Hopper-v5                                             # SBX baseline
 ```
 
@@ -154,14 +166,15 @@ uv run python -m train total_steps=3000 algorithm.horizon=100 \
 
 | Suite | Conditions | Array |
 |---|---|---|
-| `core` | erl, sc_erl-random, prefix-h200, prefix-td, hboot-td | 0-49 |
+| `core` | erl, sc_erl-random, prefix-h200 | 0-29 |
 | `controls` | td3 (`rl_only`), sc_erl-always | 0-19 |
 | `ablation-horizon` | prefix-h100, prefix-h400, prefix-h800 | 0-29 |
-| `all` | union of the above | 0-99 |
+| `config-check` | erl-evorainbow | 0-9 |
+| `all` | core + controls + ablation-horizon | 0-79 |
 
 ```bash
 uv sync                                                    # login node, once
-TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
+TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 ./scripts/submit_suite.sh controls HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5
 ```
 - `submit_suite.sh` sets the array range per suite; tag defaults to `paper-<suite>-v1` (override with `TAG=`).
@@ -180,9 +193,10 @@ TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
 ├── src/
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
-│   ├── algos/erl.py       # ERL loop and all eval modes (incl. rl_only)
+│   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats
 │   ├── baselines/         # SBX agents and logging callbacks
-│   ├── common/            # Buffer, TD3, rollout, critic heads, surrogate, metrics
+│   ├── common/            # Buffer, TD3, rollout, surrogate, utils
 │   ├── modules/           # Equinox networks and CEM
 │   ├── environments/      # MuJoCo, DMC Dog, MyoSuite registries
 │   └── conf/              # Hydra configs

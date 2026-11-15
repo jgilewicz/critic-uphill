@@ -23,18 +23,17 @@ Cel: GECCO 2027 (deadline 25.01.2027). Teza i oś: [README.md](README.md#researc
 
 ## Kod
 
-- [x] `eval_mode=rl_only` (TD3 kontrola: ta sama sieć, budżet i ewaluacja, bez populacji/gene flow).
+- [x] `eval.mode=rl_only` (TD3 kontrola: ta sama sieć, budżet i ewaluacja, bez populacji/gene flow).
+- [x] Refaktor pod etap B (protokół 3): usunięte hboot/TD/ensemble, pokrętła Hydra, diagnostyka `perf/*`, `div/*`, `pop/std`, analiza w `src/analysis`.
 - [ ] #4: zapis checkpointów populacji (+ krytyka) co N generacji; skrypt offline: ranking wg prefixu h, surogatu SC-ERL i pełnego rolloutu → Spearman, overlap elity.
-- [ ] Logować `select/*` / `gate/*` w runach CORE (teraz puste).
 - [ ] `eval_reward` po treningu do wandb (teraz tylko JSON).
-- [ ] `_step_generation` używa `cfg.eval_mode` zamiast `_resolve_eval_mode(cfg)` — dotyczy tylko `eval_mode=full` + `prefix_steps`; ujednolicić albo usunąć backward-compat.
 
 ## Analiza i tekst
 
 - [ ] Oś 2: rozkład zysku ERL → prefix-h200 na (a) TD3 sam, (b) więcej generacji, (c) surogat (sc_erl-always).
 - [ ] Oś 3: wykres h → liczba generacji → final score (h=100/200/400/800 + full).
-- [ ] Oś 4: hboot-td vs prefix-td + diagnoza saturacji kontrolera TD (δ_ema rośnie ze skalą zwrotów).
-- [ ] Statystyka: IQM + stratified bootstrap po (env, seed) (rliable); P(A>B); Wilcoxon + Holm przy ≥ 6 envach.
+- [ ] Oś 4: hboot-td vs prefix-td + diagnoza saturacji kontrolera TD (δ_ema rośnie ze skalą zwrotów), z runów `paper-core-v1` (kod usunięty).
+- [x] Statystyka: `src/analysis/stats.py` (IQM, bootstrap bez parowania, P(A>B), TOST, Holm).
 
 ## Mail do promotora
 
