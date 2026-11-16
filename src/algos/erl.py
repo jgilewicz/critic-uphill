@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, NamedTuple, get_args
 
 import equinox as eqx
@@ -14,6 +15,7 @@ import optax
 from jax.flatten_util import ravel_pytree
 
 import environments
+from common.checkpoint import checkpoint_dir, save_checkpoint
 from common.replay_buffer import Buffer
 from common.rollout import (
     collect_parallel_episode,
@@ -136,6 +138,9 @@ class ERLConfig:
     perf_env: str | None = None  # None: env_name
     perf_interval: int = 5_000
     perf_episodes: int = 5
+    # TD3 nets + replay buffer saved at these fractions of step_budget
+    checkpoint_dir: str | None = None
+    checkpoint_at: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         _check_choice("evo_target", self.evo_target, EvoTarget)
@@ -143,6 +148,20 @@ class ERLConfig:
             raise ValueError(f"pop_size={self.pop_size}; must be >= 2")
         if not self.rl.enabled:
             _check_without_rl(self)
+        _check_checkpoint(self)
+
+
+def _check_checkpoint(cfg: ERLConfig) -> None:
+    if not cfg.checkpoint_at:
+        return
+    if cfg.checkpoint_dir is None or not cfg.rl.enabled:
+        raise ValueError(
+            f"checkpoint.at={list(cfg.checkpoint_at)} needs checkpoint.dir "
+            "and rl.enabled=true (it saves the TD3 nets and replay buffer)"
+        )
+    bad = [f for f in cfg.checkpoint_at if not 0.0 < f <= 1.0]
+    if bad:
+        raise ValueError(f"checkpoint.at {bad}: fractions must be in (0, 1]")
 
 
 def _check_without_rl(cfg: ERLConfig) -> None:
@@ -470,6 +489,33 @@ def maybe_evaluate(run: Run, steps_before: int) -> Metrics:
     return metrics
 
 
+def maybe_checkpoint(run: Run, steps_before: int) -> None:
+    cfg = run.cfg
+    crossed = [
+        f
+        for f in cfg.checkpoint_at
+        if steps_before < f * cfg.step_budget <= run.env_steps
+    ]
+    if not crossed or cfg.checkpoint_dir is None:
+        return
+    path = checkpoint_dir(
+        Path(cfg.checkpoint_dir), cfg.env_name, cfg.seed, run.env_steps
+    )
+    meta = {
+        "env": cfg.env_name,
+        "seed": cfg.seed,
+        "env_steps": run.env_steps,
+        "fractions": crossed,
+        "generation": run.generation,
+        "embedding_dim": cfg.embedding_dim,
+        "hidden_dims": list(cfg.rl.critic_hidden_dims),
+        "action_limit": run.action_limit,
+        "horizon": run.horizon,
+    }
+    save_checkpoint(path, run.td3_state.online, _buffer(run), meta)
+    print(f"checkpoint -> {path}")
+
+
 def print_generation(run: Run, metrics: Metrics, tag: str) -> None:
     def show(key: str, fmt: str = ".1f") -> str:
         return f"{metrics[key]:{fmt}}" if key in metrics else "n/a"
@@ -731,6 +777,7 @@ def train(
             else:
                 metrics = _step_generation(run, rl_env, pop_env)
             metrics |= maybe_evaluate(run, steps_before)
+            maybe_checkpoint(run, steps_before)
             metrics |= {
                 "generation": float(run.generation),
                 "env_steps": float(run.env_steps),

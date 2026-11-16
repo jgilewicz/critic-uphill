@@ -43,6 +43,8 @@ def _erl_config(cfg: DictConfig) -> ERLConfig:
         perf_env=cfg.eval_env.id,
         perf_interval=int(cfg.eval.interval),
         perf_episodes=int(cfg.eval.episodes),
+        checkpoint_dir=cfg.checkpoint.dir,
+        checkpoint_at=tuple(float(f) for f in cfg.checkpoint.at),
         **algo,
     )
 

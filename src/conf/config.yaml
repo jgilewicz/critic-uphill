@@ -26,6 +26,12 @@ wandb:
   name: null
   tags: []
 
+# ERL only: save TD3 nets + replay buffer at these fractions of total_steps
+# to <dir>/<env>_s<seed>/step_<N>/ (critic-degeneracy-v1)
+checkpoint:
+  dir: null
+  at: []
+
 # path to write {"eval_reward": float} after training (hyperparameter sweeps)
 result_file: null
 
