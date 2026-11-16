@@ -1,6 +1,6 @@
 # critic-degeneracy-v1: czy krytyk TD3 rankuje sąsiadów aktora tylko przez odległość
 
-- **Status:** wysłane 2026-11-16 z commita `670468d`.
+- **Status:** zakończone 2026-11-16, decyzja **H1-noH3**.
 - **Account:** `hpc-jakgil6519-1780267238` (SC-ERL)
 - **Prerejestracja:** 2026-11-16, przed pierwszym runem
 - **Code:** git@github.com:jgilewicz/usc_erl_jax.git, branch `critic-degeneracy-v1` (z `refactor-b`, protokół 3). Zmiana w treningu: tylko zapis checkpointów (`checkpoint.dir`, `checkpoint.at`), algorytm bez zmian.
@@ -103,11 +103,32 @@ rsync -a wcss:/lustre/pd03/hpc-jakgil6519-1780267238/critic-degeneracy-v1/out/ \
 
 | job | co | stan |
 |---|---|---|
-| 6337576 | td3 HalfCheetah-v5 s0-1 + checkpointy | PENDING |
-| 6337582 | offline HalfCheetah-v5 (afterok 6337576) | PENDING |
-| 6337583 | td3 Walker2d-v5 s0-1 + checkpointy | PENDING |
-| 6337584 | offline Walker2d-v5 (afterok 6337583) | PENDING |
-| 6337585 | td3 Swimmer-v5 s0-1 + checkpointy | PENDING |
-| 6337586 | offline Swimmer-v5 (afterok 6337585) | PENDING |
+| 6337576 | td3 HalfCheetah-v5 s0-1 + checkpointy | COMPLETED |
+| 6337582 | offline HalfCheetah-v5 (afterok 6337576) | COMPLETED |
+| 6337583 | td3 Walker2d-v5 s0-1 + checkpointy | COMPLETED |
+| 6337584 | offline Walker2d-v5 (afterok 6337583) | COMPLETED |
+| 6337585 | td3 Swimmer-v5 s0-1 + checkpointy | COMPLETED |
+| 6337586 | offline Swimmer-v5 (afterok 6337585) | COMPLETED |
 
 - Pierwszy `sbatch` (HalfCheetah, trening) zwrócił socket timeout, ale job powstał (sprawdzone w `squeue`). Offline HalfCheetah dosłany ręcznie z tą samą zależnością. Brak duplikatów.
+
+## Wyniki (2026-11-16)
+
+- Pokrycie 36/36 komórek. Wszystkie 9 jobów COMPLETED (trening 1:38-2:03 h, offline 7-11 min). Koszt ≈ 48 CPU-h, ≈ 12 GPU-h.
+- σ (5%, 20% spadku): HalfCheetah 0.051, 0.114 · Walker2d 0.060, 0.123 · Swimmer 0.095, 0.494.
+- Raport: https://claude.ai/code/artifact/f53b69d3-bc81-485a-9e42-31dfc160f13f (`degeneracy.html`, dane `degeneracy.json`).
+
+| hipoteza | wartość (mediana po komórkach) | próg | wynik |
+|---|---|---|---|
+| H1 | ρ(score_TD3, −dist_H) = 0.86, stosunek TD3 = 0.095 | ≥ 0.8, ≤ 0.2 | przechodzi |
+| H2 | cząstkowa ρ TD3 = 0.19 | \|·\| ≤ 0.1 | nie przechodzi |
+| H3 | zysk FQE: HC −0.27, Walker2d 0.07, Swimmer −0.07, stosunek FQE/TD3 = 3.1× | ≥ 0.15 w ≥ 2/3, ≥ 2× | nie przechodzi |
+
+- **Decyzja (z prerejestracji): H1-noH3.** Degeneracja potwierdzona, poprawka FQE nie działa. Dalej: notatka analityczna + krytyk średniej populacji (centrum ≠ aktor).
+- Per env: degeneracja w HalfCheetah (ρ 0.93, stosunek 0.071) i Walker2d (0.85, 0.070). Swimmer nie spełnia żadnego progu (0.71, 1.32), H1 pooled przechodzi dzięki 2 z 3 envów.
+- −dist_H przewiduje prawdę co najmniej tak dobrze jak score_TD3 (mediana ρ 0.43 vs 0.39).
+- Krytyk TD3 zachowuje informację ponad odległość głównie w HalfCheetah (cząstkowa 0.41), Walker2d 0.19, Swimmer 0.02.
+- FQE ma większy wyraz 1. rzędu (0.29 vs 0.095), ale cząstkowa ρ niższa (0.07 vs 0.19): gradient FQE nie wskazuje kierunku poprawy prawdziwego zwrotu.
+- Sufit szumu prawdy: mediana 0.94, min 0.77. Niskie korelacje w Walker2d i Swimmer to słabość predyktorów, nie szum.
+- Prefiks 200: dobry w HalfCheetah (0.78), słaby w Walker2d (0.06) i Swimmer (0.23).
+- Uwaga: spadek przy stałym σ w Walker2d waha się między checkpointami od −0.06 do 0.62 (kalibracja na jednym checkpoincie słabo przenosi się na inne).

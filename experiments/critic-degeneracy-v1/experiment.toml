@@ -118,3 +118,6 @@ label = "td3 Swimmer-v5 s0-1 + checkpoints"
 [[cluster.jobs]]
 id = "6337586"
 label = "offline Swimmer-v5 (afterok 6337585)"
+
+[report]
+url = "https://claude.ai/code/artifact/f53b69d3-bc81-485a-9e42-31dfc160f13f"
