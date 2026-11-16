@@ -91,6 +91,23 @@ in >= 2 of 3 envs, and median ratio_FQE >= 2 x median ratio_TD3"""
 "H1-noH3" = "degeneracy confirmed, fix fails: analysis note + another fix (critic of the population mean, centre != actor)"
 "noH1" = "hypothesis refuted, stop"
 
+# validation of improvements: preregistered 2026-11-16 after the main
+# analysis, before any validation rollout. Same 36 cells and perturbations
+# (regenerated from [offline].key), no new checkpoints.
+[validation]
+# re-evaluated per cell: perturbations with truth > actor, the top-1 by
+# truth, the top-`top` by score_TD3 and by prefix (union); the actor too
+top = 3
+# fresh reset seeds seed_base + e, e < episodes, shared by the actor and
+# every candidate (common random numbers, paired differences)
+episodes = 20
+seed_base = 2_000_000
+# paired difference R_pert - R_actor per episode, two-sided t-interval
+alpha = 0.05
+# cell passes if >= 1 re-evaluated perturbation has its CI above zero;
+# improvement is real in an env if >= min_cell_share of its 12 cells pass
+min_cell_share = 0.5
+
 [cluster]
 ssh_host = "wcss"
 # one [[cluster.jobs]] per sbatch, appended at submission

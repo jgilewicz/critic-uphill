@@ -132,3 +132,20 @@ rsync -a wcss:/lustre/pd03/hpc-jakgil6519-1780267238/critic-degeneracy-v1/out/ \
 - Sufit szumu prawdy: mediana 0.94, min 0.77. Niskie korelacje w Walker2d i Swimmer to słabość predyktorów, nie szum.
 - Prefiks 200: dobry w HalfCheetah (0.78), słaby w Walker2d (0.06) i Swimmer (0.23).
 - Uwaga: spadek przy stałym σ w Walker2d waha się między checkpointami od −0.06 do 0.62 (kalibracja na jednym checkpoincie słabo przenosi się na inne).
+
+## Walidacja poprawy (prerejestracja 2026-11-16, przed rolloutami walidacji)
+
+- Pytanie: czy zaburzenia z prawdą > aktor to realna poprawa, czy szum selekcji z 10 epizodów (klątwa zwycięzcy)?
+- Te same 36 komórek i te same zaburzenia (odtworzone z `[offline].key`), bez nowych checkpointów i bez nowego treningu. Spec: `experiment.toml` `[validation]`.
+- **Kandydaci na komórkę** (suma zbiorów): zaburzenia z prawdą > aktor, top-1 wg prawdy, top-3 wg score_TD3, top-3 wg prefiksu. Plus aktor.
+  - Top-1 wg prawdy dodany do polecenia: bez niego komórki bez zaburzenia lepszego od aktora nie miałyby nieobciążonego „najlepszego”.
+- **Ponowna ocena:** 20 pełnych epizodów, seedy resetu 2 000 000-2 000 019 (nowe, rozłączne z prawdą, prefiksem i kalibracją), wspólne dla aktora i kandydatów.
+- **Różnica:** per epizod d_e = R_pert − R_aktor (te same stany startowe), średnia i dwustronny 95% przedział t (19 df).
+- **Sprawdzenie odtworzenia:** na 6 checkpointach 300k (z buforem) dist_L2 wszystkich 80 zaburzeń musi się zgadzać z zapisanym (rtol 1e-3), inaczej stop.
+- **Raport per env × σ** (6 komórek):
+  - odsetek zaburzeń lepszych od aktora po ponownej ocenie (CI różnicy > 0) wśród 240 zaburzeń i wśród tych z prawdą > aktor,
+  - zysk najlepszego po ponownej ocenie (max po kandydatach, optymistyczny: selekcja na tych samych danych),
+  - zysk top-1 wg prawdy, top-1 wg krytyka TD3 i top-1 wg prefiksu po ponownej ocenie (względem aktora, %).
+- **Reguła (zamknięta):** poprawa realna w envie, jeśli w ≥ 50% jego 12 komórek (≥ 6) co najmniej jedno zaburzenie ma 95% CI różnicy w całości powyżej zera.
+- Raportowane obok, poza regułą: to samo z poprawką Bonferroniego w komórce (α / liczba kandydatów), bo przy wielu kandydatach jedno CI > 0 może wyjść przypadkiem.
+- Uruchomienie lokalnie (CPU, bez grantu): `python -m offline.critic_degeneracy validate <toml> <ckpt_root> <out_dir> <env>`.
