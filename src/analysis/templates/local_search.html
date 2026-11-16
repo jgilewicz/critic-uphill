@@ -1,0 +1,392 @@
+<title>Przeszukiwanie lokalne vs TD3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, verdict -> point 3 table -> gain vs cost per env x phase -> point 1 and 2 tables (env filter) -> cells -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --pos-bg: #e3f3eb;
+  --neg-bg: #f8e7e2;
+  --band: rgb(75 89 103 / 0.13);
+  --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+    --band: rgb(169 180 191 / 0.14);
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+  --band: rgb(169 180 191 / 0.14);
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+.mono, td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 86ch; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.sub { font-size: 12px; color: var(--muted); }
+.pill { justify-self: start; font: 600 11px var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; }
+.pill.ok { color: var(--pos); background: var(--pos-bg); }
+.pill.no { color: var(--neg); background: var(--neg-bg); }
+.val { font: 500 13px var(--f-mono); color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
+.controls label { display: grid; gap: 3px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+select { font: 13px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.legend svg { display: inline-block; width: 14px; height: 14px; vertical-align: middle; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg text.lab { fill: var(--ink-2); font: 500 10.5px var(--f-body); }
+svg .pt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child, td.l, th.l { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+tr.grp td { background: var(--grid); font-weight: 600; color: var(--ink-2); }
+td.hi { color: var(--pos); font-weight: 600; } td.lo { color: var(--neg); font-weight: 600; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: 12px var(--f-mono); color: var(--ink); box-shadow: 0 2px 10px rgb(0 0 0 / 0.12); display: grid; gap: 2px; z-index: 2; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+details summary { cursor: pointer; font-weight: 600; }
+details summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+details .tablewrap { border: 0; margin-top: 8px; }
+.method { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; max-width: 86ch; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">local-search-v1 · krok 1 · offline, prerejestrowane 2026-11-16</div>
+    <h1>Czy przeszukiwanie lokalne wokół aktora TD3 się opłaca?</h1>
+    <p class="note">Zaburzenia aktora ocenione na kilku epizodach (parowanych z aktorem) i zaakceptowane, gdy wyglądają na lepsze. Zysk zwrotu na 100k kroków środowiska wobec przyrostu eval_rl TD3 na te same kroki w tej samej fazie treningu.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <h2>Werdykt reguły</h2>
+    <div class="grid3" id="verdict"></div>
+  </section>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Opłacalność: env × faza</h2>
+    <p class="note">Przyrost TD3: nachylenie MNK perf/eval_rl w oknie ±100k kroków, na 100k kroków, per seed. Najlepsza procedura: najwyższy średni (po 2 seedach) oczekiwany zysk na 100k kroków spośród 30 procedur. Druga kolumna ogranicza wybór do procedur z odsetkiem fałszywych akceptacji w HalfCheetah ≤ 5%. Zielone: zysk > 0 i > TD3 dla tego seeda.</p>
+    <div class="tablewrap" id="phaseTable"></div>
+  </section>
+
+  <section>
+    <h2>Oczekiwany zysk vs koszt w krokach</h2>
+    <p class="note">Jeden punkt = procedura przy jednym poziomie σ, średnia po 2 seedach. Oś x (log): średni koszt jednej decyzji w krokach środowiska. Oś y: oczekiwany zysk jednej decyzji (zwrot). Linia: zysk TD3 na ten sam budżet kroków (średnia nachyleń 2 seedów), pas: rozpiętość między seedami. Punkt nad linią daje więcej zwrotu na krok niż dalszy trening TD3.</p>
+    <div class="legend" id="plotLegend"></div>
+    <div class="grid3" id="plots"></div>
+  </section>
+
+  <section>
+    <h2>Procedury per env</h2>
+    <div class="controls" id="controls"></div>
+    <div class="card"><h3>1. Pojedyncza decyzja (krok SA / hill climbing)</h3>
+      <div class="sub">Akceptacja, gdy średnia różnica parowana z k epizodów > 0. Średnie po 6 komórkach (2 seedy × 3 fazy). Słuszna decyzja: akceptacja ⇔ naprawdę lepszy.</div>
+      <div class="tablewrap" id="singleTable"></div></div>
+    <div class="card"><h3>2. Najlepszy z N</h3>
+      <div class="sub">Zwycięzca = najwyższa średnia różnica do aktora, akceptacja gdy dolna granica 95% CI (bootstrap) > 0. Wariant bez parowania: osobne seedy dla każdego kandydata i aktora.</div>
+      <div class="tablewrap" id="bestTable"></div></div>
+  </section>
+
+  <section>
+    <details>
+      <summary>36 komórek: aktor i prawda</summary>
+      <div class="tablewrap" id="cells"></div>
+    </details>
+    <details>
+      <summary>Zgodność rolloutów z critic-degeneracy-v1</summary>
+      <p class="note" id="agreeNote" style="margin-top:8px"></p>
+      <div class="tablewrap" id="agree"></div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method" id="method"></div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const SP = DATA.spec, ENVS = SP.envs, HC = ENVS[0];
+const PHASES = [...new Set(DATA.phases.map(p => p.step))].sort((a, b) => a - b);
+const STEP_LABEL = s => s >= 1e6 ? `${s / 1e6}M` : `${s / 1000}k`;
+const LEVEL = ["σ 5%", "σ 20%"];
+const fmt = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : "–";
+const pct = v => Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : "–";
+const short = e => e.replace("-v5", "");
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.innerHTML = html;
+  return e;
+};
+function procLabel(name) {
+  const m = name.match(/^best-of-(\d+) k=(\d+) (\w+)$/);
+  if (!m) return `pojedyncza, k=${name.split("=")[1]}`;
+  return `najlepszy z ${m[1]}, k=${m[2]}${m[3] === "paired" ? "" : ", bez parowania"}`;
+}
+const family = n => n.startsWith("single") ? 0 : n.endsWith("unpaired") ? 2 : 1;
+const FAMILY = ["pojedyncza decyzja", "najlepszy z N, parowany", "najlepszy z N, bez parowania"];
+
+const nCells = DATA.cells.length, nProc = new Set(DATA.entries.map(e => `${e.procedure}|${e.level}`)).size;
+document.getElementById("facts").innerHTML = [
+  ["envy", ENVS.length], ["komórki", nCells], ["zaburzenia", "40 na komórkę"],
+  ["epizody prawdy", "30 na politykę"], ["procedury", nProc], ["powtórzenia", SP.reps],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const V = DATA.verdict;
+const hcFalse = {};
+for (const e of DATA.entries) hcFalse[`${e.procedure}|${e.level}`] = e.hc_false;
+const hcOk = Object.values(hcFalse).filter(v => v <= SP.rule.false_accept_max).length;
+const nBeat = DATA.entries.filter(e => e.env !== HC && e.beats_td3).length;
+const passList = V.passing.slice(0, 6).map(p => `${short(p.env)} ${STEP_LABEL(p.step)}: ${procLabel(p.procedure)}, ${LEVEL[p.level]} (HC fałsz. ${pct(p.hc_false)})`);
+document.getElementById("verdict").innerHTML = `
+  <div class="card">
+    <span class="pill ${V.pays_off ? "ok" : "no"}">${V.pays_off ? "opłaca się" : "nie opłaca się"}</span>
+    <h3>Reguła z prerejestracji</h3>
+    <div class="sub">Istnieje procedura, która w Walker2d lub Swimmer w ≥ 1 fazie ma zysk na 100k kroków > 0 i > przyrostu TD3 na 100k kroków dla obu seedów, a ta sama procedura ma w HalfCheetah odsetek fałszywych akceptacji ≤ ${pct(SP.rule.false_accept_max)} (średnia po 6 komórkach przy tym poziomie σ).</div>
+  </div>
+  <div class="card">
+    <h3>Spełniające warunek</h3>
+    <div class="val">${V.passing.length} z ${nProc * (ENVS.length - 1) * PHASES.length} (procedura × env × faza)</div>
+    <div class="sub">${passList.length ? passList.join("<br>") + (V.passing.length > 6 ? `<br>… i ${V.passing.length - 6} więcej` : "") : "brak"}</div>
+  </div>
+  <div class="card">
+    <h3>Dwa warunki osobno</h3>
+    <div class="val">bije TD3 na 2/2 seedach: ${nBeat} · HC fałsz. ≤ ${pct(SP.rule.false_accept_max)}: ${hcOk} z ${nProc} procedur</div>
+    <div class="sub">Bez decyzji o metodzie, wynik wraca do uzgodnienia. Przy 30 procedurach × 2 envach × 3 fazach „opłaca się” to wskazanie do sprawdzenia, nie dowód.</div>
+  </div>`;
+
+const PH = (env, step) => DATA.phases.find(p => p.env === env && p.step === step);
+const SUM = (env, level, name) => DATA.summary.find(s => s.env === env && s.level === level && s.procedure === name);
+const CELL = (env, seed, step, level) => DATA.cells.find(c => c.env === env && c.seed === seed && c.step === step && c.level === level);
+const td3Pair = (env, step) => { const t = PH(env, step).td3; return `${fmt(t[0], 1)} i ${fmt(t[1], 1)}`; };
+const passPhases = [...new Set(V.passing.map(p => `${p.env}|${p.step}`))].map(k => k.split("|"));
+const w600 = CELL("Walker2d-v5", 0, 600000, 0), w600s1 = CELL("Walker2d-v5", 1, 600000, 0);
+const wBad = SUM("Walker2d-v5", 1, "best-of-40 k=1 paired"), wGood = SUM("Walker2d-v5", 0, "best-of-10 k=3 paired"), wGoodU = SUM("Walker2d-v5", 0, "best-of-10 k=3 unpaired");
+const hcK1 = ["best-of-10 k=1 paired", "best-of-40 k=1 paired"].map(n => SUM(HC, 0, n).p_false);
+const swS = SUM("Swimmer-v5", 1, "single k=3");
+const swFalse = DATA.summary.filter(s => s.env === "Swimmer-v5").map(s => s.p_false);
+const exactN = DATA.agreement.filter(a => a.validation_max_abs_diff === 0).length;
+document.getElementById("findings").innerHTML = [
+  `Reguła formalnie przechodzi (${V.passing.length} kombinacji procedura × env × faza), ale tylko w ${passPhases.length} fazach, w których TD3 stoi w miejscu: ${passPhases.map(([e, s]) => `${short(e)} ${STEP_LABEL(+s)} (TD3 ${td3Pair(e, +s)} na 100k)`).join(", ")}. W pozostałych fazach Walker2d i Swimmer, gdzie TD3 rośnie, żadna z ${nProc} procedur nie bije TD3 na obu seedach.`,
+  `Walker2d 600k seed 0 to szczególny przypadek: aktor upada po ok. 300 krokach (zwrot ${fmt(w600.actor, 0)}), ${w600.n_better} z 40 zaburzeń przy σ 5% jest naprawdę lepszych, średni prawdziwy zysk zaburzenia +${fmt(w600.mean_gain, 0)}. Epizody są krótkie i tanie, sąsiedztwo pełne poprawek. Seed 1 (zwrot ${fmt(w600s1.actor, 0)}, pełne 1000 kroków) przechodzi głównie dlatego, że nachylenie TD3 jest ujemne.`,
+  `Przyrost TD3 per seed jest bardzo zaszumiony (perf/eval_rl z 5 epizodów): Walker2d 300k ${td3Pair("Walker2d-v5", 300000)}, Walker2d 1M ${td3Pair("Walker2d-v5", 1000000)}, Swimmer 600k ${td3Pair("Swimmer-v5", 600000)}. Warunek 2/2 seedów spełniają głównie fazy, gdzie oba nachylenia są bliskie zera.`,
+  `Najlepszy z N przy k = 1 szkodzi: akceptuje prawie zawsze, a zwycięzca to zwykle szczęśliwy epizod. Walker2d σ 20%, N = 40: fałszywe akceptacje ${pct(wBad.p_false)}, oczekiwany zysk ${fmt(wBad.gain, 0)}. Przy k = 3 z bramką CI zysk jest dodatni (Walker2d σ 5%, N = 10: ${fmt(wGood.gain, 0)}, bez parowania ${fmt(wGoodU.gain, 0)}). Parowanie prawie nic nie zmienia.`,
+  `Warunek HalfCheetah: przy σ 20% żadne zaburzenie w żadnej komórce nie jest naprawdę lepsze, więc fałszywa akceptacja = akceptacja i jest niska dla prawie wszystkich procedur. Przy σ 5% warunek spełniają pojedyncza decyzja k = 3, 5 i większość wariantów k = 3, a najlepszy z N przy k = 1 nie (${pct(hcK1[0])} przy N = 10, ${pct(hcK1[1])} przy N = 40).`,
+  `W Swimmer zyski są małe w wartościach bezwzględnych: pojedyncza decyzja k = 3 przy σ 20% daje ${fmt(swS.gain, 2)} zwrotu na decyzję przy zwrocie aktora 48-133. Odsetek fałszywych akceptacji w samym Swimmer wynosi ${pct(Math.min(...swFalse))} do ${pct(Math.max(...swFalse))}.`,
+  `Zysk na 100k dla pojedynczej decyzji to ekstrapolacja: zakłada, że kolejne kroki od nowego aktora dają podobny zysk. Najlepszy z N to jedna decyzja, jego koszt (11k-123k kroków) jest rzeczywisty.`,
+  `Zgodność z v1: na seedach walidacji zwroty są identyczne w ${exactN} z ${DATA.agreement.length} checkpointów. W pozostałych batch 81 głów zamiast ok. 12-25 zmienia akcje o ok. 1e-6 (sprawdzone, nie bitowo równe), a chaotyczna dynamika rozwija to w inne epizody. Wszystkie głowy w tej analizie mają ten sam batch i te same seedy.`,
+].map(f => `<li>${f}</li>`).join("");
+
+function table(cols, rows) {
+  const head = `<tr>${cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
+  return el("table", {}, head + rows.join(""));
+}
+const td = (v, d = 1, cls = "") => `<td class="n ${cls}">${fmt(v, d)}</td>`;
+const beatCls = (v, t) => v > 0 && v > t ? "hi" : "";
+function seedCells(e) {
+  return [0, 1].map(s => td(e.per_100k[s], 1, beatCls(e.per_100k[s], e.td3[s]))).join("");
+}
+function procCells(e) {
+  if (!e) return `<td class="l">–</td><td class="n">–</td><td class="n">–</td>`;
+  return `<td class="l">${procLabel(e.procedure)}, ${LEVEL[e.level]}</td>${seedCells(e)}`;
+}
+const phaseRows = [];
+for (const env of ENVS) {
+  phaseRows.push(`<tr class="grp"><td colspan="10">${env}</td></tr>`);
+  for (const p of DATA.phases.filter(p => p.env === env)) {
+    phaseRows.push(`<tr><td>${STEP_LABEL(p.step)}</td>${td(p.td3[0])}${td(p.td3[1])}${procCells(p.best)}${procCells(p.best_hc_ok)}<td class="n">${p.n_beating}</td><td class="n ${p.n_passing && env !== HC ? "hi" : ""}">${p.n_passing}</td></tr>`);
+  }
+}
+document.getElementById("phaseTable").append(table(
+  ["faza", "TD3 s0", "TD3 s1", "najlepsza procedura", "s0", "s1", "najlepsza z HC fałsz. ≤ 5%", "s0", "s1", "bije TD3", "spełnia"],
+  phaseRows,
+));
+
+function scale(lo, hi, a, b, log = false) {
+  const f = log ? Math.log10 : v => v;
+  return v => a + (f(v) - f(lo)) / (f(hi) - f(lo)) * (b - a);
+}
+function ticks(lo, hi, n = 5) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(10));
+  return out;
+}
+const tickLabel = v => Math.abs(v) >= 1000 ? `${+(v / 1000).toPrecision(3)}k` : String(+v.toPrecision(3));
+function mark(shape, x, y, r, style, attrs) {
+  if (shape === "square") return `<rect ${attrs} x="${x - r * 0.9}" y="${y - r * 0.9}" width="${r * 1.8}" height="${r * 1.8}" rx="1.5" style="${style}"/>`;
+  if (shape === "triangle") return `<path ${attrs} d="M${x},${y - r * 1.15}L${x + r * 1.05},${y + r * 0.8}L${x - r * 1.05},${y + r * 0.8}Z" style="${style}"/>`;
+  return `<circle ${attrs} cx="${x}" cy="${y}" r="${r}" style="${style}"/>`;
+}
+const SHAPE = ["circle", "square", "triangle"];
+function markStyle(fam, level) {
+  const c = `var(--c${fam})`;
+  return level === 0 ? `fill:${c};stroke:var(--surface);stroke-width:1.5` : `fill:var(--surface);stroke:${c};stroke-width:2`;
+}
+function attachTips(card, texts) {
+  const tip = el("div", { class: "tip" }); tip.hidden = true; card.append(tip);
+  card.querySelectorAll(".pt").forEach(node => {
+    const show = () => {
+      tip.innerHTML = texts[+node.dataset.i];
+      tip.hidden = false;
+      const bx = card.getBoundingClientRect(), r = node.getBoundingClientRect();
+      const left = r.left - bx.left + 14;
+      tip.style.left = (left + 250 > bx.width ? left - 270 : left) + "px";
+      tip.style.top = (r.top - bx.top - 8) + "px";
+    };
+    node.addEventListener("pointerenter", show); node.addEventListener("focus", show);
+    node.addEventListener("pointerleave", () => tip.hidden = true); node.addEventListener("blur", () => tip.hidden = true);
+  });
+}
+
+const allCost = DATA.entries.map(e => e.cost);
+const XR = [Math.pow(10, Math.floor(Math.log10(Math.min(...allCost)))), Math.pow(10, Math.ceil(Math.log10(Math.max(...allCost))))];
+const XT = []; for (let v = XR[0]; v <= XR[1] * 1.0001; v *= 10) XT.push(v);
+function gainPlot(env, step) {
+  const pts = DATA.entries.filter(e => e.env === env && e.step === step);
+  const td3 = DATA.phases.find(p => p.env === env && p.step === step).td3;
+  const slopes = Object.values(td3), mean = slopes.reduce((a, b) => a + b, 0) / slopes.length;
+  const sLo = Math.min(...slopes), sHi = Math.max(...slopes);
+  const ys = pts.map(e => e.gain).concat([0, mean * XR[1] / SP.per_steps, sLo * XR[1] / SP.per_steps, sHi * XR[1] / SP.per_steps]);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const gmax = Math.max(...pts.map(e => e.gain), 0), gmin = Math.min(...pts.map(e => e.gain), 0);
+  // keep the procedures readable when the td3 line runs far above them
+  if (hi > 8 * Math.max(gmax - gmin, 1e-9) + gmax) hi = gmax + 8 * Math.max(gmax - gmin, 1e-9);
+  if (lo < gmin - 8 * Math.max(gmax - gmin, 1e-9)) lo = gmin - 8 * Math.max(gmax - gmin, 1e-9);
+  const d = (hi - lo) * 0.06 || 1; lo -= d; hi += d;
+  const W = 380, H = 270, P = { l: 52, r: 12, t: 12, b: 36 };
+  const X = scale(XR[0], XR[1], P.l, W - P.r, true), Y = scale(lo, hi, H - P.b, P.t);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="oczekiwany zysk vs koszt, ${env} ${STEP_LABEL(step)}">`;
+  svg += `<defs><clipPath id="clip-${short(env)}-${step}"><rect x="${P.l}" y="${P.t}" width="${W - P.l - P.r}" height="${H - P.t - P.b}"/></clipPath></defs>`;
+  for (const v of ticks(lo, hi)) {
+    svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "var(--line)" : "var(--grid)"}"/>`;
+    svg += `<text x="${P.l - 6}" y="${Y(v) + 3.5}" text-anchor="end">${tickLabel(v)}</text>`;
+  }
+  for (const v of XT) {
+    svg += `<line x1="${X(v)}" x2="${X(v)}" y1="${P.t}" y2="${H - P.b}" stroke="var(--grid)"/>`;
+    svg += `<text x="${X(v)}" y="${H - P.b + 14}" text-anchor="middle">${tickLabel(v)}</text>`;
+  }
+  svg += `<text x="${(P.l + W - P.r) / 2}" y="${H - 5}" text-anchor="middle">koszt decyzji [kroki]</text>`;
+  svg += `<text transform="translate(11 ${(P.t + H - P.b) / 2}) rotate(-90)" text-anchor="middle">oczekiwany zysk [zwrot]</text>`;
+  const xs = []; for (let i = 0; i <= 60; i++) xs.push(XR[0] * Math.pow(XR[1] / XR[0], i / 60));
+  const curve = s => xs.map(x => `${X(x).toFixed(1)},${Y(s * x / SP.per_steps).toFixed(1)}`);
+  const band = curve(sHi).concat(curve(sLo).reverse()).join(" ");
+  svg += `<g clip-path="url(#clip-${short(env)}-${step})"><polygon points="${band}" fill="var(--band)"/>`;
+  svg += `<polyline points="${curve(mean).join(" ")}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 3"/></g>`;
+  const order = pts.map((e, i) => i).sort((a, b) => pts[a].level - pts[b].level);
+  for (const i of order) {
+    const e = pts[i], f = family(e.procedure);
+    const y = Math.min(Math.max(e.gain, lo), hi);
+    svg += mark(SHAPE[f], X(e.cost), Y(y), 4.5, markStyle(f, e.level), `class="pt" tabindex="0" data-i="${i}"`);
+  }
+  svg += `</svg>`;
+  const card = el("div", { class: "card" });
+  card.append(el("h3", {}, `${env} · ${STEP_LABEL(step)}`));
+  card.append(el("div", { class: "sub mono" }, `TD3 na 100k: s0 ${fmt(td3[0])} · s1 ${fmt(td3[1])}`));
+  card.insertAdjacentHTML("beforeend", svg);
+  attachTips(card, pts.map(e => `<b>${procLabel(e.procedure)}, ${LEVEL[e.level]}</b><span>zysk ${fmt(e.gain, 2)} · koszt ${fmt(e.cost, 0)}</span><span>na 100k: s0 ${fmt(e.per_100k[0])} · s1 ${fmt(e.per_100k[1])}</span><span>TD3 na 100k: s0 ${fmt(e.td3[0])} · s1 ${fmt(e.td3[1])}</span><span>HC fałsz. akcept. ${pct(e.hc_false)}</span>`));
+  return card;
+}
+const legendMark = (f, lv) => `<svg viewBox="0 0 14 14">${mark(SHAPE[f], 7, 7, 4.5, markStyle(f, lv), "")}</svg>`;
+document.getElementById("plotLegend").innerHTML =
+  FAMILY.map((n, f) => `<span>${legendMark(f, 0)} ${n}</span>`).join("") +
+  `<span>${legendMark(1, 0)} ${LEVEL[0]} (pełny)</span><span>${legendMark(1, 1)} ${LEVEL[1]} (pusty)</span>` +
+  `<span><svg viewBox="0 0 22 14" style="width:22px"><line x1="1" x2="21" y1="7" y2="7" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 3"/></svg> TD3, ten sam budżet</span>`;
+const plots = document.getElementById("plots");
+for (const env of ENVS) for (const step of PHASES) plots.append(gainPlot(env, step));
+
+const ctl = document.getElementById("controls");
+const envSel = el("select", { id: "sel-env" }, ENVS.map(e => `<option value="${e}">${e}</option>`).join(""));
+const envLab = el("label", { for: "sel-env" }, "env"); envLab.append(envSel); ctl.append(envLab);
+const SUMCOLS = ["P(akcept.)", "P(słuszna)", "P(fałsz. akcept.)", "P(lepszy | akcept.)", "zysk", "koszt [kroki]", "zysk na 100k"];
+function sumRow(s, label) {
+  const fa = s.p_false <= SP.rule.false_accept_max ? "" : (s.env === HC ? "lo" : "");
+  return `<tr><td>${label}</td><td class="l">${LEVEL[s.level]}</td>${td(s.p_accept, 3)}${td(s.p_correct, 3)}<td class="n ${fa}">${fmt(s.p_false, 3)}</td>${td(s.p_accepted_better, 3)}${td(s.gain, 2)}${td(s.cost, 0)}${td(s.per_100k, 2)}</tr>`;
+}
+function drawTables() {
+  const env = envSel.value, rows = DATA.summary.filter(s => s.env === env);
+  const single = rows.filter(s => s.kind === "single").sort((a, b) => a.level - b.level || a.k - b.k);
+  const best = rows.filter(s => s.kind === "best").sort((a, b) => a.level - b.level || a.n - b.n || a.k - b.k || b.paired - a.paired);
+  document.getElementById("singleTable").replaceChildren(table(["k", "σ", ...SUMCOLS], single.map(s => sumRow(s, s.k))));
+  document.getElementById("bestTable").replaceChildren(table(["procedura", "σ", ...SUMCOLS],
+    best.map(s => sumRow(s, `N=${s.n}, k=${s.k}${s.paired ? "" : ", bez parowania"}`))));
+}
+envSel.addEventListener("change", drawTables);
+drawTables();
+
+document.getElementById("cells").append(table(
+  ["env", "seed", "faza", "σ", "zwrot aktora", "lepszych z 40", "max prawdziwy zysk", "średni prawdziwy zysk"],
+  DATA.cells.map(c => `<tr><td>${c.env}</td><td class="n">${c.seed}</td><td class="n">${STEP_LABEL(c.step)}</td><td class="l">${LEVEL[c.level]}</td>${td(c.actor, 1)}<td class="n">${c.n_better}</td>${td(c.max_gain, 1)}${td(c.mean_gain, 1)}</tr>`),
+));
+const AG = DATA.agreement;
+const exact = AG.filter(a => a.validation_max_abs_diff === 0).length;
+document.getElementById("agreeNote").innerHTML = DATA.agreement_note || `Seedy walidacji: zwroty identyczne z v1 w ${exact} z ${AG.length} checkpointów.`;
+document.getElementById("agree").append(table(
+  ["env", "seed", "faza", "odtworzenie dist_L2", "max |Δ| seedy walidacji", "korelacja średnich, seedy prawdy (GPU)"],
+  AG.map(a => `<tr><td>${a.env}</td><td class="n">${a.seed}</td><td class="n">${STEP_LABEL(a.step)}</td><td class="l">${a.reproduction_checked ? "sprawdzone" : "brak bufora"}</td>${td(a.validation_max_abs_diff, 2)}${td(a.truth_mean_corr, 4)}</tr>`),
+));
+
+document.getElementById("method").innerHTML = [
+  "Polityki i zaburzenia z critic-degeneracy-v1: td3 (rl_only), seedy 0-1, checkpointy 300k, 600k, 1M. 40 zaburzeń głowy aktora na poziom σ (σ skalibrowane na średni spadek zwrotu 5% i 20%), odtworzone z klucza v1.",
+  "Dane: wszystkie 81 polityk na checkpoint (aktor + 2 × 40) puszczone od nowa na CPU, 30 wspólnych seedów resetu (10 seedów prawdy v1 i 20 walidacji), zwrot i długość każdego epizodu.",
+  "Prawda: średnia z 30 epizodów. Prawdziwy zysk = średnia różnica parowana do aktora. Lepszy = 95% przedział t różnicy parowanej (29 df) w całości nad zerem.",
+  "1. Pojedyncza decyzja: k ∈ {1, 3, 5} epizodów losowanych bez zwracania z 30, parowanych z aktorem, akceptacja gdy średnia różnica > 0. Zysk = średnia po zaburzeniach P(akcept.) × prawdziwy zysk. Koszt = kroki 2k epizodów.",
+  "2. Najlepszy z N: N ∈ {10, 20, 40} z 40 zaburzeń, k ∈ {1, 3}. Akceptacja, gdy dolna granica dokładnego bootstrapu percentylowego (wszystkie k^k losowań, dla bez parowania k^k × k^k) > 0. Dla k = 1 to różnica > 0. Koszt = kroki (N + 1)·k epizodów.",
+  "1000 powtórzeń losowania na komórkę i procedurę. Zysk na 100k = oczekiwany zysk / średni koszt × 100k. Dla pojedynczej decyzji to ekstrapolacja: zakłada podobny zysk w kolejnych iteracjach.",
+  "Fałszywa akceptacja = akceptacja zaburzenia, które nie jest naprawdę lepsze, na decyzję. Reguła używa średniej po 6 komórkach HalfCheetah przy tym samym poziomie σ.",
+  "TD3: nachylenie MNK perf/eval_rl (co 5000 kroków, 5 epizodów) w oknie [faza − 100k, faza + 100k] przyciętym do [0, 1M], przeliczone na 100k kroków.",
+].map(t => `<p>${t}</p>`).join("");
+</script>

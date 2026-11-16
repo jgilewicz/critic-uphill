@@ -67,21 +67,43 @@ def rollout(
     *,
     seed: int,
     steps: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     # every env resets with the same seed: all policies face one start state
     n = env.num_envs
     # Sync/AsyncVectorEnv take a per-env seed list, the base stub says int
     states, _ = env.reset(seed=[seed] * n)  # ty: ignore[invalid-argument-type]
     returns = np.zeros(n)
+    lengths = np.zeros(n, dtype=int)
     alive = np.ones(n, dtype=bool)
     for _ in range(steps):
         actions = heads_policy(embedding, heads, jnp.asarray(states, "f4"))
         states, reward, term, trunc, _ = env.step(np.asarray(actions))
         returns += np.asarray(reward) * alive
+        lengths += alive
         alive &= ~(np.asarray(term) | np.asarray(trunc))
         if not alive.any():
             break
-    return returns
+    return returns, lengths
+
+
+def episodes_matrix(
+    env_name: str,
+    embedding: SharedStateEmbedding,
+    heads: ActorHead,
+    seeds: list[int],
+    steps: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    # returns and lengths, each (heads, episodes)
+    n = heads.out_layer.weight.shape[0]
+    env = environments.make_vec_env(env_name, n, async_=False)
+    try:
+        cols = [
+            rollout(env, embedding, heads, seed=s, steps=steps) for s in seeds
+        ]
+    finally:
+        env.close()
+    returns, lengths = zip(*cols, strict=True)
+    return np.stack(returns, axis=1), np.stack(lengths, axis=1)
 
 
 def returns_matrix(
@@ -91,16 +113,7 @@ def returns_matrix(
     seeds: list[int],
     steps: int,
 ) -> np.ndarray:
-    # (heads, episodes)
-    n = heads.out_layer.weight.shape[0]
-    env = environments.make_vec_env(env_name, n, async_=False)
-    try:
-        cols = [
-            rollout(env, embedding, heads, seed=s, steps=steps) for s in seeds
-        ]
-    finally:
-        env.close()
-    return np.stack(cols, axis=1)
+    return episodes_matrix(env_name, embedding, heads, seeds, steps)[0]
 
 
 def interpolate_sigma(

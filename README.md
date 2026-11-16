@@ -154,6 +154,14 @@ python -m analysis.degeneracy ../experiments/critic-degeneracy-v1/experiment.tom
 - Validation (`[validation]`): perturbations better than the actor plus top-k by truth, TD3 and prefix, re-evaluated on fresh reset seeds with the actor (paired t CI). Regenerates perturbations from `[offline].key`, checks dist_L2 where a buffer exists.
 - All parameters in the toml `[offline]`, cluster: `scripts/submit_degeneracy.sh <env>...` (td3 with checkpoints, then `slurm_offline_degeneracy.sh` via `afterok`).
 
+### Local search payoff (`local-search-v1`)
+```bash
+python -m offline.local_search episodes <toml> <ckpt_root> <env>              # 81 heads x 30 seeds, return + length per episode (CPU)
+python -m analysis.local_search ../experiments/local-search-v1/experiment.toml # procedures 1-2, td3 slopes, rule, local_search.{json,html}
+```
+- Reuses critic-degeneracy-v1 perturbations (regenerated from its key) and td3 curves. Truth = mean of 30 episodes, better = paired t CI above 0.
+- Simulates a single accept-if-better step (k paired episodes) and best-of-N with a bootstrap CI gate, against the td3 `perf/eval_rl` slope per 100k steps.
+
 ---
 
 ## Quickstart
@@ -207,7 +215,7 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, utils
