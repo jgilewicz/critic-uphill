@@ -170,6 +170,14 @@ python -m analysis.sa_pilot ../experiments/td3-sa-pilot/experiment.toml     # ga
 - Chain on the actor head: candidate = current + sigma-level noise, accepted on k = 3 paired episodes (T0 -> 0 or T = 0), cost = real env steps.
 - Final eval: start actor and all snapshots in one batch on fresh seeds (XLA CPU matmul takes another path below 16 rows, so batch layout changes returns).
 
+### ES step with critic curvature (`critic-curvature-es-v1`)
+```bash
+python -m offline.curvature_es run <toml> <ckpt_root> <env>                # ES / Newton steps per checkpoint, 255 heads x 30 seeds (CPU)
+python -m analysis.curvature_es ../experiments/critic-curvature-es-v1/experiment.toml # H6-H8, HC control, curvature_es.{json,html}
+```
+- Gradient from the 40 local-search-v1 perturbations per sigma level (oracle = 30 episodes, k = 1, 3 subsampled), d_ES and d_N = (-H + lambda I)^-1 g with the TD3 critic's Gauss-Newton Hessian on 2000 on-policy states.
+- Step length by bisection on the exact dist_H = 0.5x, 1x, 2x the mean of the sigma-5% perturbations. All heads in one batch, paired with the actor.
+
 ---
 
 ## Quickstart
@@ -223,7 +231,7 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, utils

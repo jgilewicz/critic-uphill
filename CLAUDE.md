@@ -14,8 +14,8 @@ src/
   train.py           # Thin Hydra entrypoint (env workers re-import it)
   runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
   algos/erl.py       # ERL loop: eval modes, knobs (config dataclasses), diagnostics
-  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot
-  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate. local_search: per-episode returns + lengths. sa_chain: SA chains on the actor head)
+  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es
+  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate. local_search: per-episode returns + lengths. sa_chain: SA chains on the actor head. curvature_es: ES/Newton steps from perturbations)
   baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
   common/            # Buffer, fused TD3, rollout, critic surrogate, utils
   modules/           # Equinox modules (ActorHead, SharedStateEmbedding) + CEM evolutionary module
