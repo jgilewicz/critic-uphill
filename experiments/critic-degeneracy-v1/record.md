@@ -141,7 +141,7 @@ rsync -a wcss:/lustre/pd03/hpc-jakgil6519-1780267238/critic-degeneracy-v1/out/ \
   - Top-1 wg prawdy dodany do polecenia: bez niego komórki bez zaburzenia lepszego od aktora nie miałyby nieobciążonego „najlepszego”.
 - **Ponowna ocena:** 20 pełnych epizodów, seedy resetu 2 000 000-2 000 019 (nowe, rozłączne z prawdą, prefiksem i kalibracją), wspólne dla aktora i kandydatów.
 - **Różnica:** per epizod d_e = R_pert − R_aktor (te same stany startowe), średnia i dwustronny 95% przedział t (19 df).
-- **Sprawdzenie odtworzenia:** na 6 checkpointach 300k (z buforem) dist_L2 wszystkich 80 zaburzeń musi się zgadzać z zapisanym (rtol 1e-3), inaczej stop.
+- **Sprawdzenie odtworzenia:** na 6 checkpointach 300k (z buforem) dist_L2 wszystkich 80 zaburzeń musi się zgadzać z zapisanym (rtol 1e-3), inaczej stop. (zmienione na 5e-2, patrz wyniki walidacji)
 - **Raport per env × σ** (6 komórek):
   - odsetek zaburzeń lepszych od aktora po ponownej ocenie (CI różnicy > 0) wśród 240 zaburzeń i wśród tych z prawdą > aktor,
   - zysk najlepszego po ponownej ocenie (max po kandydatach, optymistyczny: selekcja na tych samych danych),
@@ -149,3 +149,31 @@ rsync -a wcss:/lustre/pd03/hpc-jakgil6519-1780267238/critic-degeneracy-v1/out/ \
 - **Reguła (zamknięta):** poprawa realna w envie, jeśli w ≥ 50% jego 12 komórek (≥ 6) co najmniej jedno zaburzenie ma 95% CI różnicy w całości powyżej zera.
 - Raportowane obok, poza regułą: to samo z poprawką Bonferroniego w komórce (α / liczba kandydatów), bo przy wielu kandydatach jedno CI > 0 może wyjść przypadkiem.
 - Uruchomienie lokalnie (CPU, bez grantu): `python -m offline.critic_degeneracy validate <toml> <ckpt_root> <out_dir> <env>`.
+
+### Wyniki walidacji (2026-11-16)
+
+- Raport: ta sama strona, sekcja „Walidacja”: https://claude.ai/code/artifact/f53b69d3-bc81-485a-9e42-31dfc160f13f
+- 36/36 komórek, 386 kandydatów + 18 aktorów × 20 epizodów = 8080 epizodów. Lokalnie na CPU (M-series) ok. 6 min, bez grantu.
+- **Odstępstwo od prerejestracji:** tolerancja sprawdzenia odtworzenia 1e-3 → 5e-2 (zmiana przed obejrzeniem jakichkolwiek wyników walidacji).
+  - Przy 1e-3 sprawdzenie zatrzymało pierwszy checkpoint: maks. błąd względny dist_L2 1.0e-2.
+  - Diagnoza na 6 checkpointach 300k: mediana błędu 1e-3 do 5e-3, maks. 2.2e-2, korelacja z zapisanym dist_L2 ≥ 0.99999. Zaburzenia z innym kluczem: mediana błędu 0.28 do 0.56.
+  - Przyczyna: matmule GPU (TF32) przy ewaluacji vs CPU przy walidacji. Zaburzenia są te same. Reguła decyzyjna bez zmian.
+
+| env | σ | lepsze / 240 | lepsze / prawda > aktor | komórki CI > 0 | Bonferroni | najlepszy (optym.) | top-1 prawda | top-1 TD3 | top-1 prefiks |
+|---|---|---|---|---|---|---|---|---|---|
+| HalfCheetah | 5% | 7 (2.9%) | 7/19 | 1/6 | 1/6 | +0.2% | +0.1% | −1.4% | −2.8% |
+| HalfCheetah | 20% | 0 | 0/1 | 0/6 | 0/6 | −7.5% | −7.5% | −11.0% | −14.4% |
+| Walker2d | 5% | 73 (30.4%) | 73/95 | 6/6 | 5/6 | +5.8% | +5.8% | −0.7% | −10.2% |
+| Walker2d | 20% | 28 (11.7%) | 27/45 | 4/6 | 4/6 | +3.2% | +1.4% | +0.4% | −25.6% |
+| Swimmer | 5% | 19 (7.9%) | 19/47 | 5/6 | 5/6 | +4.0% | +2.8% | −1.7% | −2.5% |
+| Swimmer | 20% | 11 (4.6%) | 11/15 | 5/6 | 4/6 | +12.5% | +12.5% | −17.3% | −17.8% |
+
+Zyski = mediany po 6 komórkach, względem zwrotu aktora na tych samych 20 epizodach.
+
+- **Werdykt (reguła):** HalfCheetah poprawa nierealna (1/12 komórek), Walker2d realna (10/12, Bonferroni 9/12), Swimmer realna (10/12, Bonferroni 9/12).
+- HalfCheetah: 7 z 19 „lepszych” się potwierdza, wszystkie przy σ 5% i o ok. 0.2%. Aktor TD3 jest tu lokalnym maksimum w skali tych zaburzeń, więc pierwotne „lepsze” to klątwa zwycięzcy.
+- Walker2d: 30% wszystkich zaburzeń przy σ 5% jest naprawdę lepsze od aktora. Aktor TD3 nie jest w lokalnym maksimum, mała losowa perturbacja często pomaga.
+- Wybór top-1 wg 10 epizodów prawdy daje realny zysk w Walker2d i Swimmer (+1.4% do +12.5%).
+- Wybór top-1 wg krytyka TD3 daje ok. 0 (−1.7% do +0.4%) albo stratę (−11%, −17% przy σ 20%). Krytyk nie wskazuje lepszych zaburzeń, zgodnie z H1 (ranking ≈ odległość od aktora, więc top-1 TD3 ≈ najbliższe aktorowi).
+- Wybór top-1 wg prefiksu 200 jest najgorszy wszędzie (do −26% w Walker2d).
+- Wniosek dla tezy: w 2 z 3 envów populacja wokół aktora zawiera realnie lepsze polityki, ale znajduje je tylko pełna ocena. Ani krytyk TD3, ani prefiks 200 ich nie wybierają.

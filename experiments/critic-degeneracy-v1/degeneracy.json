@@ -21,6 +21,5166 @@
   "coverage": "36/36 cells",
   "decision_text": "degeneracy confirmed, fix fails: analysis note + another fix (critic of the population mean, centre != actor)"
  },
+ "validation": {
+  "verdict": {
+   "HalfCheetah-v5": {
+    "passing_share": 0.08333333333333333,
+    "passing_share_bonf": 0.08333333333333333,
+    "real": false,
+    "levels": {
+     "0": {
+      "cells": 6,
+      "confirmed_of_all": 0.029166666666666667,
+      "confirmed_of_better": 0.3684210526315789,
+      "n_better": 19,
+      "passing_cells": 1,
+      "passing_cells_bonf": 1,
+      "median_best_gain": 0.002361392515911379,
+      "median_top1_truth_gain": 0.000788990843367558,
+      "median_top1_td3_gain": -0.013687703101968929,
+      "median_top1_prefix_gain": -0.028152505712256925
+     },
+     "1": {
+      "cells": 6,
+      "confirmed_of_all": 0.0,
+      "confirmed_of_better": 0.0,
+      "n_better": 1,
+      "passing_cells": 0,
+      "passing_cells_bonf": 0,
+      "median_best_gain": -0.07512112206148563,
+      "median_top1_truth_gain": -0.07512112206148563,
+      "median_top1_td3_gain": -0.11031346395371378,
+      "median_top1_prefix_gain": -0.1442881201453133
+     }
+    }
+   },
+   "Walker2d-v5": {
+    "passing_share": 0.8333333333333334,
+    "passing_share_bonf": 0.75,
+    "real": true,
+    "levels": {
+     "0": {
+      "cells": 6,
+      "confirmed_of_all": 0.30416666666666664,
+      "confirmed_of_better": 0.7684210526315789,
+      "n_better": 95,
+      "passing_cells": 6,
+      "passing_cells_bonf": 5,
+      "median_best_gain": 0.05848504779196277,
+      "median_top1_truth_gain": 0.05848504779196277,
+      "median_top1_td3_gain": -0.006687733758627569,
+      "median_top1_prefix_gain": -0.10223375889481474
+     },
+     "1": {
+      "cells": 6,
+      "confirmed_of_all": 0.11666666666666667,
+      "confirmed_of_better": 0.6,
+      "n_better": 45,
+      "passing_cells": 4,
+      "passing_cells_bonf": 4,
+      "median_best_gain": 0.031644447005488914,
+      "median_top1_truth_gain": 0.014130342176127207,
+      "median_top1_td3_gain": 0.0037413262475674914,
+      "median_top1_prefix_gain": -0.255516895844269
+     }
+    }
+   },
+   "Swimmer-v5": {
+    "passing_share": 0.8333333333333334,
+    "passing_share_bonf": 0.75,
+    "real": true,
+    "levels": {
+     "0": {
+      "cells": 6,
+      "confirmed_of_all": 0.07916666666666666,
+      "confirmed_of_better": 0.40425531914893614,
+      "n_better": 47,
+      "passing_cells": 5,
+      "passing_cells_bonf": 5,
+      "median_best_gain": 0.03991283794992503,
+      "median_top1_truth_gain": 0.028462853379250995,
+      "median_top1_td3_gain": -0.016545942453560843,
+      "median_top1_prefix_gain": -0.024919662955588593
+     },
+     "1": {
+      "cells": 6,
+      "confirmed_of_all": 0.04583333333333333,
+      "confirmed_of_better": 0.7333333333333333,
+      "n_better": 15,
+      "passing_cells": 5,
+      "passing_cells_bonf": 4,
+      "median_best_gain": 0.1254944643972915,
+      "median_top1_truth_gain": 0.1254944643972915,
+      "median_top1_td3_gain": -0.17297847873805017,
+      "median_top1_prefix_gain": -0.1784359942194505
+     }
+    }
+   }
+  },
+  "cells": [
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 8120.757390115672,
+    "n_level": 40,
+    "n_candidates": 9,
+    "n_better": 8,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": 0.005641347238406622,
+    "top1_truth_gain": 0.00249654389331898,
+    "top1_td3_gain": -0.0027261926249414112,
+    "top1_prefix_gain": 0.0011625141482628674,
+    "candidates": [
+     {
+      "row": 3,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.0011625141482628674,
+      "lo": -0.005871473278704545,
+      "hi": 0.00819650157523028,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.0027261926249414112,
+      "lo": -0.010669629405372265,
+      "hi": 0.005217244155489443,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.005641347238406622,
+      "lo": -0.002579469899358524,
+      "hi": 0.013862164376171769,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 14,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": 0.00249654389331898,
+      "lo": -0.002850380902141959,
+      "hi": 0.00784346868877992,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.0007936759982120303,
+      "lo": -0.008792521830218766,
+      "hi": 0.007205169833794706,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 24,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.012456476646216246,
+      "lo": -0.01921763534178087,
+      "hi": -0.0056953179506516235,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0032393355900425607,
+      "lo": -0.004756440260456138,
+      "hi": 0.011235111440541259,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0014447047131875533,
+      "lo": -0.005375259753299819,
+      "hi": 0.008264669179674925,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 37,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.028457320878481945,
+      "lo": -0.035248398157923876,
+      "hi": -0.021666243599040007,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 8120.757390115672,
+    "n_level": 40,
+    "n_candidates": 5,
+    "n_better": 1,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.0019220069621537633,
+    "top1_truth_gain": -0.0019220069621537633,
+    "top1_td3_gain": -0.0019220069621537633,
+    "top1_prefix_gain": -0.0019220069621537633,
+    "candidates": [
+     {
+      "row": 42,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.0019220069621537633,
+      "lo": -0.012725680120238898,
+      "hi": 0.008881666195931372,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.047310894918439636,
+      "lo": -0.054470203353638835,
+      "hi": -0.04015158648324043,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.11734755214344732,
+      "lo": -0.1238099080256756,
+      "hi": -0.11088519626121902,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.11394867678605418,
+      "lo": -0.12504421863999013,
+      "hi": -0.10285313493211823,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 74,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07593263275654918,
+      "lo": -0.08198311819091225,
+      "hi": -0.06988214732218612,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 9891.384137472305,
+    "n_level": 40,
+    "n_candidates": 6,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.0009185622065838639,
+    "top1_truth_gain": -0.0009185622065838639,
+    "top1_td3_gain": -0.02214033536736215,
+    "top1_prefix_gain": -0.017857053932660696,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.017857053932660696,
+      "lo": -0.031331282253534605,
+      "hi": -0.0043828256117867895,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 4,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.02214033536736215,
+      "lo": -0.03606085922877443,
+      "hi": -0.008219811505949874,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.011957608630653618,
+      "lo": -0.027344083285246745,
+      "hi": 0.003428866023939506,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.028016002500069522,
+      "lo": -0.04248994317252923,
+      "hi": -0.013542061827609817,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 32,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.016505936489871594,
+      "lo": -0.031230672282361663,
+      "hi": -0.0017812006973815292,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 39,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": -0.0009185622065838639,
+      "lo": -0.01525072385557721,
+      "hi": 0.013413599442409484,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 9891.384137472305,
+    "n_level": 40,
+    "n_candidates": 5,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.06132966914280345,
+    "top1_truth_gain": -0.06132966914280345,
+    "top1_td3_gain": -0.09429567966991229,
+    "top1_prefix_gain": -0.2376112908950085,
+    "candidates": [
+     {
+      "row": 45,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.09429567966991229,
+      "lo": -0.1095881534059486,
+      "hi": -0.07900320593387597,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 51,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.12143316707876557,
+      "lo": -0.1772267411702704,
+      "hi": -0.06563959298726071,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 54,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.2376112908950085,
+      "lo": -0.3178999480341419,
+      "hi": -0.15732263375587507,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.1384071032539844,
+      "lo": -0.16445406146997227,
+      "hi": -0.1123601450379965,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "top_truth",
+       "top_prefix"
+      ],
+      "gain": -0.06132966914280345,
+      "lo": -0.07759892662853483,
+      "hi": -0.04506041165707208,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 11484.158773649811,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": 0.012732564957262415,
+    "top1_truth_gain": 0.009490306954049598,
+    "top1_td3_gain": -0.005235070836575708,
+    "top1_prefix_gain": -0.17733082918501492,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.005235070836575708,
+      "lo": -0.053530904788079176,
+      "hi": 0.043060763114927764,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.051296889741271015,
+      "lo": -0.1256517969555473,
+      "hi": 0.023058017473005267,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.17733082918501492,
+      "lo": -0.23581919894515802,
+      "hi": -0.11884245942487183,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.012732564957262415,
+      "lo": -0.03422934306714848,
+      "hi": 0.05969447298167331,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": 0.009490306954049598,
+      "lo": -0.04013093864167309,
+      "hi": 0.05911155254977229,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.06664817780272965,
+      "lo": -0.16390325578912818,
+      "hi": 0.030606900183668892,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 30,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.056227552706559054,
+      "lo": -0.1264538559597619,
+      "hi": 0.013998750546643813,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 11484.158773649811,
+    "n_level": 40,
+    "n_candidates": 4,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.14458130412703254,
+    "top1_truth_gain": -0.24378203497299,
+    "top1_td3_gain": -0.24378203497299,
+    "top1_prefix_gain": -0.24378203497299,
+    "candidates": [
+     {
+      "row": 53,
+      "reasons": [
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.24378203497299,
+      "lo": -0.4045117310482004,
+      "hi": -0.08305233889777965,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 61,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.15772459070325484,
+      "lo": -0.2035451468028812,
+      "hi": -0.11190403460362847,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.14458130412703254,
+      "lo": -0.19135095707329455,
+      "hi": -0.09781165118077051,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 75,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.15423295620258246,
+      "lo": -0.2292359514315367,
+      "hi": -0.07922996097362818,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 6636.574231438198,
+    "n_level": 40,
+    "n_candidates": 14,
+    "n_better": 11,
+    "n_confirmed": 7,
+    "n_confirmed_better": 7,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.03107382043910658,
+    "top1_truth_gain": 0.026266523909056906,
+    "top1_td3_gain": 0.03107382043910658,
+    "top1_prefix_gain": -0.004916177235242256,
+    "candidates": [
+     {
+      "row": 2,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.03107382043910658,
+      "lo": 0.023339119600225992,
+      "hi": 0.038808521277987174,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.010529018192856718,
+      "lo": 0.0040890251420827245,
+      "hi": 0.016969011243630712,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 4,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.008280621081738942,
+      "lo": -0.01733323898232871,
+      "hi": 0.0007719968188508252,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.004916177235242256,
+      "lo": -0.013820037912053908,
+      "hi": 0.003987683441569397,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.006588468010472648,
+      "lo": -0.015313181163112739,
+      "hi": 0.002136245142167444,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.011263739104415667,
+      "lo": -0.0015725383126361887,
+      "hi": 0.024100016521467524,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_prefix"
+      ],
+      "gain": 0.026266523909056906,
+      "lo": 0.017344319551507954,
+      "hi": 0.03518872826660585,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 17,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.018365218520155296,
+      "lo": 0.013299460048544412,
+      "hi": 0.02343097699176618,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0269835113961066,
+      "lo": 0.02055983781208547,
+      "hi": 0.033407184980127735,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.005035425187943385,
+      "lo": -0.0003837021168989855,
+      "hi": 0.010454552492785756,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 30,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.005718593906477377,
+      "lo": -0.00276692789295036,
+      "hi": 0.014204115705905114,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 33,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.011534491332865656,
+      "lo": 0.005237530277013887,
+      "hi": 0.017831452388717427,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.007409832153136183,
+      "lo": 0.0009859337132239686,
+      "hi": 0.013833730593048398,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 37,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.0033916895455839377,
+      "lo": -0.006231937309773717,
+      "hi": 0.013015316400941593,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 6636.574231438198,
+    "n_level": 40,
+    "n_candidates": 6,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.01000696733921537,
+    "top1_truth_gain": -0.015809795948780656,
+    "top1_td3_gain": -0.035042169173302364,
+    "top1_prefix_gain": -0.055305520861472106,
+    "candidates": [
+     {
+      "row": 41,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.055305520861472106,
+      "lo": -0.06685537783015164,
+      "hi": -0.043755663892792576,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 47,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.035042169173302364,
+      "lo": -0.04202253168361107,
+      "hi": -0.028061806662993648,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 55,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": -0.015809795948780656,
+      "lo": -0.02276888504978302,
+      "hi": -0.008850706847778292,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 63,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.062113977849372,
+      "lo": -0.07062090761955099,
+      "hi": -0.05360704807919301,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.01000696733921537,
+      "lo": -0.022688269578706444,
+      "hi": 0.002674334900275706,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 77,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.15523797408853016,
+      "lo": -0.17871896660646364,
+      "hi": -0.1317569815705967,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 8387.00197330859,
+    "n_level": 40,
+    "n_candidates": 5,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.0035417373568351774,
+    "top1_truth_gain": -0.0035417373568351774,
+    "top1_td3_gain": -0.06316830991290631,
+    "top1_prefix_gain": -0.03844795749185315,
+    "candidates": [
+     {
+      "row": 6,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.06316830991290631,
+      "lo": -0.06799328950375827,
+      "hi": -0.058343330322054354,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.03844795749185315,
+      "lo": -0.04293796370420507,
+      "hi": -0.033957951279501235,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 21,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.03683771171644507,
+      "lo": -0.041812010785922615,
+      "hi": -0.03186341264696753,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 32,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.05321595463986166,
+      "lo": -0.05787267297344636,
+      "hi": -0.04855923630627697,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.0035417373568351774,
+      "lo": -0.008980152833069072,
+      "hi": 0.0018966781193987174,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 8387.00197330859,
+    "n_level": 40,
+    "n_candidates": 5,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.08891257498016782,
+    "top1_truth_gain": -0.08891257498016782,
+    "top1_td3_gain": -0.15770912831101222,
+    "top1_prefix_gain": -0.16224499205311135,
+    "candidates": [
+     {
+      "row": 48,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.15770912831101222,
+      "lo": -0.168922802639402,
+      "hi": -0.14649545398262243,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 50,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.16224499205311135,
+      "lo": -0.17039093721214568,
+      "hi": -0.15409904689407702,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 54,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.12434449149461722,
+      "lo": -0.12946608285255823,
+      "hi": -0.1192229001366762,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.1831395838953824,
+      "lo": -0.18827420629015948,
+      "hi": -0.17800496150060532,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.08891257498016782,
+      "lo": -0.09264744373705787,
+      "hi": -0.08517770622327776,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 9793.959368595915,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.03099781806893454,
+    "top1_truth_gain": -0.03099781806893454,
+    "top1_td3_gain": -0.042105846990642536,
+    "top1_prefix_gain": -0.0743138829303149,
+    "candidates": [
+     {
+      "row": 4,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.042105846990642536,
+      "lo": -0.052203177955493535,
+      "hi": -0.03200851602579154,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.059562015398731356,
+      "lo": -0.06707810927977867,
+      "hi": -0.05204592151768404,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.0743138829303149,
+      "lo": -0.07937917099286235,
+      "hi": -0.06924859486776747,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07060989085951698,
+      "lo": -0.0752703673398098,
+      "hi": -0.06594941437922415,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.10026497685691177,
+      "lo": -0.10516664510753737,
+      "hi": -0.09536330860628618,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 28,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": -0.03099781806893454,
+      "lo": -0.03725987253450112,
+      "hi": -0.024735763603367957,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 30,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07914848592826113,
+      "lo": -0.08584888302835723,
+      "hi": -0.07244808882816502,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "HalfCheetah-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 9793.959368595915,
+    "n_level": 40,
+    "n_candidates": 4,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.12633124823751526,
+    "top1_truth_gain": -0.12633124823751526,
+    "top1_td3_gain": -0.12633124823751526,
+    "top1_prefix_gain": -0.12633124823751526,
+    "candidates": [
+     {
+      "row": 42,
+      "reasons": [
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.12633124823751526,
+      "lo": -0.13514288488045523,
+      "hi": -0.11751961159457527,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.250989910639176,
+      "lo": -0.2678469254597627,
+      "hi": -0.2341328958185893,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 71,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.19201155549978252,
+      "lo": -0.19847038983921,
+      "hi": -0.18555272116035504,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 77,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.19396020039795353,
+      "lo": -0.20005929502549522,
+      "hi": -0.18786110577041185,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 53.086444247486305,
+    "n_level": 40,
+    "n_candidates": 8,
+    "n_better": 3,
+    "n_confirmed": 1,
+    "n_confirmed_better": 1,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.02346482790102899,
+    "top1_truth_gain": 0.02346482790102899,
+    "top1_td3_gain": -0.0113160802227469,
+    "top1_prefix_gain": -0.07009360030069359,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.0113160802227469,
+      "lo": -0.024822176224797286,
+      "hi": 0.00219001577930349,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.007967506049493587,
+      "lo": -0.00020772481719859322,
+      "hi": 0.016142736916185767,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": 0.004242377086353261,
+      "lo": -0.005010087014826467,
+      "hi": 0.013494841187532988,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07009360030069359,
+      "lo": -0.10496938303596734,
+      "hi": -0.035217817565419855,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.06607143439607223,
+      "lo": -0.09373844746423535,
+      "hi": -0.03840442132790912,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 21,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.006639100611921164,
+      "lo": -0.009791555969770663,
+      "hi": 0.023069757193612993,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.013373988874551868,
+      "lo": -0.027091930759606028,
+      "hi": 0.00034395301050229243,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 37,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_prefix"
+      ],
+      "gain": 0.02346482790102899,
+      "lo": 0.017368892583937263,
+      "hi": 0.029560763218120716,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 53.086444247486305,
+    "n_level": 40,
+    "n_candidates": 8,
+    "n_better": 3,
+    "n_confirmed": 2,
+    "n_confirmed_better": 2,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.33189173227220237,
+    "top1_truth_gain": 0.33189173227220237,
+    "top1_td3_gain": -0.18673033702354344,
+    "top1_prefix_gain": 0.13439366746902784,
+    "candidates": [
+     {
+      "row": 40,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.13439366746902784,
+      "lo": 0.07019278146338369,
+      "hi": 0.198594553474672,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 44,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07108908239931806,
+      "lo": -0.12121831360652785,
+      "hi": -0.020959851192108286,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 46,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.33189173227220237,
+      "lo": 0.11620119810359882,
+      "hi": 0.5475822664408059,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 51,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.024444361176068283,
+      "lo": -0.003120216660085859,
+      "hi": 0.05200893901222243,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 54,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.05706152636392273,
+      "lo": -0.08482866500511768,
+      "hi": -0.02929438772272777,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 59,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.18673033702354344,
+      "lo": -0.3029349982150885,
+      "hi": -0.07052567583199844,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.08356046781615803,
+      "lo": -0.11948376306487866,
+      "hi": -0.04763717256743741,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.3301508281823584,
+      "lo": -0.45712892302941155,
+      "hi": -0.2031727333353053,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 56.76059478259863,
+    "n_level": 40,
+    "n_candidates": 6,
+    "n_better": 2,
+    "n_confirmed": 1,
+    "n_confirmed_better": 1,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.021208633110316382,
+    "top1_truth_gain": 0.021208633110316382,
+    "top1_td3_gain": 0.021208633110316382,
+    "top1_prefix_gain": 0.021208633110316382,
+    "candidates": [
+     {
+      "row": 2,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": 0.021208633110316382,
+      "lo": 0.011550653886606796,
+      "hi": 0.030866612334025968,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.026477059908282027,
+      "lo": -0.040405852886168936,
+      "hi": -0.012548266930395124,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.00832127377463645,
+      "lo": -0.017073825039482158,
+      "hi": 0.00043127749020926027,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.012792985563002263,
+      "lo": -0.026360436954082713,
+      "hi": 0.0007744658280781891,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.0001376454833932496,
+      "lo": -0.009336694704497083,
+      "hi": 0.00961198567128358,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 39,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.08813462356431252,
+      "lo": -0.10861495441975991,
+      "hi": -0.06765429270886514,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 56.76059478259863,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 1,
+    "n_confirmed": 1,
+    "n_confirmed_better": 1,
+    "passes": true,
+    "passes_bonf": false,
+    "best_gain": 0.12579964874085311,
+    "top1_truth_gain": 0.12579964874085311,
+    "top1_td3_gain": -0.17044937237344612,
+    "top1_prefix_gain": -0.1605453394692175,
+    "candidates": [
+     {
+      "row": 50,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.1605453394692175,
+      "lo": -0.18913684464535319,
+      "hi": -0.1319538342930818,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 52,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.08286375069741629,
+      "lo": -0.10590981649378282,
+      "hi": -0.05981768490104975,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.12579964874085311,
+      "lo": 0.009747072569216343,
+      "hi": 0.2418522249124899,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 67,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.17044937237344612,
+      "lo": -0.1889600241932858,
+      "hi": -0.15193872055360644,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.10274436146153322,
+      "lo": -0.13036053906604403,
+      "hi": -0.07512818385702243,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.09935167347273029,
+      "lo": -0.1952192238484631,
+      "hi": -0.0034841230969974934,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 79,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.09504770660870247,
+      "lo": -0.26619192280852627,
+      "hi": 0.07609650959112134,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 63.683801405636686,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 2,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": 0.04974436974720683,
+    "top1_truth_gain": 0.04974436974720683,
+    "top1_td3_gain": -0.027630540354682043,
+    "top1_prefix_gain": -0.025762095195536083,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.027630540354682043,
+      "lo": -0.03374829233422848,
+      "hi": -0.02151278837513561,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.04974436974720683,
+      "lo": -0.0002927943549103178,
+      "hi": 0.09978153384932396,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.025762095195536083,
+      "lo": -0.028111116331638642,
+      "hi": -0.023413074059433523,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.029961907478308826,
+      "lo": -0.07561621799871576,
+      "hi": 0.015692403042098107,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.001679817614181353,
+      "lo": -0.02077530392119055,
+      "hi": 0.01741566869282784,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.01442169825925234,
+      "lo": -0.0036580724862789386,
+      "hi": 0.032501469004783616,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 35,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.030088858752366353,
+      "lo": -0.05367244670846272,
+      "hi": -0.006505270796269991,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 63.683801405636686,
+    "n_level": 40,
+    "n_candidates": 8,
+    "n_better": 3,
+    "n_confirmed": 2,
+    "n_confirmed_better": 2,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.12518928005372987,
+    "top1_truth_gain": 0.12518928005372987,
+    "top1_td3_gain": -0.15090346035044427,
+    "top1_prefix_gain": -0.26999660567701356,
+    "candidates": [
+     {
+      "row": 41,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.26999660567701356,
+      "lo": -0.308966040973278,
+      "hi": -0.23102717038074913,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 43,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.15090346035044427,
+      "lo": -0.19695207107421475,
+      "hi": -0.10485484962667377,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 60,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.08189599869675726,
+      "lo": 0.019390816302946447,
+      "hi": 0.1444011810905681,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.21867521656293112,
+      "lo": -0.27894000536437025,
+      "hi": -0.158410427761492,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.12518928005372987,
+      "lo": 0.07357853049208682,
+      "hi": 0.17680002961537294,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.06804047915417623,
+      "lo": -0.10162936907427222,
+      "hi": -0.03445158923408023,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.027923132656859792,
+      "lo": -0.02749823417260453,
+      "hi": 0.08334449948632412,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 70,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.1296423447101367,
+      "lo": -0.2024906281911621,
+      "hi": -0.0567940612291113,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 47.97904485288435,
+    "n_level": 40,
+    "n_candidates": 14,
+    "n_better": 10,
+    "n_confirmed": 4,
+    "n_confirmed_better": 4,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.05776833496697353,
+    "top1_truth_gain": 0.05776833496697353,
+    "top1_td3_gain": -0.021775804684374782,
+    "top1_prefix_gain": 0.05776833496697353,
+    "candidates": [
+     {
+      "row": 2,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.001356572182392172,
+      "lo": -0.007628779222570457,
+      "hi": 0.004915634857786113,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.021775804684374782,
+      "lo": -0.03556412971277877,
+      "hi": -0.007987479655970787,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.025062197541031655,
+      "lo": 0.008748296423908333,
+      "hi": 0.041376098658154975,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.004480467833405675,
+      "lo": -0.01937524173618331,
+      "hi": 0.01041430606937196,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0049777637162376365,
+      "lo": -0.010061950498832638,
+      "hi": 0.02001747793130791,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.0027240121220230137,
+      "lo": -0.007973684150422579,
+      "hi": 0.013421708394468606,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.007428084543314819,
+      "lo": -0.011888783363678237,
+      "hi": 0.026744952450307877,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.049884311075455004,
+      "lo": -0.07305127010735032,
+      "hi": -0.026717352043559683,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 20,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_prefix"
+      ],
+      "gain": 0.05776833496697353,
+      "lo": 0.045006018988255056,
+      "hi": 0.07053065094569198,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 21,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.043232436411019946,
+      "lo": 0.03460678385066785,
+      "hi": 0.051858088971372035,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.023484097100091028,
+      "lo": -0.035793370918341595,
+      "hi": -0.01117482328184046,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.008622674231938406,
+      "lo": -0.04945763574515819,
+      "hi": 0.03221228728128138,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.008585000570320843,
+      "lo": -0.018190024567460106,
+      "hi": 0.03536002570810179,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 39,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.01736270760742614,
+      "lo": 0.004301861311737866,
+      "hi": 0.030423553903114412,
+      "confirmed": true,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 47.97904485288435,
+    "n_level": 40,
+    "n_candidates": 10,
+    "n_better": 6,
+    "n_confirmed": 4,
+    "n_confirmed_better": 4,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.4747746469796909,
+    "top1_truth_gain": 0.4747746469796909,
+    "top1_td3_gain": -0.07713625721341158,
+    "top1_prefix_gain": -0.07713625721341158,
+    "candidates": [
+     {
+      "row": 41,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.20887090920584722,
+      "lo": 0.10004288753752942,
+      "hi": 0.317698930874165,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 45,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.07713625721341158,
+      "lo": -0.09498138172674973,
+      "hi": -0.059291132700073426,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.005805852286385812,
+      "lo": -0.04622335415352653,
+      "hi": 0.05783505872629815,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 58,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.22041579318672622,
+      "lo": -0.26646915662538667,
+      "hi": -0.17436242974806573,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 60,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.05924649695066545,
+      "lo": -0.0253765288813896,
+      "hi": 0.1438695227827205,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.17023907621386306,
+      "lo": -0.25940084157420445,
+      "hi": -0.08107731085352168,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.03181465901843899,
+      "lo": 0.013149082537900154,
+      "hi": 0.05048023549897783,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.09809171181167942,
+      "lo": -0.13793292392569179,
+      "hi": -0.05825049969766704,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.205154973681108,
+      "lo": 0.08597407927483369,
+      "hi": 0.3243358680873823,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.4747746469796909,
+      "lo": 0.2520292598025893,
+      "hi": 0.6975200341567925,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 129.35366772917934,
+    "n_level": 40,
+    "n_candidates": 18,
+    "n_better": 16,
+    "n_confirmed": 4,
+    "n_confirmed_better": 4,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.030081306152643223,
+    "top1_truth_gain": 0.030081306152643223,
+    "top1_td3_gain": -0.029109748199489756,
+    "top1_prefix_gain": -0.024077230715641103,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": -0.029109748199489756,
+      "lo": -0.03543865779166183,
+      "hi": -0.022780838607317676,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": -0.024077230715641103,
+      "lo": -0.0392353628939769,
+      "hi": -0.008919098537305298,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": -0.04547955310285473,
+      "lo": -0.055111890456278484,
+      "hi": -0.03584721574943098,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.054455888352240314,
+      "lo": -0.0637791847707253,
+      "hi": -0.04513259193375532,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.0026114351637483903,
+      "lo": -0.021386895373944094,
+      "hi": 0.01616402504644731,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.00709935703148304,
+      "lo": -0.009048641623668988,
+      "hi": 0.02324735568663507,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.02856001468761495,
+      "lo": 0.013156491264909998,
+      "hi": 0.0439635381103199,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.014964308908502932,
+      "lo": 0.007789105186113753,
+      "hi": 0.02213951263089211,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.033537815479599144,
+      "lo": -0.04638992998024594,
+      "hi": -0.02068570097895234,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 20,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.01039377791208438,
+      "lo": 0.0018956982630315062,
+      "hi": 0.018891857561137256,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 24,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.006006695756023094,
+      "lo": -0.021688514224033156,
+      "hi": 0.009675122711986969,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.033531709841761646,
+      "lo": -0.0531243365785579,
+      "hi": -0.0139390831049654,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.048584713173820925,
+      "lo": -0.073094793367917,
+      "hi": -0.024074632979724862,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 31,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.008639650267300486,
+      "lo": -0.02363094881637504,
+      "hi": 0.006351648281774067,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 32,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.030081306152643223,
+      "lo": 0.02413799456395588,
+      "hi": 0.03602461774133057,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 33,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.057600436734583704,
+      "lo": -0.07741312356336796,
+      "hi": -0.037787749905799445,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.049237427161457036,
+      "lo": -0.06622767346073266,
+      "hi": -0.03224718086218141,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 35,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.04981861411439985,
+      "lo": -0.05779998406672427,
+      "hi": -0.04183724416207543,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 129.35366772917934,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.07207733314271016,
+    "top1_truth_gain": -0.07207733314271016,
+    "top1_td3_gain": -0.17550758510265424,
+    "top1_prefix_gain": -0.3226304295643563,
+    "candidates": [
+     {
+      "row": 44,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.3226304295643563,
+      "lo": -0.43692704552531697,
+      "hi": -0.20833381360339562,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 48,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": -0.07207733314271016,
+      "lo": -0.15805287669240567,
+      "hi": 0.013898210406985356,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 49,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.17550758510265424,
+      "lo": -0.2098592399052778,
+      "hi": -0.14115593030003065,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 51,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.1874866830963937,
+      "lo": -0.2253181410566475,
+      "hi": -0.1496552251361399,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.3865494549056359,
+      "lo": -0.480239454495381,
+      "hi": -0.2928594553158908,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.13586757965805676,
+      "lo": -0.21145136619175148,
+      "hi": -0.060283793124362064,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 76,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.47387682170998907,
+      "lo": -0.5898240628289053,
+      "hi": -0.3579295805910728,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 135.96937597996381,
+    "n_level": 40,
+    "n_candidates": 18,
+    "n_better": 14,
+    "n_confirmed": 9,
+    "n_confirmed_better": 9,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.07506144542629131,
+    "top1_truth_gain": 0.026844400605858763,
+    "top1_td3_gain": 0.0028952436612479657,
+    "top1_prefix_gain": -0.17918968744170652,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.17918968744170652,
+      "lo": -0.2049613249369589,
+      "hi": -0.15341804994645414,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 5,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.013837188866832885,
+      "lo": 0.0011460061418616131,
+      "hi": 0.026528371591804156,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.17311200241906127,
+      "lo": -0.2122827182027181,
+      "hi": -0.13394128663540444,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.007407278243283191,
+      "lo": -0.0028541459094755667,
+      "hi": 0.017668702396041947,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.028084380621065472,
+      "lo": 0.025923114429170967,
+      "hi": 0.030245646812959978,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.0028952436612479657,
+      "lo": 0.001211957367578115,
+      "hi": 0.004578529954917816,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.015557432084595896,
+      "lo": -0.003666217753099888,
+      "hi": 0.03478108192229167,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 20,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.026844400605858763,
+      "lo": 0.025438572887952125,
+      "hi": 0.0282502283237654,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.07506144542629131,
+      "lo": 0.06586042040336589,
+      "hi": 0.08426247044921674,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.02570625329654059,
+      "lo": -0.033180767018595604,
+      "hi": -0.018231739574485584,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 24,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04168407178942907,
+      "lo": 0.027151279495111157,
+      "hi": 0.05621686408374697,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.01157443003828427,
+      "lo": -0.02296740704709954,
+      "hi": -0.00018145302946900066,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.03995737835110407,
+      "lo": 0.037633818446574346,
+      "hi": 0.04228093825563379,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 31,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.030092406323138258,
+      "lo": -0.03262534239913972,
+      "hi": -0.027559470247136796,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 32,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.2392018623812953,
+      "lo": -0.2764495641858258,
+      "hi": -0.20195416057676477,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.07495248998274234,
+      "lo": -0.095433339610503,
+      "hi": -0.054471640354981685,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 35,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.011374669192201979,
+      "lo": 0.009491231358000077,
+      "hi": 0.013258107026403879,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.02510436876212353,
+      "lo": 0.021410951247126542,
+      "hi": 0.02879778627712052,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Swimmer-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 135.96937597996381,
+    "n_level": 40,
+    "n_candidates": 8,
+    "n_better": 2,
+    "n_confirmed": 2,
+    "n_confirmed_better": 2,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.05217594541592373,
+    "top1_truth_gain": 0.05217594541592373,
+    "top1_td3_gain": -0.194738889794689,
+    "top1_prefix_gain": -0.19632664896968352,
+    "candidates": [
+     {
+      "row": 45,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.194738889794689,
+      "lo": -0.20818456916920677,
+      "hi": -0.18129321042017124,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 52,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.05217594541592373,
+      "lo": 0.03941928528180158,
+      "hi": 0.06493260555004587,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 63,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.19632664896968352,
+      "lo": -0.20845875954359783,
+      "hi": -0.18419453839576921,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.3643932754332847,
+      "lo": -0.3862151908141535,
+      "hi": -0.34257136005241584,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04891532447171519,
+      "lo": 0.046846387996238636,
+      "hi": 0.05098426094719174,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.3292089216469195,
+      "lo": -0.3710586275587654,
+      "hi": -0.28735921573507367,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 74,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.499639419093102,
+      "lo": -0.5549254437793821,
+      "hi": -0.4443533944068217,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 75,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.2882517319821231,
+      "lo": -0.3008784626350617,
+      "hi": -0.2756250013291845,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 869.2102952741355,
+    "n_level": 40,
+    "n_candidates": 23,
+    "n_better": 18,
+    "n_confirmed": 12,
+    "n_confirmed_better": 12,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.03222829088488467,
+    "top1_truth_gain": 0.03222829088488467,
+    "top1_td3_gain": -0.014112688235503584,
+    "top1_prefix_gain": -0.02886719181063607,
+    "candidates": [
+     {
+      "row": 1,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.02886719181063607,
+      "lo": -0.061407735995826086,
+      "hi": 0.0036733523745539516,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 2,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.014112688235503584,
+      "lo": -0.01687560371065892,
+      "hi": -0.011349772760348249,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.013643349413391763,
+      "lo": 0.0054390892407530506,
+      "hi": 0.021847609586030475,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 5,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.014357047467957493,
+      "lo": -0.05755451579459478,
+      "hi": 0.028840420858679796,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.03222829088488467,
+      "lo": 0.01751161412381052,
+      "hi": 0.04694496764595882,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.006285030199967823,
+      "lo": 0.0006306507511369996,
+      "hi": 0.011939409648798648,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.00936403366086866,
+      "lo": -0.007534689091469041,
+      "hi": 0.02626275641320636,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.03710186626964918,
+      "lo": -0.05201006685134139,
+      "hi": -0.022193665687956974,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.013354105569287561,
+      "lo": 0.00764093530002694,
+      "hi": 0.019067275838548184,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.0031782637359953725,
+      "lo": -0.008685555483611508,
+      "hi": 0.0023290280116207633,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.002962310518222547,
+      "lo": -0.004348651879411386,
+      "hi": 0.01027327291585648,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.02015540107391441,
+      "lo": 0.0151705750167498,
+      "hi": 0.025140227131079017,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.0231965058711291,
+      "lo": -0.027298258289434038,
+      "hi": -0.01909475345282416,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 17,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.020326451770995124,
+      "lo": 0.013780328942461803,
+      "hi": 0.026872574599528444,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0008815096669153636,
+      "lo": -0.002457958029223641,
+      "hi": 0.004220977363054369,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.005893719332317329,
+      "lo": 0.00017381636410503188,
+      "hi": 0.011613622300529628,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 24,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.009717956608173069,
+      "lo": -0.014108491035189647,
+      "hi": -0.00532742218115649,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0035824501939642974,
+      "lo": 9.023809614868686e-05,
+      "hi": 0.007074662291779908,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.024478460583578013,
+      "lo": -0.02880234096040349,
+      "hi": -0.02015458020675254,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 31,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.010815113159584,
+      "lo": 0.007117045002222625,
+      "hi": 0.014513181316945376,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 33,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.006786402564931373,
+      "lo": 0.003776024503434759,
+      "hi": 0.009796780626427986,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.02516032340063246,
+      "lo": 0.020942887698067812,
+      "hi": 0.029377759103197103,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 38,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.010560441907246216,
+      "lo": 0.00652409717348272,
+      "hi": 0.014596786641009711,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 869.2102952741355,
+    "n_level": 40,
+    "n_candidates": 11,
+    "n_better": 7,
+    "n_confirmed": 2,
+    "n_confirmed_better": 2,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.07284232853349337,
+    "top1_truth_gain": 0.025059804735521933,
+    "top1_td3_gain": 0.004287246895918277,
+    "top1_prefix_gain": -0.3508738292237868,
+    "candidates": [
+     {
+      "row": 42,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.01597319891051295,
+      "lo": -0.0470542402977442,
+      "hi": 0.015107842476718304,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 43,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.3508738292237868,
+      "lo": -0.45004104707347065,
+      "hi": -0.25170661137410294,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 59,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.07284232853349337,
+      "lo": 0.03861511602543,
+      "hi": 0.10706954104155673,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 60,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.24749407054525505,
+      "lo": -0.3609905380888445,
+      "hi": -0.1339976030016656,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 61,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.004287246895918277,
+      "lo": -0.00038208053351467035,
+      "hi": 0.008956574325351225,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 63,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.10622129465528538,
+      "lo": -0.15507030044124134,
+      "hi": -0.057372288869329394,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 2.0389538706490417e-05,
+      "lo": -0.005378404824452519,
+      "hi": 0.0054191839018655,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.025059804735521933,
+      "lo": -0.02632557527197375,
+      "hi": 0.07644518474301762,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 73,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.009743932251558295,
+      "lo": -0.0061211385540738345,
+      "hi": 0.025609003057190424,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 77,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.007586755116052835,
+      "lo": 0.0021926679327412225,
+      "hi": 0.012980842299364448,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.0745478424370232,
+      "lo": -0.123927086187861,
+      "hi": -0.02516859868618541,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 941.6467687412411,
+    "n_level": 40,
+    "n_candidates": 37,
+    "n_better": 34,
+    "n_confirmed": 29,
+    "n_confirmed_better": 29,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.2313769110779871,
+    "top1_truth_gain": 0.1314511021417565,
+    "top1_td3_gain": 0.07719952816521813,
+    "top1_prefix_gain": -0.29641955991346763,
+    "candidates": [
+     {
+      "row": 0,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.13120993058114858,
+      "lo": 0.09780891401403327,
+      "hi": 0.16461094714826388,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 1,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.17143306233956113,
+      "lo": 0.131874240752866,
+      "hi": 0.21099188392625626,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 2,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.06299138260610021,
+      "lo": 0.015317150727776854,
+      "hi": 0.11066561448442357,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1617773990667774,
+      "lo": 0.1010062432486794,
+      "hi": 0.2225485548848754,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 5,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04929754238542465,
+      "lo": 0.015000102016622802,
+      "hi": 0.0835949827542265,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.05834304531307995,
+      "lo": 0.03659856131847348,
+      "hi": 0.08008752930768642,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.05372750025839247,
+      "lo": 0.01996136179138168,
+      "hi": 0.08749363872540325,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.004450637855337112,
+      "lo": -0.059132145701209525,
+      "hi": 0.06803342141188375,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.2313769110779871,
+      "lo": 0.09075899885401077,
+      "hi": 0.37199482330196343,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.07719952816521813,
+      "lo": 0.046859389636536554,
+      "hi": 0.10753966669389972,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 11,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.15864512094139974,
+      "lo": 0.11666203489144837,
+      "hi": 0.2006282069913511,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.11256178682217949,
+      "lo": 0.09225686902180068,
+      "hi": 0.1328667046225583,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 13,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.15023807157918673,
+      "lo": 0.1099345666238304,
+      "hi": 0.19054157653454304,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 14,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.29641955991346763,
+      "lo": -0.4037899150883415,
+      "hi": -0.18904920473859374,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.05732497619961613,
+      "lo": 0.027983413758184656,
+      "hi": 0.0866665386410476,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.09359336028099356,
+      "lo": 0.056175151336931704,
+      "hi": 0.13101156922505544,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 17,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0852477892548527,
+      "lo": 0.060091684061564274,
+      "hi": 0.11040389444814112,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.05797579939248613,
+      "lo": -0.11604362296973109,
+      "hi": 9.202418475882536e-05,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.018553598021075292,
+      "lo": -0.02935100914443167,
+      "hi": 0.06645820518658226,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 20,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.06374158950664459,
+      "lo": -0.006398361332833807,
+      "hi": 0.13388154034612298,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 21,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0029454357027340256,
+      "lo": -0.027834533081048676,
+      "hi": 0.03372540448651673,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.07841688031353027,
+      "lo": 0.053985440559058295,
+      "hi": 0.10284832006800224,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.06851581585134918,
+      "lo": 0.03983345808877562,
+      "hi": 0.09719817361392274,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 24,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.06844804773997894,
+      "lo": 0.016130461417878474,
+      "hi": 0.12076563406207941,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 25,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.0998422554518635,
+      "lo": 0.069066950779406,
+      "hi": 0.130617560124321,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 26,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": 0.03136201342827554,
+      "lo": -0.02868648115721759,
+      "hi": 0.09141050801376867,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 28,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0731432711860046,
+      "lo": 0.049753104391746066,
+      "hi": 0.09653343798026312,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.08704503704866645,
+      "lo": 0.060616951644758506,
+      "hi": 0.11347312245257439,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 30,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.10087701977088949,
+      "lo": 0.026518033810217074,
+      "hi": 0.1752360057315619,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 31,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1453517844066763,
+      "lo": 0.10566888641828158,
+      "hi": 0.18503468239507098,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 33,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.13026082108676837,
+      "lo": 0.08396564919193437,
+      "hi": 0.17655599298160232,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04534783097117249,
+      "lo": 0.012403656010980816,
+      "hi": 0.07829200593136415,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 35,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.07432526171481375,
+      "lo": 0.039738826971458335,
+      "hi": 0.10891169645816917,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1092570629850838,
+      "lo": 0.08722413518278074,
+      "hi": 0.13128999078738685,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 37,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.1314511021417565,
+      "lo": 0.0017433431241581886,
+      "hi": 0.2611588611593548,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 38,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.15971206932326992,
+      "lo": -0.27557057739107715,
+      "hi": -0.04385356125546266,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 39,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0845126523056281,
+      "lo": 0.06072104555079057,
+      "hi": 0.10830425906046563,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 941.6467687412411,
+    "n_level": 40,
+    "n_candidates": 32,
+    "n_better": 29,
+    "n_confirmed": 21,
+    "n_confirmed_better": 21,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.3197856242804664,
+    "top1_truth_gain": 0.3010682117857394,
+    "top1_td3_gain": 0.06642118279509993,
+    "top1_prefix_gain": -0.0029056739388806183,
+    "candidates": [
+     {
+      "row": 40,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.20507906773932463,
+      "lo": 0.14500917854736037,
+      "hi": 0.2651489569312889,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 41,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.12338991671548728,
+      "lo": 0.06148062940288293,
+      "hi": 0.18529920402809164,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 43,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.3197856242804664,
+      "lo": 0.266791331535409,
+      "hi": 0.3727799170255237,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 44,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.14698552303755302,
+      "lo": 0.032821998857965745,
+      "hi": 0.26114904721714033,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 45,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.13397713593588376,
+      "lo": 0.009827013574738709,
+      "hi": 0.2581272582970288,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 46,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0863477880078641,
+      "lo": 0.02593214742673691,
+      "hi": 0.14676342858899133,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 47,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.24479922711493338,
+      "lo": 0.015362335002260469,
+      "hi": 0.4742361192276063,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 48,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.06017596171113378,
+      "lo": -0.01814679872209994,
+      "hi": 0.1384987221443675,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 49,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.3010682117857394,
+      "lo": 0.07180819497783272,
+      "hi": 0.530328228593646,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 50,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.12874228532060694,
+      "lo": 0.09899887078106535,
+      "hi": 0.15848569986014854,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 51,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.21095111549536713,
+      "lo": 0.15181672319182132,
+      "hi": 0.27008550779891294,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 52,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1667542770545965,
+      "lo": 0.047011533188555395,
+      "hi": 0.2864970209206376,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 53,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.17703877059946385,
+      "lo": 0.14772842075716394,
+      "hi": 0.20634912044176376,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 54,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.11418647152288024,
+      "lo": -0.06737365986239985,
+      "hi": 0.2957466029081603,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 55,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.02148117934466105,
+      "lo": -0.015409894869400318,
+      "hi": 0.05837225355872242,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 56,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.017275635764968603,
+      "lo": -0.11881097935959452,
+      "hi": 0.08425970782965733,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.0029056739388806183,
+      "lo": -0.05731919805755787,
+      "hi": 0.05150785017979663,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 58,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.14007734240214384,
+      "lo": 0.04052180813140535,
+      "hi": 0.23963287667288236,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 60,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.15717160298849997,
+      "lo": 0.07514120969079463,
+      "hi": 0.2392019962862053,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.06642118279509993,
+      "lo": -0.001852881860126028,
+      "hi": 0.13469524745032588,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 63,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1941047011087471,
+      "lo": 0.12289271747727559,
+      "hi": 0.2653166847402187,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 64,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.1926239348014612,
+      "lo": -0.23222478161452706,
+      "hi": -0.15302308798839534,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.23525148466610163,
+      "lo": 0.15065398819007209,
+      "hi": 0.3198489811421312,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.28100732291735064,
+      "lo": 0.23878536759680577,
+      "hi": 0.3232292782378955,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 67,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.2332908331249978,
+      "lo": 0.07294022840215514,
+      "hi": 0.39364143784784045,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.14004658028544847,
+      "lo": 0.07678439509093064,
+      "hi": 0.20330876547996632,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 71,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.2879374482825128,
+      "lo": -0.37417729752498957,
+      "hi": -0.20169759904003595,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 74,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.05461760660514881,
+      "lo": -0.013238819675510386,
+      "hi": 0.12247403288580802,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 75,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.042999970230424116,
+      "lo": -0.030329501160711064,
+      "hi": 0.1163294416215593,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 76,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": -0.012760666443665154,
+      "lo": -0.10945694926507459,
+      "hi": 0.08393561637774427,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 77,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.1225065930118814,
+      "lo": 0.08377991641844336,
+      "hi": 0.16123326960531942,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.1393032752378898,
+      "lo": 0.09889273841040362,
+      "hi": 0.179713812065376,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 3712.9537544696514,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 3,
+    "n_confirmed": 1,
+    "n_confirmed_better": 1,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.031156169159788756,
+    "top1_truth_gain": 0.031156169159788756,
+    "top1_td3_gain": -0.031465867027683454,
+    "top1_prefix_gain": -0.6744214566872723,
+    "candidates": [
+     {
+      "row": 2,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": -0.031465867027683454,
+      "lo": -0.0807059972755939,
+      "hi": 0.017774263220226988,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 8,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.1044053730050693,
+      "lo": -0.18098005726649677,
+      "hi": -0.02783068874364182,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": -0.025988116574674636,
+      "lo": -0.07497597552931706,
+      "hi": 0.022999742379967787,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 17,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.6744214566872723,
+      "lo": -0.7136477551229433,
+      "hi": -0.6351951582516012,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.07808348856232304,
+      "lo": -0.17377855769707157,
+      "hi": 0.017611580572425498,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.10545229865098442,
+      "lo": -0.22453742745491878,
+      "hi": 0.01363283015294991,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.031156169159788756,
+      "lo": 0.011960375539568023,
+      "hi": 0.05035196278000949,
+      "confirmed": true,
+      "confirmed_bonf": true
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 0,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 3712.9537544696514,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 0,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": -0.13897474730080686,
+    "top1_truth_gain": -0.13897474730080686,
+    "top1_td3_gain": -0.7262338401481344,
+    "top1_prefix_gain": -0.6324744134998262,
+    "candidates": [
+     {
+      "row": 43,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.7262338401481344,
+      "lo": -0.7482848291416371,
+      "hi": -0.7041828511546319,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 48,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.6324744134998262,
+      "lo": -0.6666699836778635,
+      "hi": -0.5982788433217892,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.5714148319100042,
+      "lo": -0.63646103358629,
+      "hi": -0.5063686302337183,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.645865850666221,
+      "lo": -0.6643152144345374,
+      "hi": -0.6274164868979047,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 65,
+      "reasons": [
+       "top_truth"
+      ],
+      "gain": -0.13897474730080686,
+      "lo": -0.23510374804785203,
+      "hi": -0.04284574655376169,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 72,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.8508419166518981,
+      "lo": -0.8800644576716841,
+      "hi": -0.8216193756321122,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.7015223102237317,
+      "lo": -0.7425442524649092,
+      "hi": -0.6605003679825543,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 0,
+    "actor_return": 4093.990179627348,
+    "n_level": 40,
+    "n_candidates": 8,
+    "n_better": 2,
+    "n_confirmed": 1,
+    "n_confirmed_better": 1,
+    "passes": true,
+    "passes_bonf": false,
+    "best_gain": 0.18606369161217526,
+    "top1_truth_gain": 0.18606369161217526,
+    "top1_td3_gain": -0.17686490011292677,
+    "top1_prefix_gain": -0.17560032597899342,
+    "candidates": [
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.2658569429801621,
+      "lo": -0.44985992882573406,
+      "hi": -0.0818539571345902,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.17560032597899342,
+      "lo": -0.34842886386380884,
+      "hi": -0.002771788094178028,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.2271211811712132,
+      "lo": -0.3864274643239725,
+      "hi": -0.06781489801845388,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.22570099952079947,
+      "lo": -0.4060425079675811,
+      "hi": -0.04535949107401785,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.17686490011292677,
+      "lo": -0.37626547919404657,
+      "hi": 0.022535678968193005,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.18606369161217526,
+      "lo": 0.054813825970294466,
+      "hi": 0.3173135572540561,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 38,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.4001184481300902,
+      "lo": -0.5660843459842211,
+      "hi": -0.23415255027595938,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 39,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.23101626592143085,
+      "lo": -0.38084732212004463,
+      "hi": -0.0811852097228171,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 300000,
+    "level": 1,
+    "actor_return": 4093.990179627348,
+    "n_level": 40,
+    "n_candidates": 5,
+    "n_better": 1,
+    "n_confirmed": 0,
+    "n_confirmed_better": 0,
+    "passes": false,
+    "passes_bonf": false,
+    "best_gain": 0.014275876059521943,
+    "top1_truth_gain": 0.014275876059521943,
+    "top1_td3_gain": -0.24897102057677445,
+    "top1_prefix_gain": -0.6092424721386492,
+    "candidates": [
+     {
+      "row": 53,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.6092424721386492,
+      "lo": -0.8019868834977021,
+      "hi": -0.41649806077959645,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 58,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.24897102057677445,
+      "lo": -0.4375848866911044,
+      "hi": -0.06035715446244454,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.37495156684780384,
+      "lo": -0.5739327122261914,
+      "hi": -0.17597042146941633,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 69,
+      "reasons": [
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": -0.5710383431739077,
+      "lo": -0.7282139337619694,
+      "hi": -0.41386275258584587,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 78,
+      "reasons": [
+       "better",
+       "top_truth",
+       "top_td3"
+      ],
+      "gain": 0.014275876059521943,
+      "lo": -0.15525641469571244,
+      "hi": 0.18380816681475634,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 0,
+    "actor_return": 5057.580551506077,
+    "n_level": 40,
+    "n_candidates": 17,
+    "n_better": 16,
+    "n_confirmed": 15,
+    "n_confirmed_better": 15,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.0562075650523026,
+    "top1_truth_gain": 0.0562075650523026,
+    "top1_td3_gain": 0.0051417080394089345,
+    "top1_prefix_gain": 0.04414870813982935,
+    "candidates": [
+     {
+      "row": 0,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.017445556706637035,
+      "lo": 0.014761199776239192,
+      "hi": 0.020129913637034876,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 1,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.007772819191350068,
+      "lo": 0.005233396773620797,
+      "hi": 0.010312241609079339,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 2,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.0051417080394089345,
+      "lo": 0.002855615337764812,
+      "hi": 0.0074278007410530575,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.04414870813982935,
+      "lo": 0.040957096461810116,
+      "hi": 0.047340319817848586,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 14,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0191003367900309,
+      "lo": 0.01754401193762675,
+      "hi": 0.020656661642435053,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0559319077655695,
+      "lo": 0.05348399588263057,
+      "hi": 0.058379819648508434,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 19,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.010526276462190263,
+      "lo": 0.008337732610291176,
+      "hi": 0.01271482031408935,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 22,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.03695217211458668,
+      "lo": 0.035840938577293334,
+      "hi": 0.03806340565188002,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 23,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.027935282414115952,
+      "lo": 0.026702092800262218,
+      "hi": 0.029168472027969686,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 26,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.011594134572402135,
+      "lo": 0.007942936061697083,
+      "hi": 0.01524533308310719,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 28,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.024869210780219937,
+      "lo": 0.022940124136817827,
+      "hi": 0.026798297423622046,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.0562075650523026,
+      "lo": 0.05345562240419925,
+      "hi": 0.05895950770040595,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 30,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.012431389481510935,
+      "lo": -0.017221912240024475,
+      "hi": -0.007640866722997396,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 31,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0015946077840193525,
+      "lo": -0.0032654627588978168,
+      "hi": 0.006454678326936522,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.02039070149806466,
+      "lo": 0.018070280992799243,
+      "hi": 0.02271112200333008,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 35,
+      "reasons": [
+       "better",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": 0.00258733530896957,
+      "lo": 0.0008945780203280905,
+      "hi": 0.004280092597611049,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0034442905978808403,
+      "lo": 0.0007975151963722583,
+      "hi": 0.0060910659993894225,
+      "confirmed": true,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 600000,
+    "level": 1,
+    "actor_return": 5057.580551506077,
+    "n_level": 40,
+    "n_candidates": 11,
+    "n_better": 7,
+    "n_confirmed": 4,
+    "n_confirmed_better": 4,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.04557408972518894,
+    "top1_truth_gain": 0.01398480829273247,
+    "top1_td3_gain": 0.0031954055992167063,
+    "top1_prefix_gain": -0.16015996246475125,
+    "candidates": [
+     {
+      "row": 42,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.025993094243803586,
+      "lo": 0.0227631826989094,
+      "hi": 0.029223005788697774,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 47,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04557408972518894,
+      "lo": 0.04077730456336141,
+      "hi": 0.05037087488701647,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 49,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.01398480829273247,
+      "lo": -0.07365087376116713,
+      "hi": 0.10162049034663206,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 52,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": 0.0031954055992167063,
+      "lo": -0.002357605821474392,
+      "hi": 0.008748417019907804,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.16015996246475125,
+      "lo": -0.30261595623735005,
+      "hi": -0.017703968692152454,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 58,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.22284659201871432,
+      "lo": -0.31428043756753815,
+      "hi": -0.13141274646989043,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 60,
+      "reasons": [
+       "better",
+       "top_td3",
+       "top_prefix"
+      ],
+      "gain": 0.004243100456758631,
+      "lo": -0.07204765174730982,
+      "hi": 0.08053385266082708,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 66,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.005788949647658035,
+      "lo": -0.07628658788271434,
+      "hi": 0.06470868858739827,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 68,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.00528970398876439,
+      "lo": 0.0020012522079247796,
+      "hi": 0.008578155769603999,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 72,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.017391283239519897,
+      "lo": 0.014498673961882787,
+      "hi": 0.02028389251715701,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 79,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.571331281355811,
+      "lo": -0.6512196451221134,
+      "hi": -0.49144291758950864,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 0,
+    "actor_return": 5134.000653256366,
+    "n_level": 40,
+    "n_candidates": 25,
+    "n_better": 22,
+    "n_confirmed": 15,
+    "n_confirmed_better": 15,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.06076253053162294,
+    "top1_truth_gain": 0.06076253053162294,
+    "top1_td3_gain": 0.0007372207182484454,
+    "top1_prefix_gain": 0.0034625977253449204,
+    "candidates": [
+     {
+      "row": 0,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": 0.0007372207182484454,
+      "lo": -0.001609573420903962,
+      "hi": 0.0030840148574008534,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 1,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.027463177978410015,
+      "lo": 0.02098379582707166,
+      "hi": 0.03394256012974837,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 3,
+      "reasons": [
+       "better",
+       "top_td3"
+      ],
+      "gain": 0.002217373546576494,
+      "lo": 0.0005148803313090127,
+      "hi": 0.003919866761843975,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 5,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": 0.06076253053162294,
+      "lo": 0.059121845734729554,
+      "hi": 0.06240321532851633,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 6,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.037398697163177154,
+      "lo": 0.035064458618283195,
+      "hi": 0.03973293570807112,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 7,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.014436266692942555,
+      "lo": 0.011894630107012099,
+      "hi": 0.01697790327887301,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 9,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.05614495198118721,
+      "lo": 0.054549384498893544,
+      "hi": 0.05774051946348089,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 10,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.0034625977253449204,
+      "lo": -0.00022521931397882,
+      "hi": 0.007150414764668661,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 12,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.02089067251580974,
+      "lo": -0.022619131680584954,
+      "hi": -0.019162213351034525,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 14,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.008700821196381364,
+      "lo": 0.006419027596017554,
+      "hi": 0.010982614796745173,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 15,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.022302758488232703,
+      "lo": 0.020903493742256304,
+      "hi": 0.023702023234209103,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 16,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.038006353924617195,
+      "lo": -0.1374901694457008,
+      "hi": 0.06147746159646642,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 17,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0003251470752766819,
+      "lo": -0.0016236134355161354,
+      "hi": 0.0022739075860694993,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 18,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.002242762296755221,
+      "lo": -8.830103833736473e-05,
+      "hi": 0.004573825631847807,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 21,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0022848600919385415,
+      "lo": -0.0013732477323812578,
+      "hi": 0.005942967916258341,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 26,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.032594821594132004,
+      "lo": 0.03081837599373581,
+      "hi": 0.034371267194528196,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 27,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0025725973149823733,
+      "lo": -0.0005041682714786172,
+      "hi": 0.005649362901443364,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 28,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.029715894257586438,
+      "lo": 0.028493275008911356,
+      "hi": 0.03093851350626152,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 29,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.0025037722342273784,
+      "lo": 0.0007388016754822168,
+      "hi": 0.00426874279297254,
+      "confirmed": true,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 32,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.024814111985563814,
+      "lo": 0.019571051146234936,
+      "hi": 0.030057172824892692,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 33,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.010651138397357594,
+      "lo": 0.0049854184522472355,
+      "hi": 0.016316858342467953,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 34,
+      "reasons": [
+       "better"
+      ],
+      "gain": 0.04902001053358735,
+      "lo": 0.04523628552369458,
+      "hi": 0.05280373554348012,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 36,
+      "reasons": [
+       "better",
+       "top_prefix"
+      ],
+      "gain": 0.050318184126020175,
+      "lo": 0.04792976823444536,
+      "hi": 0.052706600017594994,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 37,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.0071660107909803615,
+      "lo": -0.008580155684742546,
+      "hi": -0.005751865897218177,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 38,
+      "reasons": [
+       "better"
+      ],
+      "gain": -0.02503611455557202,
+      "lo": -0.08293362924741576,
+      "hi": 0.03286140013627172,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   },
+   {
+    "env": "Walker2d-v5",
+    "seed": 1,
+    "step": 1000000,
+    "level": 1,
+    "actor_return": 5134.000653256366,
+    "n_level": 40,
+    "n_candidates": 7,
+    "n_better": 1,
+    "n_confirmed": 1,
+    "n_confirmed_better": 0,
+    "passes": true,
+    "passes_bonf": true,
+    "best_gain": 0.01771480428578889,
+    "top1_truth_gain": -0.019082036447243458,
+    "top1_td3_gain": 0.01771480428578889,
+    "top1_prefix_gain": -0.12562306831600628,
+    "candidates": [
+     {
+      "row": 40,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": 0.01771480428578889,
+      "lo": 0.01295114122052386,
+      "hi": 0.02247846735105392,
+      "confirmed": true,
+      "confirmed_bonf": true
+     },
+     {
+      "row": 53,
+      "reasons": [
+       "better",
+       "top_truth"
+      ],
+      "gain": -0.019082036447243458,
+      "lo": -0.12480703397556252,
+      "hi": 0.0866429610810756,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 57,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.12562306831600628,
+      "lo": -0.25232360402681037,
+      "hi": 0.0010774673947978159,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 62,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.42909904825943795,
+      "lo": -0.522711471695379,
+      "hi": -0.33548662482349684,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 70,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.2956910007248394,
+      "lo": -0.4452199292921498,
+      "hi": -0.14616207215752894,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 75,
+      "reasons": [
+       "top_td3"
+      ],
+      "gain": -0.635636575158379,
+      "lo": -0.8474671253359518,
+      "hi": -0.4238060249808062,
+      "confirmed": false,
+      "confirmed_bonf": false
+     },
+     {
+      "row": 77,
+      "reasons": [
+       "top_prefix"
+      ],
+      "gain": -0.43862025580249087,
+      "lo": -0.5529170113623891,
+      "hi": -0.32432350024259265,
+      "confirmed": false,
+      "confirmed_bonf": false
+     }
+    ]
+   }
+  ],
+  "spec": {
+   "top": 3,
+   "episodes": 20,
+   "seed_base": 2000000,
+   "alpha": 0.05,
+   "min_cell_share": 0.5
+  }
+ },
  "per_env": {
   "HalfCheetah-v5": {
    "rho_td3_dist": 0.9328330206378989,
