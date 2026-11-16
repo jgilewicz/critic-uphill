@@ -1,0 +1,56 @@
+# Preregistration, fixed 2026-11-16 before any episode rollout and before
+# any TD3 slope was computed. Do not edit question, [analysis] or [rule]
+# after the first rollout.
+name = "local-search-v1"
+question = """Does local search around the TD3 actor pay off? Gain and cost
+of accepting actor perturbations judged on a few episodes paired with the
+actor, against the TD3 eval return increase for the same env steps."""
+protocol = 3
+envs = ["HalfCheetah-v5", "Walker2d-v5", "Swimmer-v5"]
+seeds = [0, 1]
+# perturbations (regenerated from its [offline].key), sigma.json, the 36
+# cells, checkpoints and the td3 curves (its cache/full) come from here
+source = "../critic-degeneracy-v1/experiment.toml"
+
+# data: python -m offline.local_search episodes (from src/). All 81 heads
+# per checkpoint (actor + 40 per sigma level) re-run on CPU with return and
+# length per episode, on the source's 10 truth seeds (eval_seed + e) and 20
+# validation seeds (seed_base + e): 30 reset seeds shared by every head.
+[analysis]
+episodes_cache = "cache/episodes"
+reps = 1000
+rng_seed = 20261117
+alpha = 0.05
+# truth: mean over the 30 episodes; "better" = paired t-interval of
+# R_pert - R_actor (29 df) entirely above zero. true gain = mean difference
+#
+# 1. single decision (SA / hill-climbing step): per perturbation, k paired
+#    episodes drawn without replacement from the 30, accept if mean
+#    difference > 0. cost = steps of the 2k episodes (actual lengths)
+single_k = [1, 3, 5]
+# 2. best of N: N of the cell's 40 drawn without replacement, k episodes
+#    each, winner = highest mean difference to the actor, accepted if the
+#    lower bound of its 95% CI > 0. CI = exact percentile bootstrap over
+#    the winner's k episodes (k = 1 degenerates to difference > 0).
+#    paired: the same k seeds for the N candidates and the actor.
+#    unpaired: own k seeds per candidate and for the actor (two-sample
+#    bootstrap). cost = steps of the (N + 1) k episodes
+best_n = [10, 20, 40]
+best_k = [1, 3]
+# expected gain = mean over repetitions of [accepted] x true gain of the
+# accepted perturbation, in return units; per 100k steps = gain / mean cost
+per_steps = 100_000
+# 3. td3 increment per 100k steps: OLS slope of perf/eval_rl over env_steps
+#    in [phase - window, phase + window] cut to [0, total_steps], per seed
+td3_window = 100_000
+
+# procedure = point (1 or 2) x k x N x paired/unpaired x sigma level
+# (30 procedures). a phase = one checkpoint step (300k, 600k, 1M)
+[rule]
+pays_off = """some procedure, in Walker2d or Swimmer, in >= 1 phase, has
+expected gain per 100k steps > 0 and > the TD3 increment per 100k steps
+for both seeds, and the same procedure has false acceptance rate <= 5% in
+HalfCheetah (mean over its 6 cells at that sigma level)"""
+# false acceptance = P(the procedure accepts a perturbation that is not
+# better), per decision
+false_accept_max = 0.05
