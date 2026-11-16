@@ -1,0 +1,6 @@
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s0_step_300000.json {'curvature': 3.9742279052734375, 'rollouts': 208.06032514572144}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s0_step_600000.json {'curvature': 2.1441378593444824, 'rollouts': 392.4465069770813}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s0_step_1000000.json {'curvature': 3.5590789318084717, 'rollouts': 676.1253769397736}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s1_step_300000.json {'curvature': 3.736237049102783, 'rollouts': 574.8195798397064}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s1_step_600000.json {'curvature': 2.9977688789367676, 'rollouts': 588.68559217453}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Walker2d-v5/s1_step_1000000.json {'curvature': 2.581946849822998, 'rollouts': 481.5099940299988}

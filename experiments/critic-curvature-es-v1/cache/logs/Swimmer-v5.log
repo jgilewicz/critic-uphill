@@ -1,0 +1,6 @@
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s0_step_300000.json {'curvature': 3.499467611312866, 'rollouts': 401.35389733314514}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s0_step_600000.json {'curvature': 1.7108821868896484, 'rollouts': 412.757483959198}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s0_step_1000000.json {'curvature': 1.6783239841461182, 'rollouts': 448.57264614105225}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s1_step_300000.json {'curvature': 1.9556381702423096, 'rollouts': 387.6283230781555}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s1_step_600000.json {'curvature': 1.416604995727539, 'rollouts': 359.83505296707153}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/Swimmer-v5/s1_step_1000000.json {'curvature': 2.089016914367676, 'rollouts': 372.48828315734863}

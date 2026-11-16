@@ -97,3 +97,6 @@ hc_max_rel = 0.02
 
 [analysis]
 steps_cache = "cache/steps"
+
+[report]
+url = "https://claude.ai/code/artifact/97390b1c-82f2-4bf1-a56f-bf6cff390049"

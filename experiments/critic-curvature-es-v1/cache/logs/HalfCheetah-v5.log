@@ -1,0 +1,6 @@
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s0_step_300000.json {'curvature': 4.08981466293335, 'rollouts': 215.6694619655609}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s0_step_600000.json {'curvature': 2.199470043182373, 'rollouts': 219.76648712158203}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s0_step_1000000.json {'curvature': 2.4552488327026367, 'rollouts': 223.27275800704956}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s1_step_300000.json {'curvature': 2.493799924850464, 'rollouts': 217.84585690498352}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s1_step_600000.json {'curvature': 2.5109097957611084, 'rollouts': 236.03335309028625}
+-> /Users/kuba/Home/research/hboot_erl/experiments/critic-curvature-es-v1/cache/steps/HalfCheetah-v5/s1_step_1000000.json {'curvature': 3.193653106689453, 'rollouts': 248.00787591934204}
