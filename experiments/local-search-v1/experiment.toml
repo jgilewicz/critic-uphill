@@ -54,3 +54,6 @@ HalfCheetah (mean over its 6 cells at that sigma level)"""
 # false acceptance = P(the procedure accepts a perturbation that is not
 # better), per decision
 false_accept_max = 0.05
+
+[report]
+url = "https://claude.ai/code/artifact/9a1c221b-861a-4005-8cb1-298e090feae8"
