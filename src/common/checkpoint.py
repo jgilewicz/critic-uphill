@@ -62,15 +62,24 @@ def _skeleton(meta: dict[str, Any]) -> TD3Networks:
     )
 
 
-def load_checkpoint(path: Path) -> Checkpoint:
-    missing = [f for f in (NETS, BUFFER, META) if not (path / f).is_file()]
+def _require(path: Path, files: tuple[str, ...]) -> None:
+    missing = [f for f in files if not (path / f).is_file()]
     if missing:
         raise FileNotFoundError(
             f"checkpoint {path} lacks {missing}. was the run trained with "
             "checkpoint.dir and checkpoint.at covering this step?"
         )
+
+
+def load_nets(path: Path) -> tuple[TD3Networks, dict[str, Any]]:
+    _require(path, (NETS, META))
     meta = json.loads((path / META).read_text())
-    nets = eqx.tree_deserialise_leaves(path / NETS, _skeleton(meta))
+    return eqx.tree_deserialise_leaves(path / NETS, _skeleton(meta)), meta
+
+
+def load_checkpoint(path: Path) -> Checkpoint:
+    _require(path, (NETS, BUFFER, META))
+    nets, meta = load_nets(path)
     with np.load(path / BUFFER) as f:
         state, action, reward, next_state, done = (
             jnp.asarray(f[k]) for k in BUFFER_FIELDS

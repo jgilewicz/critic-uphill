@@ -15,7 +15,7 @@ src/
   runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
   algos/erl.py       # ERL loop: eval modes, knobs (config dataclasses), diagnostics
   analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy
-  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate)
+  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate)
   baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
   common/            # Buffer, fused TD3, rollout, critic surrogate, utils
   modules/           # Equinox modules (ActorHead, SharedStateEmbedding) + CEM evolutionary module
@@ -34,7 +34,7 @@ src/
 - **Rollout Separation**: 1 vectorized env for the RL actor (always full $H$, seeds buffer); `pop_size` vectorized envs for the ES population.
 - **Thesis**: gain comes from cheap fitness evaluation, not the critic (prefix-h200 ≈ SC-ERL). `rl_only` = TD3 control (no population/gene flow). h-bootstrap, the TD horizon controller and critic uncertainty are negative results (code removed in protocol 3). Plan: `TODO.md`.
 - **Metrics**: WandB x-axis is always `env_steps` (`wandb.define_metric("*", step_metric="env_steps")`). Diagnostics outside the budget: `perf/eval_rl`, `perf/eval_champion`, `perf/eval_best`, `div/action_dist`, `div/param_dist`, `div/elite_origin` (0 RL actor, 1 its descendant, 2 population), `pop/std`. Also `cost/real_frac`, `gene/ea_to_rl`, `train/critic_loss`, `train/td_error`.
-- **Checkpoints**: top-level `checkpoint.dir` + `checkpoint.at` (fractions of `total_steps`) save TD3 nets + replay buffer (`common/checkpoint.py`). No effect on training.
+- **Checkpoints**: top-level `checkpoint.dir` + `checkpoint.at` (fractions of `total_steps`) save TD3 nets + replay buffer (`common/checkpoint.py`, `load_nets` skips the buffer). No effect on training.
 - **Protocol**: runs log `config.protocol` (3 now). Analysis loads one protocol per toml, so protocol-2 runs (`paper-core-v1`, `paper-v2`) stay a separate reference set.
 - **Analysis**: `python -m analysis.{fetch,summary,compare,cost,pilot} <experiment.toml>` from `src/`. One stats module (`analysis/stats.py`: IQM, unpaired stratified bootstrap, P(A>B), TOST, Holm). Prereg template `analysis/templates/experiment.toml`. HTML templates live in `analysis/templates/`, outputs next to the toml.
 - **Verification**: Run `ruff check .`, `ty check`, and a tiny-budget smoke run:

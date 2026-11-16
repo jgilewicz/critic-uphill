@@ -14,7 +14,7 @@ import optax
 
 import environments
 from analysis.runs import load_spec
-from common.checkpoint import Checkpoint, load_checkpoint
+from common.checkpoint import BUFFER, Checkpoint, load_checkpoint, load_nets
 from common.rollout import heads_policy
 from common.td3 import TD3Config, TD3State, make_fqe_train
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
@@ -286,15 +286,19 @@ def critic_measures(
     return {k: np.asarray(v) for k, v in cols.items()}, losses
 
 
+def checkpoint_key(off: dict[str, Any], meta: dict[str, Any]) -> jax.Array:
+    return jax.random.fold_in(
+        jax.random.fold_in(jax.random.key(off["key"]), meta["seed"]),
+        meta["env_steps"],
+    )
+
+
 def evaluate_checkpoint(
     off: dict[str, Any], path: Path, sigmas: list[float]
 ) -> dict[str, Any]:
     ck = load_checkpoint(path)
     meta = ck.meta
-    key = jax.random.fold_in(
-        jax.random.fold_in(jax.random.key(off["key"]), meta["seed"]),
-        meta["env_steps"],
-    )
+    key = checkpoint_key(off, meta)
     heads, levels = build_heads(
         ck.nets.actor,
         sigmas,
@@ -351,11 +355,114 @@ def evaluate(off: dict[str, Any], root: Path, out: Path, env: str) -> None:
             print(f"-> {dest} {result['seconds']}")
 
 
+def candidates(cell: dict[str, Any], top: int) -> dict[int, list[str]]:
+    # perturbation row -> why it is re-evaluated, per sigma level
+    rows = cell["perturbations"]
+    actor = float(np.mean(cell["actor"]["truth"]))
+    truth = [float(np.mean(r["truth"])) for r in rows]
+    reasons: dict[int, list[str]] = {}
+    for level in range(len(cell["sigmas"])):
+        idx = [i for i, r in enumerate(rows) if r["level"] == level]
+        picks = {
+            "better": [i for i in idx if truth[i] > actor],
+            "top_truth": sorted(idx, key=lambda i: -truth[i])[:1],
+            "top_td3": sorted(idx, key=lambda i: -rows[i]["score_td3"])[:top],
+            "top_prefix": sorted(idx, key=lambda i: -rows[i]["prefix"])[:top],
+        }
+        for why, ids in picks.items():
+            for i in ids:
+                reasons.setdefault(i, []).append(why)
+    return reasons
+
+
+def check_reproduction(
+    off: dict[str, Any], path: Path, heads: ActorHead, cell: dict[str, Any]
+) -> None:
+    # same states as evaluate, so dist_L2 pins the regenerated perturbations.
+    # rtol 5e-2: GPU (TF32) vs CPU matmuls leave <=2.2e-2, a wrong key >=0.28
+    ck = load_checkpoint(path)
+    key = jax.random.fold_in(checkpoint_key(off, ck.meta), STATES)
+    states = recent_states(ck, off["states"], off["state_window"], key)
+    acts = head_actions(ck.nets.embedding, heads, states)
+    dist = np.asarray(jnp.mean(jnp.sum((acts - acts[0]) ** 2, -1), 1))[1:]
+    stored = np.array([r["dist_l2"] for r in cell["perturbations"]])
+    if not np.allclose(dist, stored, rtol=5e-2, atol=1e-8):
+        worst = float(np.max(np.abs(dist - stored) / np.abs(stored)))
+        raise ValueError(
+            f"{path}: regenerated perturbations differ from the evaluated "
+            f"ones (max rel. dist_L2 error {worst:.2e}). check [offline].key "
+            "and sigma.json before validating"
+        )
+
+
+def validate_checkpoint(
+    off: dict[str, Any], val: dict[str, Any], path: Path, cell: dict[str, Any]
+) -> dict[str, Any]:
+    nets, meta = load_nets(path)
+    key = jax.random.fold_in(checkpoint_key(off, meta), PERTURB)
+    heads, _ = build_heads(
+        nets.actor, cell["sigmas"], off["perturbations"], key
+    )
+    reproduced = (path / BUFFER).is_file()
+    if reproduced:
+        check_reproduction(off, path, heads, cell)
+    reasons = candidates(cell, val["top"])
+    rows = sorted(reasons)
+    pick = jnp.asarray([0] + [i + 1 for i in rows])
+    subset = jax.tree.map(lambda x: x[pick], heads)
+    seeds = [val["seed_base"] + e for e in range(val["episodes"])]
+    t0 = time.time()
+    returns = returns_matrix(
+        meta["env"], nets.embedding, subset, seeds, off["horizon"]
+    )
+    return {
+        "meta": meta,
+        "sigmas": cell["sigmas"],
+        "seeds": seeds,
+        "reproduction_checked": reproduced,
+        "actor": returns[0].tolist(),
+        "candidates": [
+            {
+                "row": i,
+                "level": cell["perturbations"][i]["level"],
+                "reasons": reasons[i],
+                "returns": returns[k + 1].tolist(),
+            }
+            for k, i in enumerate(rows)
+        ],
+        "seconds": time.time() - t0,
+    }
+
+
+def validate(
+    off: dict[str, Any], val: dict[str, Any], root: Path, out: Path, env: str
+) -> None:
+    for seed in off["seeds"]:
+        for path in checkpoints(root, env, seed):
+            source = out / env / f"s{seed}_{path.name}.json"
+            dest = out / env / f"validate_s{seed}_{path.name}.json"
+            if dest.is_file():
+                print(f"skip {dest}: exists")
+                continue
+            if not source.is_file():
+                raise FileNotFoundError(
+                    f"{source} missing. validate re-evaluates the "
+                    "candidates of an evaluated checkpoint, run evaluate first"
+                )
+            cell = json.loads(source.read_text())
+            result = validate_checkpoint(off, val, path, cell)
+            dest.write_text(json.dumps(result))
+            n = len(result["candidates"])
+            print(f"-> {dest} {n} candidates {result['seconds']:.0f}s")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="critic-degeneracy-v1 offline measures"
     )
-    parser.add_argument("command", choices=["calibrate", "evaluate"])
+    parser.add_argument(
+        "command", choices=["calibrate", "evaluate", "validate"]
+    )
     parser.add_argument("toml", type=Path)
     parser.add_argument("checkpoint_root", type=Path)
     parser.add_argument("out_dir", type=Path)
@@ -363,8 +470,13 @@ def main() -> None:
     args = parser.parse_args()
     spec = load_spec(args.toml)
     off = spec["offline"] | {"seeds": spec["seeds"]}
-    command = calibrate if args.command == "calibrate" else evaluate
-    command(off, args.checkpoint_root, args.out_dir, args.env)
+    paths = (args.checkpoint_root, args.out_dir, args.env)
+    if args.command == "validate":
+        validate(off, spec["validation"], *paths)
+    elif args.command == "calibrate":
+        calibrate(off, *paths)
+    else:
+        evaluate(off, *paths)
 
 
 if __name__ == "__main__":

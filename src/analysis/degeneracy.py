@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, t as student_t
 
 from analysis.runs import load_spec
 
@@ -163,6 +163,154 @@ def hypotheses(cells: list[Cell], envs: list[str]) -> dict[str, Any]:
     }
 
 
+def paired_ci(d: np.ndarray, alpha: float) -> tuple[float, float, float]:
+    # two-sided t-interval of the mean paired difference
+    half = (
+        student_t.ppf(1 - alpha / 2, len(d) - 1)
+        * d.std(ddof=1)
+        / math.sqrt(len(d))
+    )
+    return float(d.mean()), float(d.mean() - half), float(d.mean() + half)
+
+
+def gain_of(scored: list[dict[str, Any]], reason: str) -> float | None:
+    # every top-1 pick is re-evaluated by construction, None if absent
+    hits = [c["gain"] for c in scored if reason in c["reasons"]]
+    return hits[0] if hits else None
+
+
+def validation_cell(
+    d: dict[str, Any], level: int, alpha: float, n_level: int
+) -> Cell:
+    actor = np.array(d["actor"])
+    base = abs(float(actor.mean()))
+    mine = [c for c in d["candidates"] if c["level"] == level]
+    k = len(mine)
+    scored: list[dict[str, Any]] = []
+    for c in mine:
+        diff = np.array(c["returns"]) - actor
+        mean, lo, hi = paired_ci(diff, alpha)
+        bonf_lo = paired_ci(diff, alpha / k)[1]
+        scored.append(
+            {
+                "row": c["row"],
+                "reasons": c["reasons"],
+                "gain": mean / base,
+                "lo": lo / base,
+                "hi": hi / base,
+                "confirmed": lo > 0,
+                "confirmed_bonf": bonf_lo > 0,
+            }
+        )
+    better = [c for c in scored if "better" in c["reasons"]]
+    top1 = {r: gain_of(scored, f"top_{r}") for r in ("truth", "td3", "prefix")}
+    return {
+        "env": d["meta"]["env"],
+        "seed": d["meta"]["seed"],
+        "step": d["meta"]["env_steps"],
+        "level": level,
+        "actor_return": float(actor.mean()),
+        "n_level": n_level,
+        "n_candidates": k,
+        "n_better": len(better),
+        "n_confirmed": sum(c["confirmed"] for c in scored),
+        "n_confirmed_better": sum(c["confirmed"] for c in better),
+        "passes": any(c["confirmed"] for c in scored),
+        "passes_bonf": any(c["confirmed_bonf"] for c in scored),
+        "best_gain": max(c["gain"] for c in scored),
+        "top1_truth_gain": top1["truth"],
+        "top1_td3_gain": top1["td3"],
+        "top1_prefix_gain": top1["prefix"],
+        "candidates": scored,
+    }
+
+
+def load_validation(
+    results: Path, envs: list[str], val: dict[str, Any], n_level: int
+) -> list[Cell]:
+    cells = []
+    for env in envs:
+        for path in (results / env).glob("validate_s*_step_*.json"):
+            d = json.loads(path.read_text())
+            for level in range(len(d["sigmas"])):
+                cells.append(validation_cell(d, level, val["alpha"], n_level))
+    return sorted(
+        cells, key=lambda c: (c["env"], c["seed"], c["step"], c["level"])
+    )
+
+
+def validation_verdict(
+    vcells: list[Cell], envs: list[str], val: dict[str, Any]
+) -> dict[str, Any]:
+    out = {}
+    for e in envs:
+        mine = [c for c in vcells if c["env"] == e]
+        share = float(np.mean([c["passes"] for c in mine]))
+        groups = {}
+        for level in sorted({c["level"] for c in mine}):
+            g = [c for c in mine if c["level"] == level]
+            n_better = sum(c["n_better"] for c in g)
+            groups[level] = {
+                "cells": len(g),
+                "confirmed_of_all": sum(c["n_confirmed"] for c in g)
+                / sum(c["n_level"] for c in g),
+                "confirmed_of_better": (
+                    sum(c["n_confirmed_better"] for c in g) / n_better
+                    if n_better
+                    else None
+                ),
+                "n_better": n_better,
+                "passing_cells": sum(c["passes"] for c in g),
+                "passing_cells_bonf": sum(c["passes_bonf"] for c in g),
+            } | {
+                f"median_{k}": float(np.median([c[k] for c in g]))
+                for k in (
+                    "best_gain",
+                    "top1_truth_gain",
+                    "top1_td3_gain",
+                    "top1_prefix_gain",
+                )
+            }
+        out[e] = {
+            "passing_share": share,
+            "passing_share_bonf": float(
+                np.mean([c["passes_bonf"] for c in mine])
+            ),
+            "real": share >= val["min_cell_share"],
+            "levels": groups,
+        }
+    return out
+
+
+def print_validation(verdict: dict[str, Any]) -> None:
+    print(
+        "env              lv cells  ok/all ok/better  pass bonf"
+        "   best  top1tr top1td3 top1pre"
+    )
+    for e, v in verdict.items():
+        for level, g in v["levels"].items():
+            ob = g["confirmed_of_better"]
+            print(
+                f"{e:<16} {level:>2} {g['cells']:>5}"
+                f"  {g['confirmed_of_all']:6.3f}"
+                f"  {'  n/a' if ob is None else f'{ob:5.2f}'}"
+                f"  {g['passing_cells']:>4} {g['passing_cells_bonf']:>4}"
+                + "".join(
+                    f" {g[f'median_{k}'] * 100:+6.1f}%"
+                    for k in (
+                        "best_gain",
+                        "top1_truth_gain",
+                        "top1_td3_gain",
+                        "top1_prefix_gain",
+                    )
+                )
+            )
+        print(
+            f"{e:<16} passing {v['passing_share']:.2f}"
+            f" (bonf {v['passing_share_bonf']:.2f}) real={v['real']}"
+        )
+
+
 def print_table(cells: list[Cell]) -> None:
     head = (
         "env              seed    step lv  drop  ceil  rTD3  rFQE  r-dL2"
@@ -199,8 +347,18 @@ def main(toml_path: Path) -> None:
     verdict["coverage"] = f"{len(cells)}/{expected} cells"
     verdict["decision_text"] = spec["decision"][verdict["decision"]]
     print(json.dumps(verdict, indent=1))
+    val = spec["validation"]
+    vcells = load_validation(results, spec["envs"], val, off["perturbations"])
+    if len(vcells) != expected:
+        raise FileNotFoundError(
+            f"{len(vcells)}/{expected} validation cells under {results}. "
+            "run python -m offline.critic_degeneracy validate per env"
+        )
+    vverdict = validation_verdict(vcells, spec["envs"], val)
+    print_validation(vverdict)
     data = {
         "verdict": verdict,
+        "validation": {"verdict": vverdict, "cells": vcells, "spec": val},
         "per_env": per_env(cells, spec["envs"]),
         "cells": cells,
         "hypotheses": spec["hypotheses"],

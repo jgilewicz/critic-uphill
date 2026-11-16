@@ -143,6 +143,15 @@ details .tablewrap { border: 0; margin-top: 8px; }
   </section>
 
   <section>
+    <h2>Walidacja: czy zaburzenia lepsze od aktora są lepsze naprawdę?</h2>
+    <p class="note" id="valNote"></p>
+    <div class="verdicts" id="valVerdicts"></div>
+    <div class="tablewrap" id="valTable"></div>
+    <div class="legend" id="valLegend"></div>
+    <div class="pair" id="valForest"></div>
+  </section>
+
+  <section>
     <details>
       <summary>Tabela 36 komórek</summary>
       <div class="tablewrap" id="cells"></div>
@@ -385,4 +394,74 @@ document.getElementById("cells").append(table(
     td(c.rho_td3_dist, 2, cls(c.rho_td3_dist >= 0.8)), td(c.partial_td3), td(c.partial_fqe, 2, cls(c.partial_fqe - c.partial_td3 >= 0.15)),
     td(c.ratio_td3, 3, cls(c.ratio_td3 <= 0.2)), td(c.ratio_fqe, 3), td(c.fqe_loss, 4)])
 ));
+
+const VAL = DATA.validation, VV = VAL.verdict, VS = VAL.spec;
+const pct = v => v == null ? "n/a" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+document.getElementById("valNote").innerHTML = `Kandydaci w każdej komórce: zaburzenia z prawdą &gt; aktor, top-1 wg prawdy, top-${VS.top} wg score_TD3 i top-${VS.top} wg prefiksu. Każdy oceniony ponownie na ${VS.episodes} nowych epizodach (seedy resetu ${VS.seed_base}+), aktor na tych samych. Różnica parami per epizod, ${Math.round((1 - VS.alpha) * 100)}% przedział t. Reguła (prerejestrowana): poprawa realna w envie, jeśli w ≥ ${VS.min_cell_share * 100}% jego 12 komórek co najmniej jedno zaburzenie ma CI różnicy w całości powyżej zera. Zyski względem zwrotu aktora z tych samych epizodów.`;
+document.getElementById("valVerdicts").innerHTML = ENVS.map(e => {
+  const v = VV[e], n = VAL.cells.filter(c => c.env === e).length;
+  const pass = VAL.cells.filter(c => c.env === e && c.passes).length;
+  const bonf = VAL.cells.filter(c => c.env === e && c.passes_bonf).length;
+  return `<div class="card">
+    <span class="pill ${v.real ? "ok" : "no"}">${v.real ? "poprawa realna" : "poprawa nierealna"}</span>
+    <h3>${e}</h3>
+    <div class="val">komórki z CI &gt; 0: ${pass}/${n} (próg ${Math.ceil(VS.min_cell_share * n)})<br>z Bonferronim w komórce: ${bonf}/${n}</div>
+  </div>`;
+}).join("");
+document.getElementById("valTable").append(table(
+  ["env", "σ", "kandydaci", "lepsze / wszystkie", "lepsze / prawda > aktor", "komórki CI > 0", "Bonferroni", "najlepszy (optym.)", "top-1 prawda", "top-1 TD3", "top-1 prefiks"],
+  ENVS.flatMap(e => Object.entries(VV[e].levels).map(([lv, g]) => {
+    const cs = VAL.cells.filter(c => c.env === e && c.level === +lv);
+    const nAll = cs.reduce((s, c) => s + c.n_level, 0), nConf = cs.reduce((s, c) => s + c.n_confirmed, 0);
+    const nConfB = cs.reduce((s, c) => s + c.n_confirmed_better, 0);
+    return [`<td>${e}</td>`, `<td class="n">${+lv === 0 ? "5%" : "20%"}</td>`,
+      `<td class="n">${cs.reduce((s, c) => s + c.n_candidates, 0)}</td>`,
+      `<td class="n">${nConf}/${nAll} <span class="ci">${pct(g.confirmed_of_all).replace("+", "")}</span></td>`,
+      `<td class="n">${g.n_better ? `${nConfB}/${g.n_better}` : "0/0"}</td>`,
+      `<td class="n ${g.passing_cells ? "hi" : ""}">${g.passing_cells}/${g.cells}</td>`,
+      `<td class="n">${g.passing_cells_bonf}/${g.cells}</td>`,
+      ...["best_gain", "top1_truth_gain", "top1_td3_gain", "top1_prefix_gain"].map(k => `<td class="n">${pct(g[`median_${k}`])}</td>`)];
+  }))
+));
+document.getElementById("valLegend").innerHTML = `<span><svg viewBox="0 0 14 14" width="14" height="14" style="display:inline-block;width:14px;vertical-align:middle"><circle cx="7" cy="7" r="4" style="fill:var(--pos)"/></svg> CI różnicy &gt; 0</span><span><svg viewBox="0 0 14 14" width="14" height="14" style="display:inline-block;width:14px;vertical-align:middle"><circle cx="7" cy="7" r="4" style="fill:var(--muted)"/></svg> CI zawiera 0 albo poniżej</span><span>mediany zysku w tabeli: po 6 komórkach (2 seedy × 3 checkpointy)</span>`;
+
+function forest(env) {
+  const cs = VAL.cells.filter(c => c.env === env);
+  const all = cs.flatMap(c => c.candidates);
+  const lo = Math.min(...all.map(c => c.lo), 0), hi = Math.max(...all.map(c => c.hi), 0);
+  const padv = (hi - lo) * 0.05;
+  const W = 440, H = 300, P = { l: 52, r: 10, t: 12, b: 50 };
+  const X = i => P.l + (i + 0.5) * (W - P.l - P.r) / cs.length;
+  const Y = scale(lo - padv, hi + padv, H - P.b, P.t);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${env}: zysk kandydatów po ponownej ocenie z 95% CI, per komórka">`;
+  for (const v of ticks(lo - padv, hi + padv)) {
+    svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/>`;
+    svg += `<text x="${P.l - 6}" y="${Y(v) + 3.5}" text-anchor="end">${Math.round(v * 100)}%</text>`;
+  }
+  svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ink-2)" stroke-width="1.2"/>`;
+  const tips = [];
+  cs.forEach((c, i) => {
+    const n = c.candidates.length, span = Math.min(22, (W - P.l - P.r) / cs.length - 6);
+    c.candidates.forEach((q, j) => {
+      const x = X(i) + (n > 1 ? (j / (n - 1) - 0.5) * span : 0);
+      const col = q.confirmed ? "var(--pos)" : "var(--muted)";
+      svg += `<line x1="${x}" x2="${x}" y1="${Y(q.lo)}" y2="${Y(q.hi)}" stroke="${col}" stroke-width="1" opacity="${q.confirmed ? 0.9 : 0.45}"/>`;
+      svg += `<circle class="pt" tabindex="0" data-i="${tips.length}" cx="${x}" cy="${Y(q.gain)}" r="2.6" style="fill:${col}"/>`;
+      tips.push(`<b>s${c.seed} ${STEP_LABEL(c.step)} σ ${c.level === 0 ? "5%" : "20%"} #${q.row}</b><span>zysk ${pct(q.gain)} [${pct(q.lo)}, ${pct(q.hi)}]</span><span>${q.reasons.join(", ")}</span>`);
+    });
+    svg += `<text x="${X(i)}" y="${H - P.b + 13}" text-anchor="middle">${c.level === 0 ? "5" : "20"}</text>`;
+  });
+  [...new Set(cs.map(c => `${c.seed}|${c.step}`))].forEach((k, gi) => {
+    const [s, st] = k.split("|");
+    svg += `<text x="${(X(2 * gi) + X(2 * gi + 1)) / 2}" y="${H - P.b + 27}" text-anchor="middle">s${s} ${STEP_LABEL(+st)}</text>`;
+  });
+  svg += `<text x="${(P.l + W - P.r) / 2}" y="${H - 6}" text-anchor="middle">komórka: σ (% spadku), seed, checkpoint</text></svg>`;
+  const card = el("div", { class: "card" });
+  card.append(el("h3", {}, env));
+  card.append(el("div", { class: "sub" }, `zysk względem aktora po ${VS.episodes} nowych epizodach, kreska = 95% CI różnicy`));
+  card.insertAdjacentHTML("beforeend", svg);
+  attachTips(card, tips);
+  return card;
+}
+ENVS.forEach(e => document.getElementById("valForest").append(forest(e)));
 </script>
