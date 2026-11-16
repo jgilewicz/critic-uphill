@@ -1,0 +1,99 @@
+# Preregistration, fixed 2026-11-16 before any state, Hessian or step was
+# computed. Do not edit question, [states], [steps], [evaluation] or
+# [[hypotheses]] after the first rollout.
+name = "critic-curvature-es-v1"
+question = """Does an ES step built from the 40 perturbations of
+local-search-v1 (optionally rescaled by the TD3 critic's Gauss-Newton
+Hessian) gain more than the best single perturbation, and more than TD3 for
+the same env steps?"""
+protocol = 3
+envs = ["HalfCheetah-v5", "Walker2d-v5", "Swimmer-v5"]
+seeds = [0, 1]
+# checkpoints, sigma levels, perturbation key, td3 eval_rl curves
+source = "../critic-degeneracy-v1/experiment.toml"
+# R_i: 81 heads x 30 episodes per checkpoint (truth + validation seeds)
+episodes_source = "../local-search-v1/experiment.toml"
+
+# cell = env x seed x checkpoint (300k, 600k, 1M) x sigma level (5%, 20%):
+# 36 cells, 24 in Walker2d + Swimmer. data: python -m offline.curvature_es
+# run <toml> <ckpt_root> <env> (from src/), all CPU
+
+# 2000 states for H_a and J. buffer.npz is local for 300k only, so the
+# states are on-policy: `episodes` actor rollouts on reset seeds
+# seed_base + e, every alive state pooled, 2000 drawn without replacement
+[states]
+n = 2000
+episodes = 20
+seed_base = 6_000_000
+key = 20261119
+
+# whitened head coordinates u: delta_theta = sigma * S * eps per leaf,
+# S = std of the actor's leaf (as perturb in critic-degeneracy-v1).
+# g_u = sum_i (R_i - R_actor) eps_i / (N sigma), N = 40 of one sigma level,
+# so d_ES = S g_u = sum_i (R_i - R_actor) delta_theta_i / (N sigma^2).
+# H_theta = mean_s J_s^T H_a,s J_s (Gauss-Newton: H_a = Hessian of
+# min(Q1, Q2) of the TD3 critic over the action at a = actor(s), J_s =
+# d action / d head weights), H_u = S H_theta S.
+# d_N = S (-H_u + lambda I)^-1 g_u, lambda = max(0, -mu_min) + damping *
+# mu_max, mu = eigenvalues of -H_u
+[steps]
+damping = 1e-3
+# R sources. oracle: mean of all 30 episodes per head. k = 1, 3: k of the 30
+# episodes drawn without replacement, the same k reset seeds for the actor
+# and the 40 perturbations (paired), `draws` independent draws per k
+ks = [1, 3]
+draws = 10
+draw_seed = 20261120
+# dist_H(theta') = mean_s -1/2 da^T H_a da, da = actor'(s) - actor(s) on the
+# 2000 states (as -t2_TD3 in critic-degeneracy-v1). reference = mean dist_H
+# of the cell's 40 sigma-5% perturbations on the same states. alpha by
+# bisection on the exact dist_H(theta + alpha d) = multiple x reference,
+# relative tolerance 1e-3
+dist_multiples = [0.5, 1.0, 2.0]
+# cost of a k step = actual env steps of its 41 k episodes (actor + 40
+# perturbations). oracle: not a procedure, cost reported only
+
+# one batch per checkpoint, the same fresh reset seeds for every head:
+# actor, the best single perturbation per sigma level (highest mean of the
+# 30 local-search-v1 episodes), every step (2 levels x 2 directions x 3
+# multiples x (oracle + 2 ks x 10 draws) = 252 steps). gain = mean over the
+# episodes of R(head) - R(actor)
+[evaluation]
+episodes = 30
+seed_base = 5_000_000
+
+# td3 increment for cost c = OLS slope of perf/eval_rl in [t - 100k,
+# t + 100k] cut to [0, 1M] (as local-search-v1) x c, same run
+[compare]
+td3_window = 100_000
+
+[[hypotheses]]
+id = "H6"
+question = "ES step beats the best single perturbation"
+rule = """oracle g, d_ES, best of the 3 multiples: gain > gain of the best
+single perturbation of the same sigma level in >= 16 of the 24 Walker2d +
+Swimmer cells"""
+
+[[hypotheses]]
+id = "H7"
+question = "the critic Hessian improves the step"
+rule = """oracle g: gain(d_N) > gain(d_ES) at >= 2 of the 3 multiples in
+>= 16 of the 24 Walker2d + Swimmer cells"""
+
+[[hypotheses]]
+id = "H8"
+question = "a cheap ES step beats TD3 on the plateau"
+rule = """some procedure (k, direction, multiple) at some sigma level has
+mean gain over the 10 draws > 0 and > td3 increment for its mean cost in
+Walker2d 600k seed 0 and in >= 4 of the 6 Swimmer checkpoints (300k, 600k,
+1M x seeds 0, 1) at that sigma level"""
+
+[[hypotheses]]
+id = "HC"
+question = "HalfCheetah control: no gain"
+rule = """median over the 12 HalfCheetah cells of the best oracle step gain
+(over directions and multiples) <= 2% of the actor's return"""
+hc_max_rel = 0.02
+
+[analysis]
+steps_cache = "cache/steps"
