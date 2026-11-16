@@ -1,6 +1,6 @@
 # td3-sa-pilot: łańcuch SA z checkpointów TD3 w fazach plateau
 
-- **Status:** prerejestracja 2026-11-16, przed uruchomieniem jakiegokolwiek łańcucha.
+- **Status:** prerejestracja 2026-11-16 (7bdf3b5), wyniki 2026-11-16.
 - **Charakter:** offline, bez treningu i bez nowych checkpointów, lokalnie na CPU (bez grantu).
 - **Code:** branch `td3-sa-pilot` (z `local-search-v1`).
 - **Spec:** `experiment.toml` (`[chain]`, `[evaluation]`, `[compare]`, `[rule]`). Checkpointy, σ i krzywe TD3: `critic-degeneracy-v1`. Epizody do T0: `local-search-v1`.
@@ -56,3 +56,28 @@
 
 - Zysk po 25k, 50k, 100k per komórka × wariant (średnia i rozrzut po łańcuchach) vs zysk TD3, liczba akceptacji, ocena końcowa na 10 świeżych epizodach, werdykt reguły.
 - `python -m analysis.sa_pilot ../experiments/td3-sa-pilot/experiment.toml` (z `src/`) → `sa_pilot.{json,html}`.
+
+## Wyniki (2026-11-16)
+
+- **Raport:** https://claude.ai/code/artifact/d014ff24-b872-465d-a175-37cb78b31b00 (`sa_pilot.{json,html}`).
+- **Werdykt: reguła niespełniona.** Żaden z 4 wariantów nie bije TD3 w plateau.
+
+| wariant | Swimmer (pary) | Walker2d 600k s0: SA vs TD3 | HalfCheetah 600k s0 / s1 |
+|---|---|---|---|
+| σ 5%, T0 → 0 | 0/4 | +10.7 vs +57.6 | −1.42% / −0.82% |
+| σ 5%, T = 0 | 2/4 | −120.2 vs +57.6 | +0.24% / 0.00% |
+| σ 20%, T0 → 0 | 1/4 | −306.0 vs +57.6 | 0.00% / 0.00% |
+| σ 20%, T = 0 | 1/4 | −136.1 vs +57.6 | 0.00% / 0.00% |
+
+- Swimmer: TD3 też stoi (+3.1, +2.8, +0.9, −2.5 przez 100k). Zysk SA po 100k od −20 do +11.7, rozrzut między łańcuchami większy niż średnia (np. σ 20% s0 300k: −30 … +44). Nie da się odróżnić od szumu przy 5 łańcuchach i 10 epizodach.
+- Walker2d 600k s0 (utknięty): impet traci się po 50k. σ 5% przy 50k: wszystkie 10 łańcuchów > 0 (średnio +169 / +178), przy 100k 2/5 łańcuchów w każdym harmonogramie spada do ok. −600. σ 20% szkodzi już od 25k.
+- Poza regułą: Walker2d 600k s1 σ 5% +310 / +285, wszystkie 10 łańcuchów > 0 (+117 … +565), TD3 −28. σ 20% tam −809 … −1519. Swimmer 1M σ 20% +21 / +17 (s0), σ 5% +8 / +11 (s1).
+- HalfCheetah: brak szkody, bo prawie nic nie jest akceptowane (σ 20%: 0 akceptacji, σ 5%: ≤ 1.4 średnio). Kontrola przechodzi trywialnie.
+- Akceptacje: σ 5% ok. 25%, σ 20% ok. 18% kandydatów. Swimmer i HalfCheetah 17 iteracji na 100k (6 × 1000 kroków), Walker2d s0 44-58 (upadki skracają epizody).
+- Wniosek wstępny: k = 3 przy σ z kalibracji to za mało, by łańcuch szedł w górę dłużej niż ok. 50k. Akceptacje na szumie (winner's curse) zjadają wcześniejszy zysk. Jedyny czysty sygnał (Walker2d s1 σ 5%) jest poza regułą i wymaga potwierdzenia.
+
+### Odstępstwa
+
+- `[analysis] chains_cache` i `[report] url` dopisane do toml po prerejestracji (ścieżki, bez zmian w `[chain]`, `[compare]`, `[rule]`).
+- Pierwsze uruchomienie łańcuchów padło przy zapisie JSON (`np.bool_` w trace), poprawka `bool(...)`, ponowne uruchomienie. Łańcuchy są deterministyczne (te same akceptacje w logach obu przebiegów).
+- Snapshoty biorą pierwszą iterację z użytymi ≥ 25k / 50k / 100k (przekroczenie < 1 iteracji, w Swimmer/HalfCheetah do 2k kroków). Akceptacje liczone do tej iteracji.

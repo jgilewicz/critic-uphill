@@ -77,3 +77,6 @@ hc_max_rel = 0.02
 
 [analysis]
 chains_cache = "cache/chains"
+
+[report]
+url = "https://claude.ai/code/artifact/d014ff24-b872-465d-a175-37cb78b31b00"
