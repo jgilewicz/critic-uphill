@@ -34,6 +34,7 @@ packages = [
     "src/environments",
     "src/modules",
     "src/analysis",
+    "src/offline",
 ]
 
 [tool.ruff]

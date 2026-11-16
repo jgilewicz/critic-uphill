@@ -256,3 +256,49 @@ def make_td3_train(
         )
 
     return train
+
+
+# (state, buffer data, buffer size, num_updates, key) -> (state, mean loss)
+FQETrainFn = Callable[
+    [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
+    tuple[TD3State, jax.Array],
+]
+
+
+def make_fqe_train(
+    cfg: TD3Config, critic_optimizer: optax.GradientTransformation
+) -> FQETrainFn:
+    # fitted Q evaluation: the TD3 critic update with target.embedding and
+    # target.actor held at the evaluated policy, and no actor update
+    @eqx.filter_jit
+    def train(
+        state: TD3State,
+        data: BufferData,
+        size: jax.Array,
+        num_updates: jax.Array,
+        key: jax.Array,
+    ) -> tuple[TD3State, jax.Array]:
+        dynamic, static = eqx.partition(state, eqx.is_array)
+
+        def body(
+            _: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
+        ) -> tuple[Any, jax.Array, jax.Array]:
+            dynamic, key, loss_sum = carry
+            key, sample_key, critic_key = jax.random.split(key, 3)
+            batch = sample_batch(data, size, sample_key, cfg.batch_size)
+            state, loss, _ = _critic_update(
+                cfg,
+                critic_optimizer,
+                eqx.combine(dynamic, static),
+                batch,
+                critic_key,
+            )
+            return eqx.filter(state, eqx.is_array), key, loss_sum + loss
+
+        dynamic, _, loss_sum = jax.lax.fori_loop(
+            0, num_updates, body, (dynamic, key, jnp.zeros(()))
+        )
+        loss = loss_sum / jnp.maximum(num_updates, 1)
+        return eqx.combine(dynamic, static), loss
+
+    return train
