@@ -1,0 +1,388 @@
+<title>Degeneracja krytyka TD3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, verdict cards -> findings -> per-env medians -> score vs dist_H per cell -> ratios and partials over cells -> all cells -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --pos-bg: #e3f3eb;
+  --neg-bg: #f8e7e2;
+  --seq-lo: #c3d7ef;
+  --seq-hi: #0d3f80;
+  --c0: #2a78d6; --c1: #eb6834; --c2: #1baf7a;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+    --seq-lo: #2a3f57; --seq-hi: #a8d0ff;
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+  --seq-lo: #2a3f57; --seq-hi: #a8d0ff;
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+.mono, td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 86ch; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.stack { display: grid; gap: 14px; }
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.sub { font-size: 12px; color: var(--muted); }
+.pill { justify-self: start; font: 600 11px var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; }
+.pill.ok { color: var(--pos); background: var(--pos-bg); }
+.pill.no { color: var(--neg); background: var(--neg-bg); }
+.val { font: 500 13px var(--f-mono); color: var(--ink); }
+.decision { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 4px; }
+.decision b { font-family: var(--f-mono); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
+.controls label { display: grid; gap: 3px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+select { font: 13px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.ramp { display: inline-block; width: 120px; height: 9px; border-radius: 4px; background: linear-gradient(90deg, var(--seq-lo), var(--seq-hi)); vertical-align: middle; margin: 0 6px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg text.lab { fill: var(--ink-2); font: 500 10.5px var(--f-body); }
+svg .pt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+td.hi { color: var(--pos); font-weight: 600; } td.lo { color: var(--neg); font-weight: 600; }
+td .ci { color: var(--muted); font-size: 11.5px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: 12px var(--f-mono); color: var(--ink); box-shadow: 0 2px 10px rgb(0 0 0 / 0.12); display: grid; gap: 2px; z-index: 2; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+details summary { cursor: pointer; font-weight: 600; }
+details summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+details .tablewrap { border: 0; margin-top: 8px; }
+.method { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; max-width: 86ch; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">critic-degeneracy-v1 · offline, prerejestrowane 2026-11-16</div>
+    <h1>Czy krytyk TD3 rankuje sąsiadów aktora tylko przez odległość?</h1>
+    <p class="note">Aktor TD3 stoi w maksimum swojego krytyka, więc ocena krytyka dla zaburzeń aktora może sprowadzać się do ważonej hesjanem odległości od aktora. Drugie pytanie: czy krytyk trenowany niezależnie od aktora (FQE) niesie informację o kierunku poprawy.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <h2>Werdykt</h2>
+    <div class="verdicts" id="verdicts"></div>
+    <div class="decision" id="decision"></div>
+  </section>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Mediany per env</h2>
+    <p class="note">Mediana po 12 komórkach envu (2 seedy × 3 checkpointy × 2 poziomy σ). Każda komórka to 40 zaburzeń.</p>
+    <div class="stack">
+      <div class="card"><h3>Struktura krytyka</h3><div class="tablewrap" id="envStruct"></div></div>
+      <div class="card"><h3>Spearman z prawdą (10 epizodów)</h3><div class="tablewrap" id="envTruth"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Wynik krytyka vs odległość hesjanowa</h2>
+    <p class="note">Jedna komórka: 40 zaburzeń aktora. Oś x: dist_H = −½ δᵀHδ z hesjanu krytyka TD3 w akcji aktora. Oś y: wynik krytyka minus wynik aktora. Kolor: prawdziwy zwrot (średnia z 10 epizodów), od najniższego do najwyższego w komórce. Pierścień w (0, 0) to aktor. Degeneracja oznacza, że punkty leżą na malejącej linii, a kolor nie zależy od położenia wzdłuż niej.</p>
+    <div class="controls" id="controls"></div>
+    <div class="legend" id="seqLegend"></div>
+    <div class="pair" id="cellScatter"></div>
+  </section>
+
+  <section>
+    <h2>Wszystkie komórki</h2>
+    <div class="legend" id="envLegend"></div>
+    <div class="pair" id="overview"></div>
+  </section>
+
+  <section>
+    <details>
+      <summary>Tabela 36 komórek</summary>
+      <div class="tablewrap" id="cells"></div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method">
+      <p>Polityki: td3 (rl_only), seedy 0-1, checkpointy przy 300k, 600k i 1M krokach. Zaburzenia głowy aktora jak w CEM: δ ~ N(0, (σ·std(liścia))²). σ kalibrowane raz na env (seed 0, 300k) na średni spadek zwrotu 5% i 20%, potem stałe.</p>
+      <p>Prawda: średnia z 10 pełnych epizodów na zaburzenie, wspólne seedy resetu dla wszystkich zaburzeń. Sufit szumu: Spearman połówek 5 vs 5 epizodów, Spearman-Brown 2r/(1+r). Prefiks: zwrot z pierwszych 200 kroków osobnego epizodu.</p>
+      <p>Miary na 2000 stanach z ostatnich 100k przejść bufora. Q = min(Q1, Q2). score = średnia Q(s, π′(s)). t1 = średnia g·δ_a, t2 = średnia ½δ_aᵀHδ_a, g i H po akcji w a = π(s), osobno dla każdego krytyka. dist_H = −t2_TD3. Stosunek 1./2. rzędu = mediana |t1| / mediana |t2| w komórce.</p>
+      <p>FQE: ta sama architektura co krytyk TD3, od zera, 100k kroków gradientu na buforze z checkpointu, cel TD z a′ = aktor(s′) + wygładzanie TD3. Aktor nie jest trenowany.</p>
+      <p>Cząstkowa ρ(score, prawda | dist_H) liczona z trzech korelacji Spearmana. Hipotezy i progi zamknięte przed runami (experiment.toml).</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const V = DATA.verdict, CELLS = DATA.cells, ENVS = Object.keys(DATA.per_env);
+const ENV_COLOR = Object.fromEntries(ENVS.map((e, i) => [e, `var(--c${i})`]));
+const ENV_SHAPE = Object.fromEntries(ENVS.map((e, i) => [e, ["circle", "square", "triangle"][i]]));
+const PRED = [["score_td3", "score TD3"], ["score_fqe", "score FQE"], ["neg_dist_l2", "−dist L2"], ["neg_dist_h", "−dist H"], ["prefix", "prefiks 200"]];
+const STEP_LABEL = s => `${s / 1000}k`;
+const fmt = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : "n/a";
+const el = (tag, attrs = {}, html = "") => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.innerHTML = html;
+  return e;
+};
+const med = xs => { const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const M = V.medians, PE = DATA.per_env;
+
+document.getElementById("facts").innerHTML = [
+  ["envy", ENVS.length],
+  ["checkpointy", "18"],
+  ["komórki", V.coverage],
+  ["zaburzenia", "40 na komórkę"],
+  ["sufit szumu (mediana)", fmt(M.ceiling)],
+  ["koszt", "≈48 CPU-h · ≈12 GPU-h"],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const HYP = [
+  { id: "H1", title: "Degeneracja", values: `ρ(score_TD3, −dist_H) = ${fmt(M.rho_td3_dist)} (próg ≥ 0.8)<br>stosunek 1./2. rzędu TD3 = ${fmt(M.ratio_td3, 3)} (próg ≤ 0.2)` },
+  { id: "H2", title: "Brak informacji ponad odległość", values: `cząstkowa ρ(score_TD3, prawda | dist_H) = ${fmt(M.partial_td3)} (próg |·| ≤ 0.1)` },
+  { id: "H3", title: "Poprawka przez FQE", values: `zysk cząstkowej ρ per env: ${ENVS.map(e => `${e.replace("-v5", "")} ${fmt(V.partial_gain_per_env[e])}`).join(", ")} (próg ≥ 0.15 w ≥ 2 z 3)<br>stosunek FQE / TD3 = ${fmt(M.ratio_fqe / M.ratio_td3, 1)}× (próg ≥ 2×)` },
+];
+const rules = Object.fromEntries(DATA.hypotheses.map(h => [h.id, h.rule]));
+document.getElementById("verdicts").innerHTML = HYP.map(h => `
+  <div class="card">
+    <span class="pill ${V[h.id] ? "ok" : "no"}">${h.id} ${V[h.id] ? "przechodzi" : "nie przechodzi"}</span>
+    <h3>${h.title}</h3>
+    <div class="val">${h.values}</div>
+    <div class="sub">${rules[h.id]}</div>
+  </div>`).join("");
+document.getElementById("decision").innerHTML = `<span class="eyebrow">decyzja z prerejestracji</span><div><b>${V.decision}</b>: ${V.decision_text}</div>`;
+
+const pe = (e, k) => PE[e][k];
+const swRatio = pe("Swimmer-v5", "ratio_td3");
+document.getElementById("findings").innerHTML = [
+  `Krytyk TD3 ocenia zaburzenia prawie wyłącznie przez odległość hesjanową. Mediana ρ(score_TD3, −dist_H) = ${fmt(M.rho_td3_dist)}, wyraz 1. rzędu jest ${fmt(1 / M.ratio_td3, 0)}× mniejszy od 2. rzędu. Degeneracja dotyczy HalfCheetah (ρ ${fmt(pe("HalfCheetah-v5", "rho_td3_dist"))}, stosunek ${fmt(pe("HalfCheetah-v5", "ratio_td3"), 3)}) i Walker2d (${fmt(pe("Walker2d-v5", "rho_td3_dist"))}, ${fmt(pe("Walker2d-v5", "ratio_td3"), 3)}). Swimmer nie spełnia żadnego z dwóch progów (ρ ${fmt(pe("Swimmer-v5", "rho_td3_dist"))}, stosunek ${fmt(swRatio, 2)}), więc pooled H1 przechodzi dzięki dwóm envom z trzech.`,
+  `Sama odległość od aktora przewiduje prawdę co najmniej tak dobrze jak krytyk TD3. ρ z prawdą (mediana po komórkach): −dist_H ${fmt(med(CELLS.map(c => c.rho_truth.neg_dist_h)))}, score_TD3 ${fmt(med(CELLS.map(c => c.rho_truth.score_td3)))}, −dist_L2 ${fmt(med(CELLS.map(c => c.rho_truth.neg_dist_l2)))}. Przy stałym σ zaburzenie, które bardziej oddala się od aktora, zwykle traci więcej.`,
+  `H2 nie przechodzi: po kontroli dist_H krytyk TD3 zachowuje część informacji (cząstkowa ρ = ${fmt(M.partial_td3)}, próg 0.1). Wyraźnie w HalfCheetah (${fmt(pe("HalfCheetah-v5", "partial_td3"))}), słabo w Walker2d (${fmt(pe("Walker2d-v5", "partial_td3"))}), wcale w Swimmer (${fmt(pe("Swimmer-v5", "partial_td3"))}).`,
+  `FQE nie poprawia rankingu. Cząstkowa ρ FQE ${fmt(M.partial_fqe)} wobec ${fmt(M.partial_td3)} dla TD3. Zysk ≥ 0.15 nie występuje w żadnym envie (najlepiej Walker2d, ${fmt(V.partial_gain_per_env["Walker2d-v5"])}). W HalfCheetah FQE jest gorsze (${fmt(V.partial_gain_per_env["HalfCheetah-v5"])}).`,
+  `FQE ma ${fmt(M.ratio_fqe / M.ratio_td3, 1)}× większy udział wyrazu 1. rzędu (${fmt(M.ratio_fqe, 3)} wobec ${fmt(M.ratio_td3, 3)}), więc mniej siedzi w maksimum. Ten gradient nie wskazuje jednak kierunku poprawy prawdziwego zwrotu.`,
+  `Prawda jest wiarygodna: mediana sufitu szumu ${fmt(M.ceiling)}, minimum ${fmt(Math.min(...CELLS.map(c => c.ceiling)))}. Niskie korelacje w Walker2d i Swimmer wynikają z predyktorów, a nie z szumu ewaluacji. Prefiks 200 kroków działa w HalfCheetah (mediana ρ ${fmt(pe("HalfCheetah-v5", "rho_truth_prefix"))}), w Walker2d i Swimmer prawie wcale.`,
+  `Kalibracja σ w Walker2d jest niestabilna między checkpointami: spadek zwrotu przy tym samym σ waha się od ${fmt(Math.min(...CELLS.filter(c => c.env === "Walker2d-v5").map(c => c.drop)))} do ${fmt(Math.max(...CELLS.filter(c => c.env === "Walker2d-v5").map(c => c.drop)))}. Swimmer potrzebował σ = ${fmt(DATA.sigmas["Swimmer-v5"][1])} na 20% spadku.`,
+].map(f => `<li>${f}</li>`).join("");
+
+function table(cols, rows) {
+  const head = `<tr>${cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
+  return el("table", {}, head + rows.map(r => `<tr>${r.join("")}</tr>`).join(""));
+}
+const td = (v, d = 2, cls = "") => `<td class="n ${cls}">${fmt(v, d)}</td>`;
+document.getElementById("envStruct").append(table(
+  ["env", "ρ(TD3, −dist_H)", "ρ(FQE, −dist_H)", "1./2. TD3", "1./2. FQE", "cząstk. TD3", "cząstk. FQE", "zysk FQE"],
+  ENVS.map(e => [`<td>${e}</td>`,
+    td(pe(e, "rho_td3_dist"), 2, pe(e, "rho_td3_dist") >= 0.8 ? "hi" : ""), td(pe(e, "rho_fqe_dist")),
+    td(pe(e, "ratio_td3"), 3, pe(e, "ratio_td3") <= 0.2 ? "hi" : "lo"), td(pe(e, "ratio_fqe"), 3),
+    td(pe(e, "partial_td3")), td(pe(e, "partial_fqe")),
+    td(V.partial_gain_per_env[e], 2, V.partial_gain_per_env[e] >= 0.15 ? "hi" : "lo")])
+));
+document.getElementById("envTruth").append(table(
+  ["env", ...PRED.map(p => p[1]), "sufit"],
+  ENVS.map(e => [`<td>${e}</td>`, ...PRED.map(([k]) => td(pe(e, `rho_truth_${k}`))), td(pe(e, "ceiling"))])
+));
+
+function scale(lo, hi, a, b, log = false) {
+  const f = log ? Math.log10 : v => v;
+  return v => a + (f(v) - f(lo)) / (f(hi) - f(lo)) * (b - a);
+}
+function ticks(lo, hi, n = 5) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(10));
+  return out;
+}
+const tickLabel = v => Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(0) : String(+v.toPrecision(3));
+function mark(shape, x, y, r, style, attrs) {
+  if (shape === "square") return `<rect ${attrs} x="${x - r * 0.9}" y="${y - r * 0.9}" width="${r * 1.8}" height="${r * 1.8}" rx="1.5" style="${style}"/>`;
+  if (shape === "triangle") return `<path ${attrs} d="M${x},${y - r * 1.15}L${x + r * 1.05},${y + r * 0.8}L${x - r * 1.05},${y + r * 0.8}Z" style="${style}"/>`;
+  return `<circle ${attrs} cx="${x}" cy="${y}" r="${r}" style="${style}"/>`;
+}
+function attachTips(card, texts) {
+  const tip = el("div", { class: "tip" }); tip.hidden = true; card.append(tip);
+  card.querySelectorAll(".pt").forEach(node => {
+    const show = () => {
+      tip.innerHTML = texts[+node.dataset.i];
+      tip.hidden = false;
+      const bx = card.getBoundingClientRect(), r = node.getBoundingClientRect();
+      const left = r.left - bx.left + 14;
+      tip.style.left = (left + 230 > bx.width ? left - 250 : left) + "px";
+      tip.style.top = (r.top - bx.top - 8) + "px";
+    };
+    node.addEventListener("pointerenter", show); node.addEventListener("focus", show);
+    node.addEventListener("pointerleave", () => tip.hidden = true); node.addEventListener("blur", () => tip.hidden = true);
+  });
+}
+function frame(o) {
+  const W = 440, H = 300, P = { l: 58, r: 14, t: 12, b: 38 };
+  const X = scale(o.x[0], o.x[1], P.l, W - P.r, o.log), Y = scale(o.y[0], o.y[1], H - P.b, P.t, o.log);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.aria}">`;
+  const xt = o.log ? o.logTicks : ticks(...o.x), yt = o.log ? o.logTicks : ticks(...o.y);
+  for (const v of yt) {
+    svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/>`;
+    svg += `<text x="${P.l - 6}" y="${Y(v) + 3.5}" text-anchor="end">${tickLabel(v)}</text>`;
+  }
+  for (const v of xt) {
+    svg += `<line x1="${X(v)}" x2="${X(v)}" y1="${P.t}" y2="${H - P.b}" stroke="var(--grid)"/>`;
+    svg += `<text x="${X(v)}" y="${H - P.b + 14}" text-anchor="middle">${tickLabel(v)}</text>`;
+  }
+  svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="var(--line)"/>`;
+  svg += `<text x="${(P.l + W - P.r) / 2}" y="${H - 6}" text-anchor="middle">${o.xLabel}</text>`;
+  svg += `<text transform="translate(12 ${(P.t + H - P.b) / 2}) rotate(-90)" text-anchor="middle">${o.yLabel}</text>`;
+  return { svg, X, Y, W, H, P };
+}
+
+function cellCard(cell, which) {
+  const yi = which === "td3" ? 1 : 2;
+  const pts = cell.points;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[yi]).concat([0]), tr = pts.map(p => p[3]);
+  const pad = (lo, hi) => { const d = (hi - lo) * 0.06 || 1e-6; return [lo - d, hi + d]; };
+  const [tlo, thi] = [Math.min(...tr), Math.max(...tr)];
+  const f = frame({ x: pad(Math.min(0, ...xs), Math.max(...xs)), y: pad(Math.min(...ys), Math.max(...ys)),
+    xLabel: "dist_H", yLabel: `score ${which.toUpperCase()} − score aktora`, aria: `score ${which} vs dist_H, kolor = prawda` });
+  let svg = f.svg;
+  svg += `<circle cx="${f.X(0)}" cy="${f.Y(0)}" r="6" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+  const order = pts.map((p, i) => i).sort((a, b) => pts[a][3] - pts[b][3]);
+  for (const i of order) {
+    const t = thi > tlo ? (pts[i][3] - tlo) / (thi - tlo) : 0.5;
+    const style = `fill:color-mix(in oklab, var(--seq-hi) ${(t * 100).toFixed(0)}%, var(--seq-lo));stroke:var(--surface);stroke-width:1.5`;
+    svg += mark("circle", f.X(pts[i][0]), f.Y(pts[i][yi]), 5, style, `class="pt" tabindex="0" data-i="${i}"`);
+  }
+  svg += `</svg>`;
+  const card = el("div", { class: "card" });
+  const rd = which === "td3" ? cell.rho_td3_dist : cell.rho_fqe_dist;
+  const pr = which === "td3" ? cell.partial_td3 : cell.partial_fqe;
+  const ra = which === "td3" ? cell.ratio_td3 : cell.ratio_fqe;
+  card.append(el("h3", {}, `Krytyk ${which === "td3" ? "TD3" : "FQE"}`));
+  card.append(el("div", { class: "sub mono" }, `ρ(score, −dist_H) ${fmt(rd)} · ρ(score, prawda) ${fmt(cell.rho_truth[`score_${which}`])} · cząstkowa ${fmt(pr)} · 1./2. ${fmt(ra, 3)}`));
+  card.insertAdjacentHTML("beforeend", svg);
+  attachTips(card, pts.map(p => `<span>prawda ${fmt(p[3], 1)}</span><span>dist_H ${fmt(p[0], 4)}</span><span>Δscore ${fmt(p[yi], 3)}</span>`));
+  return card;
+}
+
+const ctl = document.getElementById("controls");
+const OPTS = {
+  env: ENVS.map(e => [e, e]),
+  seed: [...new Set(CELLS.map(c => c.seed))].map(s => [s, `seed ${s}`]),
+  step: [...new Set(CELLS.map(c => c.step))].map(s => [s, STEP_LABEL(s)]),
+  level: [[0, "σ: spadek 5%"], [1, "σ: spadek 20%"]],
+};
+const LABELS = { env: "env", seed: "seed", step: "checkpoint", level: "poziom σ" };
+const sel = { env: "HalfCheetah-v5", seed: 0, step: 1000000, level: 1 };
+for (const [k, opts] of Object.entries(OPTS)) {
+  const s = el("select", { id: `sel-${k}` }, opts.map(([v, l]) => `<option value="${v}"${v == sel[k] ? " selected" : ""}>${l}</option>`).join(""));
+  s.addEventListener("change", () => { sel[k] = k === "env" ? s.value : +s.value; drawCell(); });
+  const lab = el("label", { for: `sel-${k}` }, LABELS[k]); lab.append(s); ctl.append(lab);
+}
+function drawCell() {
+  const cell = CELLS.find(c => c.env === sel.env && c.seed === sel.seed && c.step === sel.step && c.level === sel.level);
+  const tr = cell.points.map(p => p[3]);
+  document.getElementById("seqLegend").innerHTML = `<span>prawda: ${fmt(Math.min(...tr), 1)}<span class="ramp"></span>${fmt(Math.max(...tr), 1)}</span><span>zwrot aktora ${fmt(cell.actor_return, 1)} · σ = ${fmt(cell.sigma, 3)} · spadek ${fmt(cell.drop * 100, 0)}% · sufit ${fmt(cell.ceiling)}</span>`;
+  const box = document.getElementById("cellScatter");
+  box.replaceChildren(cellCard(cell, "td3"), cellCard(cell, "fqe"));
+}
+drawCell();
+
+document.getElementById("envLegend").innerHTML = ENVS.map(e => {
+  const svg = `<svg viewBox="0 0 14 14" width="14" height="14" style="display:inline-block;width:14px;vertical-align:middle">${mark(ENV_SHAPE[e], 7, 7, 5, `fill:${ENV_COLOR[e]}`, "")}</svg>`;
+  return `<span>${svg} ${e}</span>`;
+}).join("");
+
+function overview(o) {
+  const f = frame(o);
+  let svg = f.svg + o.guides(f);
+  CELLS.forEach((c, i) => {
+    svg += mark(ENV_SHAPE[c.env], f.X(o.get(c)[0]), f.Y(o.get(c)[1]), 4.5, `fill:${ENV_COLOR[c.env]};stroke:var(--surface);stroke-width:1.5;fill-opacity:0.9`, `class="pt" tabindex="0" data-i="${i}"`);
+  });
+  svg += `</svg>`;
+  const card = el("div", { class: "card" });
+  card.append(el("h3", {}, o.title));
+  card.append(el("div", { class: "sub" }, o.sub));
+  card.insertAdjacentHTML("beforeend", svg);
+  attachTips(card, CELLS.map(c => `<b>${c.env} s${c.seed} ${STEP_LABEL(c.step)} lv${c.level}</b><span>${o.xName} ${fmt(o.get(c)[0], 3)}</span><span>${o.yName} ${fmt(o.get(c)[1], 3)}</span>`));
+  return card;
+}
+const line = (f, x1, y1, x2, y2, dash, label, dy = 12) =>
+  `<line x1="${f.X(x1)}" y1="${f.Y(y1)}" x2="${f.X(x2)}" y2="${f.Y(y2)}" stroke="var(--muted)" stroke-width="1.2" ${dash ? 'stroke-dasharray="4 3"' : ""}/>` +
+  (label ? `<text class="lab" x="${f.X(x2) - 4}" y="${f.Y(y2) + dy}" text-anchor="end">${label}</text>` : "");
+const ov = document.getElementById("overview");
+ov.append(overview({
+  title: "Stosunek 1./2. rzędu: TD3 vs FQE",
+  sub: "Skala log. Na prawo od x = 0.2 TD3 nie jest w maksimum (H1). Nad linią 2× FQE ma wyraźnie większy wyraz 1. rzędu (H3).",
+  x: [0.01, 20], y: [0.01, 20], log: true, logTicks: [0.01, 0.1, 1, 10],
+  xLabel: "|t1| / |t2|, krytyk TD3", yLabel: "|t1| / |t2|, FQE", xName: "TD3", yName: "FQE",
+  aria: "stosunek pierwszego do drugiego rzędu, TD3 vs FQE, po komórkach",
+  get: c => [c.ratio_td3, c.ratio_fqe],
+  guides: f => line(f, 0.01, 0.01, 20, 20, false, "y = x") + line(f, 0.01, 0.02, 10, 20, true, "y = 2x", -16) + line(f, 0.2, 0.01, 0.2, 20, true, "") + `<text class="lab" x="${f.X(0.2) + 4}" y="${f.P.t + 10}">0.2</text>`,
+}));
+ov.append(overview({
+  title: "Cząstkowa ρ z prawdą przy kontroli dist_H",
+  sub: "Pasmo |x| ≤ 0.1 to H2. Nad linią y = x + 0.15 FQE poprawia ranking (H3).",
+  x: [-0.8, 0.8], y: [-0.8, 0.8],
+  xLabel: "cząstkowa ρ, krytyk TD3", yLabel: "cząstkowa ρ, FQE", xName: "TD3", yName: "FQE",
+  aria: "cząstkowa korelacja z prawdą, TD3 vs FQE, po komórkach",
+  get: c => [c.partial_td3, c.partial_fqe],
+  guides: f => `<rect x="${f.X(-0.1)}" y="${f.P.t}" width="${f.X(0.1) - f.X(-0.1)}" height="${f.H - f.P.b - f.P.t}" fill="var(--grid)"/>` +
+    line(f, -0.8, -0.8, 0.8, 0.8, false, "y = x") + line(f, -0.8, -0.65, 0.65, 0.8, true, "y = x + 0.15", -16),
+}));
+
+const cls = (ok) => ok ? "hi" : "";
+document.getElementById("cells").append(table(
+  ["env", "seed", "ckpt", "σ", "spadek", "sufit", ...PRED.map(p => `ρ ${p[1]}`), "ρ(TD3, −dist_H)", "cząstk. TD3", "cząstk. FQE", "1./2. TD3", "1./2. FQE", "loss FQE"],
+  CELLS.map(c => [`<td>${c.env}</td>`, `<td class="n">${c.seed}</td>`, `<td class="n">${STEP_LABEL(c.step)}</td>`, td(c.sigma, 3),
+    td(c.drop), td(c.ceiling), ...PRED.map(([k]) => td(c.rho_truth[k])),
+    td(c.rho_td3_dist, 2, cls(c.rho_td3_dist >= 0.8)), td(c.partial_td3), td(c.partial_fqe, 2, cls(c.partial_fqe - c.partial_td3 >= 0.15)),
+    td(c.ratio_td3, 3, cls(c.ratio_td3 <= 0.2)), td(c.ratio_fqe, 3), td(c.fqe_loss, 4)])
+));
+</script>

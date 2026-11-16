@@ -147,7 +147,7 @@ python -m analysis.pilot   ../experiments/<name>/experiment.toml  # report.html
 ```bash
 python -m offline.critic_degeneracy calibrate <toml> <ckpt_root> <out_dir> <env>  # sigma.json
 python -m offline.critic_degeneracy evaluate  <toml> <ckpt_root> <out_dir> <env>  # per checkpoint JSON
-python -m analysis.degeneracy ../experiments/critic-degeneracy-v1/experiment.toml # H1-H3, decision
+python -m analysis.degeneracy ../experiments/critic-degeneracy-v1/experiment.toml # H1-H3, decision, degeneracy.{json,html}
 ```
 - Actor-head perturbations at two calibrated sigma levels, true return (10 episodes, common seeds), prefix-200, TD3 and FQE critic scores with 1st/2nd-order Taylor terms around the actor.
 - All parameters in the toml `[offline]`, cluster: `scripts/submit_degeneracy.sh <env>...` (td3 with checkpoints, then `slurm_offline_degeneracy.sh` via `afterok`).

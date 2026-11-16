@@ -9,6 +9,7 @@ from scipy.stats import spearmanr
 
 from analysis.runs import load_spec
 
+TEMPLATE = Path(__file__).resolve().parent / "templates" / "degeneracy.html"
 Cell = dict[str, Any]
 # predictors ranked against the truth; -dist_H = t2_td3, -dist_L2 below
 PREDICTORS = ("score_td3", "score_fqe", "neg_dist_l2", "neg_dist_h", "prefix")
@@ -59,6 +60,20 @@ def cell_stats(rows: list[dict[str, Any]], actor: dict, where: str) -> Cell:
     }
 
 
+def points(rows: list[dict[str, Any]], actor: dict) -> list[list[float]]:
+    # scatter rows: dist_H, score_TD3 and score_FQE relative to the actor,
+    # truth
+    return [
+        [
+            -r["t2_td3"],
+            r["score_td3"] - actor["score_td3"],
+            r["score_fqe"] - actor["score_fqe"],
+            float(np.mean(r["truth"])),
+        ]
+        for r in rows
+    ]
+
+
 def load_cells(results: Path, envs: list[str]) -> list[Cell]:
     cells = []
     for env in envs:
@@ -77,6 +92,8 @@ def load_cells(results: Path, envs: list[str]) -> list[Cell]:
                         "sigma": sigma,
                         "n": len(rows),
                         "actor_return": float(np.mean(d["actor"]["truth"])),
+                        "fqe_loss": d["fqe_loss"][-1],
+                        "points": points(rows, d["actor"]),
                     }
                     | cell_stats(rows, d["actor"], where)
                 )
@@ -87,6 +104,30 @@ def load_cells(results: Path, envs: list[str]) -> list[Cell]:
 
 def med(cells: list[Cell], key: str) -> float:
     return float(np.median([c[key] for c in cells]))
+
+
+MEDIANS = (
+    "rho_td3_dist",
+    "rho_fqe_dist",
+    "ratio_td3",
+    "ratio_fqe",
+    "partial_td3",
+    "partial_fqe",
+    "ceiling",
+)
+
+
+def per_env(cells: list[Cell], envs: list[str]) -> dict[str, dict[str, Any]]:
+    out = {}
+    for e in envs:
+        mine = [c for c in cells if c["env"] == e]
+        out[e] = {k: med(mine, k) for k in MEDIANS} | {
+            f"rho_truth_{k}": float(
+                np.median([c["rho_truth"][k] for c in mine])
+            )
+            for k in PREDICTORS
+        }
+    return out
 
 
 def hypotheses(cells: list[Cell], envs: list[str]) -> dict[str, Any]:
@@ -113,18 +154,7 @@ def hypotheses(cells: list[Cell], envs: list[str]) -> dict[str, Any]:
     else:
         decision = "H1+H3" if h3 else "H1-noH3"
     return {
-        "medians": {
-            k: med(cells, k)
-            for k in (
-                "rho_td3_dist",
-                "rho_fqe_dist",
-                "ratio_td3",
-                "ratio_fqe",
-                "partial_td3",
-                "partial_fqe",
-                "ceiling",
-            )
-        },
+        "medians": {k: med(cells, k) for k in MEDIANS},
         "partial_gain_per_env": gain,
         "H1": bool(h1),
         "H2": bool(h2),
@@ -169,9 +199,23 @@ def main(toml_path: Path) -> None:
     verdict["coverage"] = f"{len(cells)}/{expected} cells"
     verdict["decision_text"] = spec["decision"][verdict["decision"]]
     print(json.dumps(verdict, indent=1))
+    data = {
+        "verdict": verdict,
+        "per_env": per_env(cells, spec["envs"]),
+        "cells": cells,
+        "hypotheses": spec["hypotheses"],
+        "sigmas": {
+            e: json.loads((results / e / "sigma.json").read_text())["sigmas"]
+            for e in spec["envs"]
+        },
+    }
     out = spec["dir"] / "degeneracy.json"
-    out.write_text(json.dumps({"verdict": verdict, "cells": cells}, indent=1))
-    print(f"-> {out}")
+    out.write_text(json.dumps(data, indent=1))
+    page = spec["dir"] / "degeneracy.html"
+    page.write_text(
+        TEMPLATE.read_text().replace("/*DATA*/null", json.dumps(data))
+    )
+    print(f"-> {out}\n-> {page}")
 
 
 if __name__ == "__main__":
