@@ -1,0 +1,96 @@
+# Preregistration, fixed 2026-11-16 before any run. Do not edit question,
+# envs, seeds, [offline] or [[hypotheses]] after the first training run.
+name = "critic-degeneracy-v1"
+question = """Does the TD3 critic rank perturbations of its own actor only by
+their (Hessian-weighted) distance from the actor, because the actor sits at a
+maximum of the critic? Does a critic trained independently of the actor (FQE)
+carry information about the direction of improvement?"""
+protocol = 3
+envs = ["HalfCheetah-v5", "Walker2d-v5", "Swimmer-v5"]
+conditions = ["td3"]
+controls = []
+seeds = [0, 1]
+total_steps = 1_000_000
+
+[wandb]
+entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
+project = "h_boostrap_"
+tag = "critic-degeneracy-v1"
+run_name = '^(?P<condition>.+)_(?P<env>[^_]+)_s(?P<seed>\d+)$'
+
+[metric]
+keys = ["perf/eval_rl"]
+x = ["env_steps"]
+final_window = 0.1
+
+[analysis]
+caches = ["cache/full"]
+# offline JSONs rsynced from PD: <env>/sigma.json, <env>/s<seed>_step_<N>.json
+offline_cache = "cache/offline"
+
+# offline measures: python -m offline.critic_degeneracy (from src/)
+[offline]
+checkpoint_at = [0.3, 0.6, 1.0]
+# sigma levels: chosen once per env on seed 0's first checkpoint (30%),
+# then fixed for that env's 6 checkpoints
+calibration_seed = 0
+sigma_grid = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0]
+calibration_perturbations = 20
+calibration_episodes = 3
+calibration_seed_base = 1_000_100
+# mean return drop vs the actor, 1 - mean(R_pert) / R_actor
+target_drops = [0.05, 0.20]
+perturbations = 40
+# truth = mean of truth_episodes full episodes, reset seeds eval_seed + e,
+# the same seed for every perturbation (common random numbers); prefix =
+# first prefix_h steps of one more episode, seed eval_seed + truth_episodes
+truth_episodes = 10
+eval_seed = 1_000_000
+horizon = 1000
+prefix_h = 200
+# critic measures on `states` distinct states from the newest
+# `state_window` buffer transitions
+states = 2000
+state_window = 100_000
+key = 20261116
+
+[offline.fqe]
+# same twin architecture as the TD3 critic, trained from scratch on the
+# checkpoint buffer with a' = actor(s') + clipped noise (TD3 smoothing)
+steps = 100_000
+log_every = 10_000
+lr = 1e-3
+batch_size = 256
+gamma = 0.99
+tau = 0.005
+policy_noise = 0.2
+noise_clip = 0.5
+
+# cell = env x seed x checkpoint x sigma level (36 cells, 40 perturbations
+# each). rho = Spearman over the 40 perturbations, truth = mean of the 10
+# episodes. partial rho(x, truth | dist_H) from the three Spearman rhos.
+# ratio = median |t1| / median |t2| over the cell's perturbations.
+[[hypotheses]]
+id = "H1"
+question = "TD3 critic score is a Hessian-weighted distance"
+rule = "median over cells rho(score_TD3, -dist_H) >= 0.8 and median ratio_TD3 <= 0.2"
+
+[[hypotheses]]
+id = "H2"
+question = "TD3 critic carries no information beyond distance"
+rule = "|median over cells partial rho(score_TD3, truth | dist_H)| <= 0.1"
+
+[[hypotheses]]
+id = "H3"
+question = "an independent critic (FQE) fixes it"
+rule = """per env, median over its 12 cells of partial_FQE - partial_TD3 >= 0.15
+in >= 2 of 3 envs, and median ratio_FQE >= 2 x median ratio_TD3"""
+
+[decision]
+"H1+H3" = "stage 2: independent-critic surrogate in ERL"
+"H1-noH3" = "degeneracy confirmed, fix fails: analysis note + another fix (critic of the population mean, centre != actor)"
+"noH1" = "hypothesis refuted, stop"
+
+[cluster]
+ssh_host = "wcss"
+# one [[cluster.jobs]] per sbatch, appended at submission

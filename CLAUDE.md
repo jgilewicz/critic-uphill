@@ -14,7 +14,8 @@ src/
   train.py           # Thin Hydra entrypoint (env workers re-import it)
   runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
   algos/erl.py       # ERL loop: eval modes, knobs (config dataclasses), diagnostics
-  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats
+  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy
+  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate)
   baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
   common/            # Buffer, fused TD3, rollout, critic surrogate, utils
   modules/           # Equinox modules (ActorHead, SharedStateEmbedding) + CEM evolutionary module
@@ -33,6 +34,7 @@ src/
 - **Rollout Separation**: 1 vectorized env for the RL actor (always full $H$, seeds buffer); `pop_size` vectorized envs for the ES population.
 - **Thesis**: gain comes from cheap fitness evaluation, not the critic (prefix-h200 ≈ SC-ERL). `rl_only` = TD3 control (no population/gene flow). h-bootstrap, the TD horizon controller and critic uncertainty are negative results (code removed in protocol 3). Plan: `TODO.md`.
 - **Metrics**: WandB x-axis is always `env_steps` (`wandb.define_metric("*", step_metric="env_steps")`). Diagnostics outside the budget: `perf/eval_rl`, `perf/eval_champion`, `perf/eval_best`, `div/action_dist`, `div/param_dist`, `div/elite_origin` (0 RL actor, 1 its descendant, 2 population), `pop/std`. Also `cost/real_frac`, `gene/ea_to_rl`, `train/critic_loss`, `train/td_error`.
+- **Checkpoints**: top-level `checkpoint.dir` + `checkpoint.at` (fractions of `total_steps`) save TD3 nets + replay buffer (`common/checkpoint.py`). No effect on training.
 - **Protocol**: runs log `config.protocol` (3 now). Analysis loads one protocol per toml, so protocol-2 runs (`paper-core-v1`, `paper-v2`) stay a separate reference set.
 - **Analysis**: `python -m analysis.{fetch,summary,compare,cost,pilot} <experiment.toml>` from `src/`. One stats module (`analysis/stats.py`: IQM, unpaired stratified bootstrap, P(A>B), TOST, Holm). Prereg template `analysis/templates/experiment.toml`. HTML templates live in `analysis/templates/`, outputs next to the toml.
 - **Verification**: Run `ruff check .`, `ty check`, and a tiny-budget smoke run:
@@ -42,7 +44,8 @@ src/
 
 ## Slurm (WCSS Lem)
 
-- Single benchmark runner: [`slurm_run_array.sh`](slurm_run_array.sh).
+- Single benchmark runner: [`slurm_run_array.sh`](slurm_run_array.sh). `EXTRA` adds Hydra overrides.
+- `critic-degeneracy-v1`: `scripts/submit_degeneracy.sh <env>...` = td3 seeds 0-1 with checkpoints on PD, then `slurm_offline_degeneracy.sh` (`afterok`).
 - Suites (`SUITE`, task = cond×10+seed): `core` (erl, sc_erl-random, prefix-h200, 0-29), `controls` (td3 = rl_only, sc_erl-always, 0-19), `ablation-horizon` (h100/400/800, 0-29), `config-check` (erl-evorainbow, 0-9), `all` (0-79). Submit with `scripts/submit_suite.sh <suite> <env>...`.
 - Paper envs: MuJoCo v5 HalfCheetah, Hopper, Walker2d, Ant, Swimmer, Humanoid. DMC Dog and MyoSuite (`.venv-myosuite`) stay registered.
 - Run `uv sync` on the login node prior to submissions. Jobs execute `.venv/bin/python` directly on `lem-gpu` (1x NVIDIA H100, 8 CPUs, 16GB RAM).

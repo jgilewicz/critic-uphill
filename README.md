@@ -102,6 +102,7 @@ Dropped: h-bootstrap and the TD-error horizon controller (negative results in `p
 | `eval.mode`, `eval.prefix_h`, `eval.p_real` | see above | `full`, 200, 0.21 |
 
 - Unknown keys fail at startup (Hydra struct config + dataclass constructors).
+- Checkpoints (top-level, needs `rl.enabled`): `checkpoint.dir=<root> checkpoint.at=[0.3,0.6,1.0]` saves the TD3 nets (embedding, actor, both critics) and the filled replay buffer to `<root>/<env>_s<seed>/step_<N>/` (`src/common/checkpoint.py`).
 
 ---
 
@@ -141,6 +142,15 @@ python -m analysis.pilot   ../experiments/<name>/experiment.toml  # report.html
 - P(A>B) over all seed pairs, two-sided bootstrap p (TOST for equivalence), Holm within a family, gatekeeping via `requires`.
 - Only runs of the toml `protocol` are loaded (default 2: `paper-core-v1`, `paper-v2`).
 - Preregistration template: `src/analysis/templates/experiment.toml`.
+
+### Offline critic measures (`critic-degeneracy-v1`)
+```bash
+python -m offline.critic_degeneracy calibrate <toml> <ckpt_root> <out_dir> <env>  # sigma.json
+python -m offline.critic_degeneracy evaluate  <toml> <ckpt_root> <out_dir> <env>  # per checkpoint JSON
+python -m analysis.degeneracy ../experiments/critic-degeneracy-v1/experiment.toml # H1-H3, decision
+```
+- Actor-head perturbations at two calibrated sigma levels, true return (10 episodes, common seeds), prefix-200, TD3 and FQE critic scores with 1st/2nd-order Taylor terms around the actor.
+- All parameters in the toml `[offline]`, cluster: `scripts/submit_degeneracy.sh <env>...` (td3 with checkpoints, then `slurm_offline_degeneracy.sh` via `afterok`).
 
 ---
 
@@ -190,11 +200,13 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 ├── TODO.md                # Experiment plan and open work
 ├── slurm_run_array.sh     # SLURM array (suites: core, controls, ablation-horizon, all)
 ├── scripts/submit_suite.sh# Submit one suite across envs
+├── slurm_offline_degeneracy.sh, scripts/submit_degeneracy.sh  # critic-degeneracy-v1
 ├── src/
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy
+│   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, utils
 │   ├── modules/           # Equinox networks and CEM

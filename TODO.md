@@ -11,6 +11,7 @@ Cel: GECCO 2027 (deadline 25.01.2027). Teza i oś: [README.md](README.md#researc
 | 2 | Swimmer CORE + Humanoid CORE | `core` × Swimmer-v5, Humanoid-v5 | 100 | ~450 | Swimmer 6256649 PENDING (QOSGrpCPUMinutesLimit); Humanoid dodany do rejestru |
 | 3 | Horyzont h=100/400/800 (h=200 z CORE) | `ablation-horizon` × 4 envy × 10 seedów | 120 | ~450 | nie wysłane |
 | 4 | Zgodność rankingu: prefix vs SC-ERL vs pełny rollout | HC + Walker2d × 5 seedów, checkpointy + offline eval | 20 | ~100 | brak kodu |
+| 5 | Degeneracja krytyka TD3 (critic-degeneracy-v1) | td3 × HC, Walker2d, Swimmer × 2 seedy, checkpointy + offline | 6 + 3 | ~60 (+~15 GPU-h) | prereg + kod gotowe, nie wysłane |
 | | **Razem** | | 320 | ~1250 | |
 
 - [ ] **Budżet**: grant ma 136 CPU-h (< 1250). Decyzja: Solvro (wszystkie punkty, także #1) vs doładowanie grantu.
