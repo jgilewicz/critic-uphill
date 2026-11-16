@@ -1,6 +1,6 @@
 # critic-degeneracy-v1: czy krytyk TD3 rankuje sąsiadów aktora tylko przez odległość
 
-- **Status:** prerejestracja, nic nie wysłane.
+- **Status:** wysłane 2026-11-16 z commita `670468d`.
 - **Account:** `hpc-jakgil6519-1780267238` (SC-ERL)
 - **Prerejestracja:** 2026-11-16, przed pierwszym runem
 - **Code:** git@github.com:jgilewicz/usc_erl_jax.git, branch `critic-degeneracy-v1` (z `refactor-b`, protokół 3). Zmiana w treningu: tylko zapis checkpointów (`checkpoint.dir`, `checkpoint.at`), algorytm bez zmian.
@@ -103,3 +103,11 @@ rsync -a wcss:/lustre/pd03/hpc-jakgil6519-1780267238/critic-degeneracy-v1/out/ \
 
 | job | co | stan |
 |---|---|---|
+| 6337576 | td3 HalfCheetah-v5 s0-1 + checkpointy | PENDING |
+| 6337582 | offline HalfCheetah-v5 (afterok 6337576) | PENDING |
+| 6337583 | td3 Walker2d-v5 s0-1 + checkpointy | PENDING |
+| 6337584 | offline Walker2d-v5 (afterok 6337583) | PENDING |
+| 6337585 | td3 Swimmer-v5 s0-1 + checkpointy | PENDING |
+| 6337586 | offline Swimmer-v5 (afterok 6337585) | PENDING |
+
+- Pierwszy `sbatch` (HalfCheetah, trening) zwrócił socket timeout, ale job powstał (sprawdzone w `squeue`). Offline HalfCheetah dosłany ręcznie z tą samą zależnością. Brak duplikatów.

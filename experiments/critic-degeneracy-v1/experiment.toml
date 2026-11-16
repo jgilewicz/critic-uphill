@@ -94,3 +94,27 @@ in >= 2 of 3 envs, and median ratio_FQE >= 2 x median ratio_TD3"""
 [cluster]
 ssh_host = "wcss"
 # one [[cluster.jobs]] per sbatch, appended at submission
+
+[[cluster.jobs]]
+id = "6337576"
+label = "td3 HalfCheetah-v5 s0-1 + checkpoints"
+
+[[cluster.jobs]]
+id = "6337582"
+label = "offline HalfCheetah-v5 (afterok 6337576)"
+
+[[cluster.jobs]]
+id = "6337583"
+label = "td3 Walker2d-v5 s0-1 + checkpoints"
+
+[[cluster.jobs]]
+id = "6337584"
+label = "offline Walker2d-v5 (afterok 6337583)"
+
+[[cluster.jobs]]
+id = "6337585"
+label = "td3 Swimmer-v5 s0-1 + checkpoints"
+
+[[cluster.jobs]]
+id = "6337586"
+label = "offline Swimmer-v5 (afterok 6337585)"
