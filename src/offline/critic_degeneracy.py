@@ -65,13 +65,13 @@ def rollout(
     embedding: SharedStateEmbedding,
     heads: ActorHead,
     *,
-    seed: int,
+    seeds: list[int],
     steps: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    # every env resets with the same seed: all policies face one start state
+    # one reset seed per env
     n = env.num_envs
     # Sync/AsyncVectorEnv take a per-env seed list, the base stub says int
-    states, _ = env.reset(seed=[seed] * n)  # ty: ignore[invalid-argument-type]
+    states, _ = env.reset(seed=seeds)  # ty: ignore[invalid-argument-type]
     returns = np.zeros(n)
     lengths = np.zeros(n, dtype=int)
     alive = np.ones(n, dtype=bool)
@@ -98,7 +98,9 @@ def episodes_matrix(
     env = environments.make_vec_env(env_name, n, async_=False)
     try:
         cols = [
-            rollout(env, embedding, heads, seed=s, steps=steps) for s in seeds
+            # every env resets with the same seed: all policies face one start
+            rollout(env, embedding, heads, seeds=[s] * n, steps=steps)
+            for s in seeds
         ]
     finally:
         env.close()

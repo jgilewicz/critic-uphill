@@ -1,0 +1,296 @@
+<title>Łańcuch SA vs TD3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, verdict -> findings -> gain table -> gain vs steps per cell -> acceptances -> step 0 (agreement) -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --pos-bg: #e3f3eb;
+  --neg-bg: #f8e7e2;
+  --c0: #2a78d6; --c1: #eb6834; --ref: #4b5967;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+    --c0: #3987e5; --c1: #d95926; --ref: #a9b4bf;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+  --c0: #3987e5; --c1: #d95926; --ref: #a9b4bf;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 86ch; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+.plots { grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.sub { font-size: 12px; color: var(--muted); }
+.pill { justify-self: start; font: 600 11px var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; }
+.pill.ok { color: var(--pos); background: var(--pos-bg); }
+.pill.no { color: var(--neg); background: var(--neg-bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.legend svg { display: inline-block; width: 26px; height: 12px; vertical-align: middle; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg .pt { cursor: default; }
+svg .pt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child, td.l, th.l { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+tr.grp td { background: var(--grid); font-weight: 600; color: var(--ink-2); }
+td.hi { color: var(--pos); font-weight: 600; } td.lo { color: var(--neg); font-weight: 600; }
+.rng { color: var(--muted); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: 12px var(--f-mono); color: var(--ink); box-shadow: 0 2px 10px rgb(0 0 0 / 0.12); display: grid; gap: 2px; z-index: 2; }
+.method { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; max-width: 86ch; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">td3-sa-pilot · offline, prerejestrowane 2026-11-16</div>
+    <h1>Czy łańcuch SA z checkpointu bije dalszy trening TD3 w plateau?</h1>
+    <p class="note">Wyżarzanie na głowie aktora TD3: kandydat = bieżąca polityka + szum, oceniony na 3 epizodach parowanych z bieżącą polityką, 100k kroków środowiska. Zysk względem aktora startowego wobec zysku tego samego runu TD3 przez kolejne 100k kroków.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <h2>Werdykt reguły</h2>
+    <div class="grid3" id="verdict"></div>
+    <div class="tablewrap" id="verdictTable"></div>
+  </section>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Zysk po 100k kroków</h2>
+    <p class="note">Zysk SA = średnia po 5 łańcuchach z różnicy zwrotu snapshotu i aktora startowego na tych samych 10 świeżych epizodach. W nawiasie rozpiętość między łańcuchami. Zysk TD3 = eval_rl w oknie t + 100k ± 10k minus eval_rl w oknie t ± 10k. Zielone: zysk SA > 0 i > TD3. Czerwone: zysk SA < 0.</p>
+    <div class="tablewrap" id="gainTable"></div>
+  </section>
+
+  <section>
+    <h2>Zysk w trakcie łańcucha</h2>
+    <p class="note">Snapshoty przy 25k, 50k i 100k zużytych kroków (oś x: kroki faktyczne, średnia po łańcuchach). Linia przerywana: TD3 od punktu startu do t + 100k, liniowo. Kreska pionowa: rozpiętość 5 łańcuchów.</p>
+    <div class="legend" id="legend"></div>
+    <div class="grid3 plots" id="plots"></div>
+  </section>
+
+  <section>
+    <h2>Akceptacje</h2>
+    <p class="note">Średnia liczba zaakceptowanych kandydatów do 25k / 50k / 100k kroków i średnia liczba iteracji (6 epizodów na iterację, w Walker2d epizody kończą się upadkiem, więc iteracji jest więcej).</p>
+    <div class="tablewrap" id="acceptTable"></div>
+  </section>
+
+  <section>
+    <h2>Krok 0: zgodność odtworzeń local-search-v1</h2>
+    <ul class="find">
+      <li>Rozbieżności (max_abs_diff do 9614) są w 8 z 18 checkpointów. Źródło liczyło walidację w batchu 11-15 głów, local-search-v1 w batchu 81. XLA na CPU liczy macierze z mniej niż 16 wierszami inną ścieżką: akcje różnią się o ok. 1e-7 dla n &lt; 16 i są bitowo równe dla n ≥ 16 (sprawdzone dla n = 8..40 w 3 envach).</li>
+      <li>Chaotyczna dynamika rozwija tę różnicę w każdy epizod tych checkpointów (w HalfCheetah do 9.6k zwrotu, czyli inny tryb biegu).</li>
+      <li>Powtórka tych 8 checkpointów w oryginalnym batchu daje bitowo te same zwroty, więc zaburzenia są te same. reproduction_checked = false w 12/18 oznacza tylko brak lokalnego buffer.npz (pobrany dla 300k), powtórka zastępuje to sprawdzenie.</li>
+      <li>Prawda w Walker2d i Swimmer: komórki, które przeszły regułę local-search-v1 (Walker2d 600k, Swimmer 300k i 1M), są bitowo zgodne. Z komórek tego pilota rozbieżne są tylko Swimmer s0 600k (zysk zaburzeń przesunięty maks. o 1.39, 2.4% zwrotu aktora) i HalfCheetah 600k. Prawda local-search-v1 jest liczona w jednym batchu dla wszystkich głów, więc spójna.</li>
+      <li>Skutek dla pilota: zwrot przy stałym seedzie resetu zależy od ścieżki numerycznej. Ocena końcowa liczy aktora startowego i 60 snapshotów w jednym batchu (61 głów) na tych samych seedach.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method" id="method"></div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const SP = DATA.spec, CH = SP.chain, V = DATA.verdict;
+const LEVEL = ["σ 5%", "σ 20%"];
+const SCHED = { anneal: "T0 → 0", greedy: "T = 0" };
+const STEP_LABEL = s => s >= 1e6 ? `${s / 1e6}M` : `${s / 1000}k`;
+const fmt = (v, d = 1) => Number.isFinite(v) ? v.toFixed(d) : "–";
+const pct = (v, d = 1) => Number.isFinite(v) ? `${(v * 100).toFixed(d)}%` : "–";
+const short = e => e.replace("-v5", "");
+const varLabel = v => `${LEVEL[v.level]}, ${SCHED[v.schedule]}`;
+const color = v => `var(--c${v.level})`;
+const dash = v => v.schedule === "greedy" ? "5 3" : "";
+const cellLabel = c => `${short(c.env)} ${STEP_LABEL(c.step)} s${c.seed}`;
+const CELL = (env, step, seed) => DATA.cells.find(c => c.env === env && c.step === step && c.seed === seed);
+const inRule = c => (c.env === "Swimmer-v5" && c.step < 1e6) || (c.env === "Walker2d-v5" && c.seed === SP.rule.stuck_seed) || c.env === "HalfCheetah-v5";
+const VARS = DATA.cells[0].variants.map(v => ({ level: v.level, schedule: v.schedule }));
+const last = a => a[a.length - 1];
+
+document.getElementById("facts").innerHTML = [
+  ["komórki", DATA.cells.length], ["warianty", VARS.length], ["łańcuchy", DATA.cells.length * VARS.length * CH.chains],
+  ["k", `${CH.k} parowane`], ["budżet", `${CH.budget / 1000}k kroków`], ["ocena", `${SP.evaluation.episodes} świeżych epizodów`],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const passing = V.variants.filter(r => r.passes);
+document.getElementById("verdict").innerHTML = `
+  <div class="card">
+    <span class="pill ${V.sa_beats_td3 ? "ok" : "no"}">${V.sa_beats_td3 ? "SA bije TD3" : "SA nie bije TD3"}</span>
+    <h3>Reguła z prerejestracji</h3>
+    <div class="sub">Istnieje wariant, który przy snapshocie 100k ma zysk > 0 i > zysku TD3 w ≥ 3 z 4 par Swimmer (300k, 600k × seedy 0-1) i w Walker2d 600k na seedzie, który utknął (s${SP.rule.stuck_seed}), oraz |zysk| &lt; ${pct(SP.rule.hc_max_rel, 0)} zwrotu aktora startowego w obu komórkach HalfCheetah 600k.</div>
+  </div>
+  <div class="card">
+    <h3>Warianty spełniające regułę</h3>
+    <div class="sub">${passing.length ? passing.map(varLabel).join("<br>") : "brak"}</div>
+    <div class="sub">Pilot: 4 warianty, 5 łańcuchów, 10 epizodów oceny. Wynik to wskazanie, nie dowód. Bez decyzji o metodzie.</div>
+  </div>`;
+
+const mark = ok => ok ? `<td class="hi">tak</td>` : `<td class="lo">nie</td>`;
+document.getElementById("verdictTable").innerHTML = `<table>
+  <tr><th>wariant</th><th>Swimmer: pary SA > TD3</th><th>Walker2d 600k s${SP.rule.stuck_seed}: SA vs TD3</th><th>HalfCheetah 600k s0 / s1</th><th>wynik</th></tr>
+  ${V.variants.map(r => `<tr><td class="l">${varLabel(r)}</td>
+    <td class="n ${r.checks.swimmer ? "hi" : "lo"}">${r.swimmer_pairs}/4</td>
+    <td class="n ${r.checks.walker ? "hi" : "lo"}">${fmt(r.walker_gain)} vs ${fmt(r.walker_td3)}</td>
+    <td class="n ${r.checks.halfcheetah ? "hi" : "lo"}">${r.hc_rel.map(x => pct(x, 2)).join(" / ")}</td>
+    ${mark(r.passes)}</tr>`).join("")}</table>`;
+
+function findings() {
+  const out = [], rows = DATA.cells.flatMap(c => c.variants.map(v => ({ c, v })));
+  const checks = V.variants.map(r => `${varLabel(r)}: Swimmer ${r.swimmer_pairs}/4, Walker2d ${r.checks.walker ? "tak" : "nie"}, HalfCheetah ${r.checks.halfcheetah ? "tak" : "nie"}`);
+  out.push(`Reguła ${V.sa_beats_td3 ? "spełniona" : "niespełniona"}. ${checks.join(". ")}.`);
+  const pos = rows.filter(({ v }) => last(v.gain) > 0).length;
+  out.push(`Zysk SA po 100k > 0 w ${pos} z ${rows.length} par komórka × wariant.`);
+  const fade = rows.filter(({ v }) => v.gain[2] <= v.gain[1]).length;
+  out.push(`Impet: zysk przy 100k nie wyższy niż przy 50k w ${fade} z ${rows.length} par komórka × wariant.`);
+  for (const lv of [0, 1]) {
+    const sel = rows.filter(({ v }) => v.level === lv);
+    const acc = sel.reduce((a, { v }) => a + last(v.accepts), 0), it = sel.reduce((a, { v }) => a + v.iterations, 0);
+    out.push(`${LEVEL[lv]}: akceptowane ${pct(acc / it, 0)} kandydatów (oba harmonogramy, wszystkie komórki).`);
+  }
+  return out;
+}
+const FIND = findings();
+document.getElementById("findings").innerHTML = FIND.map(f => `<li>${f}</li>`).join("");
+
+function gainCell(c, v) {
+  const g = last(v.gain), td3 = c.td3.gain;
+  const cls = g > 0 && td3 !== null && g > td3 ? "hi" : g < 0 ? "lo" : "";
+  return `<td class="n ${cls}">${fmt(g)} <span class="rng">[${fmt(last(v.gain_min))}, ${fmt(last(v.gain_max))}]</span></td>`;
+}
+document.getElementById("gainTable").innerHTML = `<table>
+  <tr><th>komórka</th><th>w regule</th><th>aktor start</th><th>TD3 +100k</th>${VARS.map(v => `<th>${varLabel(v)}</th>`).join("")}</tr>
+  ${DATA.cells.map(c => `<tr><td class="l">${cellLabel(c)}</td><td class="l">${inRule(c) ? "tak" : "nie"}</td>
+    <td class="n">${fmt(c.start)}</td><td class="n">${c.td3.gain === null ? "brak" : fmt(c.td3.gain)}</td>
+    ${c.variants.map(v => gainCell(c, v)).join("")}</tr>`).join("")}</table>`;
+
+document.getElementById("acceptTable").innerHTML = `<table>
+  <tr><th>komórka</th>${VARS.map(v => `<th>${varLabel(v)}</th>`).join("")}</tr>
+  ${DATA.cells.map(c => `<tr><td class="l">${cellLabel(c)}</td>
+    ${c.variants.map(v => `<td class="n">${v.accepts.map(a => fmt(a, 1)).join(" / ")} <span class="rng">z ${fmt(v.iterations, 0)}</span></td>`).join("")}</tr>`).join("")}</table>`;
+
+const legendLine = (stroke, d) => `<svg viewBox="0 0 26 12" aria-hidden="true"><line x1="1" y1="6" x2="25" y2="6" stroke="${stroke}" stroke-width="2" stroke-dasharray="${d}"/></svg>`;
+document.getElementById("legend").innerHTML = VARS.map(v => `<span>${legendLine(color(v), dash(v))} ${varLabel(v)}</span>`).join("")
+  + `<span>${legendLine("var(--ref)", "2 3")} TD3 (+100k, liniowo)</span>`;
+
+function scale(lo, hi, a, b) { return x => a + (x - lo) / (hi - lo || 1) * (b - a); }
+function ticks(lo, hi, n = 4) {
+  const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0 || 1));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= step0) || mag;
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+
+function plot(c) {
+  const W = 360, H = 210, L = 46, R = 12, T = 12, B = 26;
+  const ys = [0, ...(c.td3.gain === null ? [] : [c.td3.gain])];
+  c.variants.forEach(v => ys.push(...v.gain_min, ...v.gain_max));
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const xs = scale(0, CH.budget * 1.08, L, W - R), yv = scale(lo, hi, H - B, T);
+  const parts = [];
+  for (const t of ticks(lo, hi)) parts.push(`<line x1="${L}" x2="${W - R}" y1="${yv(t)}" y2="${yv(t)}" stroke="var(--grid)"/><text x="${L - 6}" y="${yv(t) + 3.5}" text-anchor="end">${t}</text>`);
+  parts.push(`<line x1="${L}" x2="${W - R}" y1="${yv(0)}" y2="${yv(0)}" stroke="var(--line)" stroke-width="1.2"/>`);
+  for (const s of [0, ...CH.snapshots]) parts.push(`<text x="${xs(s)}" y="${H - 8}" text-anchor="middle">${s ? STEP_LABEL(s) : "0"}</text>`);
+  if (c.td3.gain !== null) parts.push(`<line x1="${xs(0)}" y1="${yv(0)}" x2="${xs(CH.budget)}" y2="${yv(c.td3.gain)}" stroke="var(--ref)" stroke-width="1.5" stroke-dasharray="2 3"/>`);
+  const tips = [];
+  c.variants.forEach((v, vi) => {
+    const off = (vi - 1.5) * 3;
+    const px = [xs(0), ...v.gain.map((_, j) => xs(meanUsed(v, j)) + off)];
+    const py = [yv(0), ...v.gain.map(g => yv(g))];
+    parts.push(`<polyline points="${px.map((x, i) => `${x},${py[i]}`).join(" ")}" fill="none" stroke="${color(v)}" stroke-width="2" stroke-dasharray="${dash(v)}"/>`);
+    v.gain.forEach((g, j) => {
+      const x = px[j + 1];
+      parts.push(`<line x1="${x}" x2="${x}" y1="${yv(v.gain_min[j])}" y2="${yv(v.gain_max[j])}" stroke="${color(v)}" stroke-width="1" opacity="0.55"/>`);
+      const shape = v.schedule === "greedy"
+        ? `<rect x="${x - 4}" y="${py[j + 1] - 4}" width="8" height="8" rx="1.5"`
+        : `<circle cx="${x}" cy="${py[j + 1]}" r="4.2"`;
+      parts.push(`<g class="pt" tabindex="0" data-tip="${tips.length}">${shape} fill="${color(v)}" stroke="var(--surface)" stroke-width="2"/><rect x="${x - 9}" y="${py[j + 1] - 9}" width="18" height="18" fill="transparent"/></g>`);
+      tips.push(`<b>${varLabel(v)}</b><span>${STEP_LABEL(CH.snapshots[j])}: zysk ${fmt(g)}</span><span>łańcuchy ${fmt(v.gain_min[j])} … ${fmt(v.gain_max[j])}</span><span>akceptacje ${fmt(v.accepts[j], 1)}</span>`);
+    });
+  });
+  const card = document.createElement("div");
+  card.className = "card";
+  const td3 = c.td3.gain === null ? "TD3 +100k: brak (koniec runu)" : `TD3 +100k: ${fmt(c.td3.gain)}`;
+  card.innerHTML = `<h3>${cellLabel(c)}${inRule(c) ? "" : " <span class='sub'>(poza regułą)</span>"}</h3><div class="sub">aktor start ${fmt(c.start)} · ${td3}</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Zysk SA w trakcie łańcucha, ${cellLabel(c)}">${parts.join("")}</svg>`;
+  const tip = document.createElement("div");
+  tip.className = "tip"; tip.hidden = true; card.appendChild(tip);
+  card.querySelectorAll(".pt").forEach(p => {
+    const show = () => {
+      tip.innerHTML = tips[+p.dataset.tip]; tip.hidden = false;
+      const r = p.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      tip.style.left = `${Math.min(r.left - cr.left + 12, cr.width - 190)}px`;
+      tip.style.top = `${r.top - cr.top - 70}px`;
+    };
+    p.addEventListener("mouseenter", show); p.addEventListener("focus", show);
+    p.addEventListener("mouseleave", () => tip.hidden = true); p.addEventListener("blur", () => tip.hidden = true);
+  });
+  return card;
+}
+function meanUsed(v, j) {
+  return v.chains.reduce((a, ch) => a + ch.snapshot_used[j], 0) / v.chains.length;
+}
+const plots = document.getElementById("plots");
+DATA.cells.forEach(c => plots.appendChild(plot(c)));
+
+document.getElementById("method").innerHTML = [
+  `Start: aktor TD3 z checkpointu critic-degeneracy-v1, embedding stały, łańcuch zmienia tylko głowę.`,
+  `Kandydat: θ' = θ + σ·std(W)·N(0, 1) per liść bieżącej głowy, σ = skalibrowany poziom komórki (5% lub 20% spadku zwrotu).`,
+  `Iteracja: ${CH.k} świeże seedy resetu wspólne dla θ i θ', Δ̂ = średnia R(θ') − R(θ). Akceptacja, gdy Δ̂ > 0, inaczej z prawd. exp(Δ̂ / T). T0 → 0: T = T0·(1 − użyte / ${CH.budget / 1000}k), T0 = mediana sd różnicy parowanej / √${CH.k} z local-search-v1. T = 0: tylko Δ̂ > 0.`,
+  `Koszt = rzeczywiste kroki 2·${CH.k} epizodów. Iteracja startuje, gdy użyte &lt; ${CH.budget / 1000}k. Snapshot = bieżąca polityka po pierwszej iteracji, która przekroczy 25k / 50k / 100k.`,
+  `Ocena poza budżetem: aktor startowy i wszystkie snapshoty w jednym batchu na ${SP.evaluation.episodes} świeżych seedach (${SP.evaluation.seed_base}…).`,
+  `TD3: perf/eval_rl tego samego runu (co 5k kroków, 5 epizodów), średnia w oknie ±${SP.compare.window / 1000}k wokół t i t + 100k.`,
+].map(s => `<div>${s}</div>`).join("");
+</script>

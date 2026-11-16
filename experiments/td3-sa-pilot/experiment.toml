@@ -74,3 +74,6 @@ actor's return on both HalfCheetah 600k seeds"""
 # local-search-v1. Walker2d 600k seed 1, Swimmer 1M: reported, not in the rule
 stuck_seed = 0
 hc_max_rel = 0.02
+
+[analysis]
+chains_cache = "cache/chains"

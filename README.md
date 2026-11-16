@@ -162,6 +162,14 @@ python -m analysis.local_search ../experiments/local-search-v1/experiment.toml #
 - Reuses critic-degeneracy-v1 perturbations (regenerated from its key) and td3 curves. Truth = mean of 30 episodes, better = paired t CI above 0.
 - Simulates a single accept-if-better step (k paired episodes) and best-of-N with a bootstrap CI gate, against the td3 `perf/eval_rl` slope per 100k steps.
 
+### SA chain from checkpoints (`td3-sa-pilot`)
+```bash
+python -m offline.sa_chain run <toml> <ckpt_root> <env>                    # 4 variants x 5 chains per cell, 100k steps each, final eval (CPU)
+python -m analysis.sa_pilot ../experiments/td3-sa-pilot/experiment.toml     # gains at 25k/50k/100k vs td3 +100k, rule, sa_pilot.{json,html}
+```
+- Chain on the actor head: candidate = current + sigma-level noise, accepted on k = 3 paired episodes (T0 -> 0 or T = 0), cost = real env steps.
+- Final eval: start actor and all snapshots in one batch on fresh seeds (XLA CPU matmul takes another path below 16 rows, so batch layout changes returns).
+
 ---
 
 ## Quickstart
@@ -215,7 +223,7 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, utils
