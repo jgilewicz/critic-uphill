@@ -1,0 +1,288 @@
+<title>Krajobraz i krytyk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, verdict -> findings -> cos table -> scatter (L1, cos vs gain) -> step gains (L2, HC) -> in/out of sample -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --pos-bg: #e3f3eb;
+  --neg-bg: #f8e7e2;
+  --c0: #2a78d6; --c1: #eb6834; --c2: #7a4fc4; --ref: #4b5967;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+    --c0: #3987e5; --c1: #d95926; --c2: #9a74db; --ref: #a9b4bf;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+  --c0: #3987e5; --c1: #d95926; --c2: #9a74db; --ref: #a9b4bf;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 86ch; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+.plots { grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.sub { font-size: 12px; color: var(--muted); }
+.pill { justify-self: start; font: 600 11px var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; }
+.pill.ok { color: var(--pos); background: var(--pos-bg); }
+.pill.no { color: var(--neg); background: var(--neg-bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.legend svg { display: inline-block; width: 26px; height: 12px; vertical-align: middle; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+svg .pt { cursor: default; }
+svg .pt:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child, td.l, th.l { text-align: left; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px; }
+.mk { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+td.hi { color: var(--pos); background: var(--pos-bg); }
+td.lo { color: var(--neg); }
+tr.grp td { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); background: var(--grid); }
+.rng { color: var(--muted); font-size: 11px; }
+.tip { position: absolute; z-index: 5; pointer-events: none; display: grid; gap: 2px; max-width: 220px; padding: 7px 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; color: var(--ink-2); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+.tip b { color: var(--ink); }
+.method { display: grid; gap: 8px; max-width: 86ch; font-size: 13px; color: var(--ink-2); }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">landscape-critic-v1 · offline, prerejestrowane 2026-11-17</div>
+    <h1>Czy krajobraz zaburzeń uczy krytyka kierunku poprawy?</h1>
+    <p class="note">Krytyk TD3 z checkpointu dotrenowany na buforze z przejściami z 80 zaburzeń głowy aktora (A: σ małe, B: σ duże, C: oba) albo na samym buforze (D, kontrola). Kierunek krytyka g_kryt = ∇ średniej Q1(s, π_θ(s)) po wagach głowy porównany z gradientem ES oracle (30 epizodów na zaburzenie). Krok po g_kryt o długości 1× odniesienia dist_H, oceniony na 30 świeżych epizodach parowanych z aktorem.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <h2>Werdykty hipotez</h2>
+    <div class="grid4" id="verdict"></div>
+  </section>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Kierunek: sketch cos z gradientem ES</h2>
+    <p class="note">Sketch cos = cos(Σ_i (ε_i·g_kryt)·ε_i / N, g_ES): gradient ES, jaki dałaby liniowa predykcja krytyka na tych samych 40 ε, średnio po dwóch poziomach σ. Losowy kierunek: ok. 0 ± 0.16. T0 = krytyk z checkpointu. X* = najlepszy z A-C × K (obwódka). Zielone: ≥ 0.3. Surowy cos w ostatnich kolumnach, z sufitem √(N/(N+P)) dla idealnego krytyka.</p>
+    <div class="tablewrap" id="cosTable"></div>
+  </section>
+
+  <section>
+    <h2>Kierunek wobec kontroli i zysku</h2>
+    <p class="note">Punkt = komórka (lewy) albo krytyk w komórce (prawy). Kolor = env.</p>
+    <div class="legend" id="legend"></div>
+    <div class="grid3 plots" id="plots"></div>
+  </section>
+
+  <section>
+    <h2>Krok: zysk wobec kontroli i kroku ES</h2>
+    <p class="note">Zysk = średnia parowana R(głowa) − R(aktor) na 30 epizodach, w nawiasie 95% CI t. Wszystkie kroki tej samej długości (dist_H oryginalnego krytyka = 1× średniej 40 zaburzeń σ małe). ES k = 1: średnia z 10 losowań [min, max], koszt 41 epizodów. Krajobraz: koszt 80 epizodów + K aktualizacji krytyka. Zielone: zysk X* > 0 i > D*.</p>
+    <div class="tablewrap" id="stepTable"></div>
+  </section>
+
+  <section>
+    <h2>W próbie i poza próbą</h2>
+    <p class="note">A widział tylko przejścia zaburzeń σ małe, B tylko σ duże. Poziomy mają niezależne ε, więc cos z g_ES drugiego poziomu mierzy uogólnienie kierunku poza zaburzenia, które krytyk widział. Wartości dla K = 20k.</p>
+    <div class="tablewrap" id="splitTable"></div>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method" id="method"></div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const SP = DATA.spec, V = DATA.verdict, H = Object.fromEntries(SP.hypotheses.map(h => [h.id, h]));
+const ENVS = ["Walker2d-v5", "HalfCheetah-v5", "Swimmer-v5"];
+const NAMES = ["T0", "A5k", "A20k", "B5k", "B20k", "C5k", "C20k", "D5k", "D20k"];
+const STEP_LABEL = s => s >= 1e6 ? `${s / 1e6}M` : `${s / 1000}k`;
+const fmt = (v, d = 1) => Number.isFinite(v) ? v.toFixed(d) : "–";
+const sgn = (v, d = 2) => Number.isFinite(v) ? (v >= 0 ? "+" : "") + v.toFixed(d) : "–";
+const pct = (v, d = 1) => Number.isFinite(v) ? `${(v * 100).toFixed(d)}%` : "–";
+const short = e => e.replace("-v5", "");
+const color = env => `var(--c${ENVS.indexOf(env)})`;
+const cellLabel = c => `${short(c.env)} s${c.seed} ${STEP_LABEL(c.step)}`;
+const crit = (c, n) => c.critics.find(r => r.name === n);
+const median = a => { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+const ofEnv = env => DATA.cells.filter(c => c.env === env);
+const role = env => env === "Walker2d-v5" ? "hipotezy" : env === "HalfCheetah-v5" ? "kontrola" : "opisowo";
+
+document.getElementById("facts").innerHTML = [
+  ["komórki", DATA.cells.length], ["Walker2d", ofEnv("Walker2d-v5").length], ["krytycy na komórkę", NAMES.length],
+  ["K", SP.critic.updates.map(k => `${k / 1000}k`).join(", ")], ["głowy w ocenie", 32], ["ocena", `${SP.evaluation.episodes} epizodów parowanych`],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+const card = (ok, title, rule, extra) => `<div class="card">
+  <span class="pill ${ok ? "ok" : "no"}">${ok ? "spełniona" : "niespełniona"}</span>
+  <h3>${title}</h3><div class="sub">${rule}</div><div class="sub">${extra}</div></div>`;
+document.getElementById("verdict").innerHTML = [
+  card(V.L1.passes, "L1: krajobraz uczy kierunku", `sketch cos X* ≥ ${H.L1.min_cos} i ≥ najlepszy D + ${H.L1.min_margin}, ≥ ${H.L1.min_cells} z ${V.L1.of} komórek Walker2d.`, `wynik: <b>${V.L1.count}/${V.L1.of}</b>`),
+  card(V.L2.passes, "L2: krok po krytyku z krajobrazu", `zysk kroku X* > 0 i > zysku kroku D* (to samo K), ≥ ${H.L2.min_cells} z ${V.L2.of} komórek Walker2d.`, `wynik: <b>${V.L2.count}/${V.L2.of}</b>`),
+  card(V.HC.passes, "HC: kontrola HalfCheetah", `mediana po 6 komórkach zysku kroku X* / |R aktora| ≥ ${pct(H.HC.hc_min_rel, 0)}.`, `mediana: <b>${pct(V.HC.median_rel, 2)}</b>`),
+  `<div class="card"><span class="pill ${V.L1.passes ? "ok" : "no"}">reguła stopu</span><h3>${V.L1.passes ? "kierunek metody otwarty" : "kierunek metody zamknięty"}</h3><div class="sub">Zapisana przed liczeniem: L1 nie przechodzi → krajobraz nie uczy krytyka kierunku, spisujemy wynik analityczny.</div></div>`,
+].join("");
+
+function findings() {
+  const out = [];
+  for (const env of ENVS) {
+    const cs = ofEnv(env);
+    const t0 = cs.map(c => crit(c, "T0").sketch), x = cs.map(c => crit(c, c.x_star).sketch), d = cs.map(c => c.d_best_sketch);
+    out.push(`${short(env)}: sketch cos T0 mediana ${sgn(median(t0))}, X* ${sgn(median(x))} (zakres ${sgn(Math.min(...x))} do ${sgn(Math.max(...x))}), najlepszy D ${sgn(median(d))}.`);
+  }
+  for (const env of ENVS) {
+    const cs = ofEnv(env), rel = (c, n) => crit(c, n).step.gain / Math.abs(c.actor);
+    const es = cs.map(c => Math.max(...c.es.map(e => e.oracle.gain)) / Math.abs(c.actor));
+    const k1 = cs.map(c => Math.max(...c.es.map(e => e.k1)) / Math.abs(c.actor));
+    out.push(`${short(env)}: zysk kroku, mediana względna: T0 ${pct(median(cs.map(c => rel(c, "T0"))), 2)}, X* ${pct(median(cs.map(c => rel(c, c.x_star))), 2)}, D* ${pct(median(cs.map(c => rel(c, c.d_star))), 2)}, ES oracle (lepszy σ) ${pct(median(es), 2)}, ES k = 1 (lepszy σ) ${pct(median(k1), 2)}.`);
+  }
+  const all = DATA.cells.flatMap(c => c.critics.map(r => [r.sketch, r.step.gain / Math.abs(c.actor)]));
+  const mx = all.reduce((a, p) => a + p[0], 0) / all.length, my = all.reduce((a, p) => a + p[1], 0) / all.length;
+  const cov = all.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0), vx = all.reduce((a, p) => a + (p[0] - mx) ** 2, 0), vy = all.reduce((a, p) => a + (p[1] - my) ** 2, 0);
+  out.push(`Wszyscy krytycy (${all.length}): korelacja Pearsona sketch cos z zyskiem względnym kroku ${fmt(cov / Math.sqrt(vx * vy), 2)}.`);
+  const raw = DATA.cells.map(c => Math.max(...c.critics.map(r => Math.abs(r.raw)) ) / c.ceiling);
+  out.push(`Surowy cos: najwyższy |cos| w komórce to od ${pct(Math.min(...raw), 0)} do ${pct(Math.max(...raw), 0)} sufitu idealnego krytyka.`);
+  return out;
+}
+document.getElementById("findings").innerHTML = findings().map(f => `<li>${f}</li>`).join("");
+
+const mark = ok => ok === undefined ? `<td class="l">–</td>` : ok ? `<td class="hi">tak</td>` : `<td class="lo">nie</td>`;
+const group = (env, cols) => `<tr class="grp"><td colspan="${cols}" class="l">${short(env)} (${role(env)})</td></tr>`;
+const cosCell = (c, n) => { const r = crit(c, n), v = r.sketch, star = n === c.x_star;
+  return `<td class="n ${v >= H.L1.min_cos ? "hi" : v < 0 ? "lo" : ""}" ${star ? 'style="outline:1.5px solid var(--ink-2);outline-offset:-3px"' : ""}>${sgn(v)}</td>`; };
+document.getElementById("cosTable").innerHTML = `<table>
+  <tr><th>komórka</th>${NAMES.map(n => `<th>${n}</th>`).join("")}<th>X*</th><th>surowy T0</th><th>surowy X*</th><th>sufit</th><th>L1</th></tr>
+  ${ENVS.map(env => group(env, NAMES.length + 6) + ofEnv(env).map(c => `<tr><td class="l">${cellLabel(c).replace(short(c.env) + " ", "")}</td>
+    ${NAMES.map(n => cosCell(c, n)).join("")}<td class="l">${c.x_star}</td>
+    <td class="n">${sgn(crit(c, "T0").raw, 3)}</td><td class="n">${sgn(crit(c, c.x_star).raw, 3)}</td><td class="n">${fmt(c.ceiling, 3)}</td>${mark(c.l1)}</tr>`).join("")).join("")}</table>`;
+
+function scale(lo, hi, a, b) { return x => a + (x - lo) / (hi - lo || 1) * (b - a); }
+function ticks(lo, hi, n = 4) {
+  const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0 || 1));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= step0) || mag;
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+function scatter(o) {
+  const W = 400, H0 = 300, L = 50, R = 12, T = 12, B = 34;
+  const ext = (vals, fixed) => { let lo = Math.min(0, ...vals, ...fixed), hi = Math.max(0, ...vals, ...fixed); const p = (hi - lo) * 0.06 || 0.01; return [lo - p, hi + p]; };
+  const [xlo, xhi] = ext(o.pts.map(p => p.x), o.xfix || []), [ylo, yhi] = ext(o.pts.map(p => p.y), o.yfix || []);
+  const xs = scale(xlo, xhi, L, W - R), ys = scale(ylo, yhi, H0 - B, T);
+  const parts = [];
+  for (const t of ticks(ylo, yhi)) parts.push(`<line x1="${L}" x2="${W - R}" y1="${ys(t)}" y2="${ys(t)}" stroke="var(--grid)"/><text x="${L - 6}" y="${ys(t) + 3.5}" text-anchor="end">${o.yf(t)}</text>`);
+  for (const t of ticks(xlo, xhi)) parts.push(`<line y1="${T}" y2="${H0 - B}" x1="${xs(t)}" x2="${xs(t)}" stroke="var(--grid)"/><text x="${xs(t)}" y="${H0 - B + 14}" text-anchor="middle">${o.xf(t)}</text>`);
+  parts.push(`<line x1="${L}" x2="${W - R}" y1="${ys(0)}" y2="${ys(0)}" stroke="var(--line)" stroke-width="1.2"/><line y1="${T}" y2="${H0 - B}" x1="${xs(0)}" x2="${xs(0)}" stroke="var(--line)" stroke-width="1.2"/>`);
+  (o.guides || []).forEach(g => parts.push(g(xs, ys, xlo, xhi, ylo, yhi)));
+  parts.push(`<text x="${(L + W - R) / 2}" y="${H0 - 4}" text-anchor="middle">${o.xl}</text><text transform="translate(11 ${(T + H0 - B) / 2}) rotate(-90)" text-anchor="middle">${o.yl}</text>`);
+  const tips = [];
+  o.pts.forEach(p => {
+    const x = xs(p.x), y = ys(p.y);
+    parts.push(`<g class="pt" tabindex="0" data-tip="${tips.length}"><circle cx="${x}" cy="${y}" r="${o.r || 4.2}" fill="${color(p.c.env)}" stroke="var(--surface)" stroke-width="${o.r ? 1 : 2}"/><rect x="${x - 8}" y="${y - 8}" width="16" height="16" fill="transparent"/></g>`);
+    tips.push(`<b>${cellLabel(p.c)}${p.n ? " · " + p.n : ""}</b><span>${o.xl}: ${o.xf(p.x)}</span><span>${o.yl}: ${o.yf(p.y)}</span>`);
+  });
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `<h3>${o.title}</h3><div class="sub">${o.sub}</div><svg viewBox="0 0 ${W} ${H0}" role="img" aria-label="${o.title}">${parts.join("")}</svg>`;
+  const tip = document.createElement("div");
+  tip.className = "tip"; tip.hidden = true; el.appendChild(tip);
+  el.querySelectorAll(".pt").forEach(g => {
+    const show = () => {
+      tip.innerHTML = tips[+g.dataset.tip]; tip.hidden = false;
+      const r = g.getBoundingClientRect(), cr = el.getBoundingClientRect();
+      tip.style.left = `${Math.min(r.left - cr.left + 12, cr.width - 210)}px`;
+      tip.style.top = `${r.top - cr.top - 64}px`;
+    };
+    g.addEventListener("mouseenter", show); g.addEventListener("focus", show);
+    g.addEventListener("mouseleave", () => tip.hidden = true); g.addEventListener("blur", () => tip.hidden = true);
+  });
+  return el;
+}
+document.getElementById("legend").innerHTML = ENVS.map(e => `<span><span class="mk" style="background:${color(e)}"></span>${short(e)}</span>`).join("");
+const plots = document.getElementById("plots");
+const c2 = t => sgn(t, 1);
+plots.appendChild(scatter({
+  title: "L1: X* wobec najlepszego D", sub: "obszar L1: nad linią y = x + 0.2 i nad y = 0.3 (przerywane)",
+  xl: "sketch cos, najlepszy D", yl: "sketch cos, X*", xf: c2, yf: c2, xfix: [-0.5, 0.5], yfix: [-0.5, 0.5],
+  guides: [(xs, ys, xlo, xhi) => `<line x1="${xs(xlo)}" y1="${ys(xlo + H.L1.min_margin)}" x2="${xs(xhi)}" y2="${ys(xhi + H.L1.min_margin)}" stroke="var(--ref)" stroke-dasharray="3 3"/><line x1="${xs(xlo)}" x2="${xs(xhi)}" y1="${ys(H.L1.min_cos)}" y2="${ys(H.L1.min_cos)}" stroke="var(--ref)" stroke-dasharray="3 3"/>`],
+  pts: DATA.cells.map(c => ({ c, n: c.x_star, x: c.d_best_sketch, y: crit(c, c.x_star).sketch })),
+}));
+plots.appendChild(scatter({
+  title: "Czy kierunek przewiduje zysk kroku", sub: "każdy krytyk w każdej komórce (T0, A-D × K)",
+  xl: "sketch cos", yl: "zysk kroku / |R aktora|", xf: c2, yf: t => pct(t, 0), r: 3,
+  pts: DATA.cells.flatMap(c => c.critics.map(r => ({ c, n: r.name, x: r.sketch, y: r.step.gain / Math.abs(c.actor) }))),
+}));
+
+const gainCell = (g, cls = "") => `<td class="n ${cls || (g.gain < 0 ? "lo" : "")}">${fmt(g.gain)} <span class="rng">[${fmt(g.lo)}, ${fmt(g.hi)}]</span></td>`;
+document.getElementById("stepTable").innerHTML = `<table>
+  <tr><th>komórka</th><th>aktor</th><th>T0</th><th>X*</th><th>D*</th><th>ES oracle σ małe</th><th>ES oracle σ duże</th><th>ES k = 1 σ małe</th><th>ES k = 1 σ duże</th><th>koszt krajobrazu</th><th>L2</th></tr>
+  ${ENVS.map(env => group(env, 11) + ofEnv(env).map(c => { const x = crit(c, c.x_star), d = crit(c, c.d_star);
+    return `<tr><td class="l">${cellLabel(c).replace(short(c.env) + " ", "")}</td><td class="n">${fmt(c.actor)}</td>
+    ${gainCell(crit(c, "T0").step)}${gainCell(x.step, x.step.gain > Math.max(0, d.step.gain) ? "hi" : "")}${gainCell(d.step)}
+    ${c.es.map(e => gainCell(e.oracle)).join("")}
+    ${c.es.map(e => `<td class="n ${e.k1 < 0 ? "lo" : ""}">${fmt(e.k1)} <span class="rng">[${fmt(e.k1_min)}, ${fmt(e.k1_max)}]</span></td>`).join("")}
+    <td class="n">${fmt(c.landscape_cost / 1000, 0)}k</td>${mark(c.l2)}</tr>`; }).join("")).join("")}</table>`;
+
+document.getElementById("splitTable").innerHTML = `<table>
+  <tr><th>komórka</th><th>A: σ małe (w próbie)</th><th>A: σ duże</th><th>B: σ duże (w próbie)</th><th>B: σ małe</th><th>D: σ małe</th><th>D: σ duże</th></tr>
+  ${ENVS.map(env => group(env, 7) + ofEnv(env).map(c => { const a = crit(c, "A20k").levels, b = crit(c, "B20k").levels, d = crit(c, "D20k").levels;
+    return `<tr><td class="l">${cellLabel(c).replace(short(c.env) + " ", "")}</td>${[a[0], a[1], b[1], b[0], d[0], d[1]].map(l => `<td class="n">${sgn(l.sketch)}</td>`).join("")}</tr>`; }).join("")).join("")}</table>`;
+
+const cr = SP.critic;
+document.getElementById("method").innerHTML = [
+  `Komórka = env × seed × checkpoint (300k, 600k, 1M), checkpointy critic-degeneracy-v1. Głowa aktora = Linear(256 → A) + tanh, embedding stały. P = 1542 (Walker2d, HalfCheetah), 514 (Swimmer).`,
+  `Krajobraz: 80 zaburzeń critic-degeneracy-v1 (40 na poziom, σ małe = 5% spadku zwrotu, σ duże = 20%), 1 epizod każde, seed ${SP.landscape.seed_base} + i. Wszystkie żywe przejścia (s, a, r, s′, terminated).`,
+  `Krytyk: start z krytyków checkpointu, target = kopia online, a′ = aktor(s′) + obcięty szum (${cr.policy_noise}, ${cr.noise_clip}), γ ${cr.gamma}, τ ${cr.tau}, Adam ${cr.lr}, batch ${cr.batch_size} (A-C: połowa bufor, połowa krajobraz, D: bufor). Snapshoty po ${cr.updates.join(" i ")} aktualizacjach, ten sam klucz dla wariantów.`,
+  `Kierunek: g_u = S·∇_θ średnia_s Q1(s, π_θ(s)) na 2000 stanach on-policy critic-curvature-es-v1, S = std liścia aktora. g_ES = Σ_i (R_i − R_aktor)·ε_i / (N·σ), R z 30 epizodów local-search-v1.`,
+  `Odstępstwo od specyfikacji: g_ES leży w rozpiętości 40 ε, więc surowy cos ma sufit √(N/(N+P)) (0.16 Walker2d). L1 liczone na sketch cos (gradient ES liniowej predykcji krytyka na tych samych ε), progi bez zmian.`,
+  `Krok: d = S·g_u, długość z bisekcji na dist_H oryginalnego krytyka = ${SP.steps.multiple}× średniej 40 zaburzeń σ małe. Kroki ES: kierunki oracle i k = 1 z critic-curvature-es-v1, ta sama długość.`,
+  `Ocena: 32 głowy w jednym batchu (ta sama ścieżka numeryczna), ${SP.evaluation.episodes} seedów ${SP.evaluation.seed_base}…, CI = 95% t dla różnicy parowanej.`,
+  `Wielokrotność: X* to maksimum sketch cos po 6 krytykach (A-C × K), najlepszy D po 2. Wybór X* po cos, nie po zysku.`,
+].map(s => `<div>${s}</div>`).join("");
+</script>

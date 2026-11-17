@@ -178,6 +178,14 @@ python -m analysis.curvature_es ../experiments/critic-curvature-es-v1/experiment
 - Gradient from the 40 local-search-v1 perturbations per sigma level (oracle = 30 episodes, k = 1, 3 subsampled), d_ES and d_N = (-H + lambda I)^-1 g with the TD3 critic's Gauss-Newton Hessian on 2000 on-policy states.
 - Step length by bisection on the exact dist_H = 0.5x, 1x, 2x the mean of the sigma-5% perturbations. All heads in one batch, paired with the actor.
 
+### Critic fine-tuned on the perturbation landscape (`landscape-critic-v1`)
+```bash
+python -m offline.landscape_critic run <toml> <ckpt_root> <env>            # landscape rollouts, critic fine-tuning A-D x K, 32 heads x 30 seeds (CPU)
+python -m analysis.landscape_critic ../experiments/landscape-critic-v1/experiment.toml # L1, L2, HC control, landscape_critic.{json,html}
+```
+- Landscape = the 80 critic-degeneracy-v1 perturbations, 1 episode each, all alive transitions. Critic fine-tuned with TD3 targets on half buffer, half landscape (A small sigma, B large, C both, D buffer only), snapshots at 5k and 20k updates (`make_mixed_fqe_train`).
+- Direction = sketch cos of the Q1 gradient over the head weights with the ES oracle gradient (raw cos is capped at sqrt(N / (N + P))). Step of 1x the dist_H reference, compared with ES oracle and k = 1 steps.
+
 ---
 
 ## Quickstart
@@ -231,7 +239,7 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, utils

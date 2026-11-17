@@ -263,13 +263,50 @@ FQETrainFn = Callable[
     [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
     tuple[TD3State, jax.Array],
 ]
+# (state, buffer data, extra data, num_updates, key) -> (state, mean loss)
+MixedFQETrainFn = Callable[
+    [TD3State, BufferData, BufferData, jax.Array, jax.Array],
+    tuple[TD3State, jax.Array],
+]
+
+
+def _fqe_loop(
+    cfg: TD3Config,
+    critic_optimizer: optax.GradientTransformation,
+    state: TD3State,
+    sample: Callable[[jax.Array], Batch],
+    *,
+    num_updates: jax.Array,
+    key: jax.Array,
+) -> tuple[TD3State, jax.Array]:
+    # fitted Q evaluation: the TD3 critic update with target.embedding and
+    # target.actor held at the evaluated policy, and no actor update
+    dynamic, static = eqx.partition(state, eqx.is_array)
+
+    def body(
+        _: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
+    ) -> tuple[Any, jax.Array, jax.Array]:
+        dynamic, key, loss_sum = carry
+        key, sample_key, critic_key = jax.random.split(key, 3)
+        state, loss, _ = _critic_update(
+            cfg,
+            critic_optimizer,
+            eqx.combine(dynamic, static),
+            sample(sample_key),
+            critic_key,
+        )
+        return eqx.filter(state, eqx.is_array), key, loss_sum + loss
+
+    dynamic, _, loss_sum = jax.lax.fori_loop(
+        0, num_updates, body, (dynamic, key, jnp.zeros(()))
+    )
+    loss = loss_sum / jnp.maximum(num_updates, 1)
+    return eqx.combine(dynamic, static), loss
 
 
 def make_fqe_train(
     cfg: TD3Config, critic_optimizer: optax.GradientTransformation
 ) -> FQETrainFn:
-    # fitted Q evaluation: the TD3 critic update with target.embedding and
-    # target.actor held at the evaluated policy, and no actor update
     @eqx.filter_jit
     def train(
         state: TD3State,
@@ -278,27 +315,52 @@ def make_fqe_train(
         num_updates: jax.Array,
         key: jax.Array,
     ) -> tuple[TD3State, jax.Array]:
-        dynamic, static = eqx.partition(state, eqx.is_array)
+        def sample(k: jax.Array) -> Batch:
+            return sample_batch(data, size, k, cfg.batch_size)
 
-        def body(
-            _: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
-        ) -> tuple[Any, jax.Array, jax.Array]:
-            dynamic, key, loss_sum = carry
-            key, sample_key, critic_key = jax.random.split(key, 3)
-            batch = sample_batch(data, size, sample_key, cfg.batch_size)
-            state, loss, _ = _critic_update(
-                cfg,
-                critic_optimizer,
-                eqx.combine(dynamic, static),
-                batch,
-                critic_key,
-            )
-            return eqx.filter(state, eqx.is_array), key, loss_sum + loss
-
-        dynamic, _, loss_sum = jax.lax.fori_loop(
-            0, num_updates, body, (dynamic, key, jnp.zeros(()))
+        return _fqe_loop(
+            cfg,
+            critic_optimizer,
+            state,
+            sample,
+            num_updates=num_updates,
+            key=key,
         )
-        loss = loss_sum / jnp.maximum(num_updates, 1)
-        return eqx.combine(dynamic, static), loss
+
+    return train
+
+
+def make_mixed_fqe_train(
+    cfg: TD3Config, critic_optimizer: optax.GradientTransformation
+) -> MixedFQETrainFn:
+    # FQE with half of every batch from each dataset, both used in full
+    half = cfg.batch_size // 2
+
+    @eqx.filter_jit
+    def train(
+        state: TD3State,
+        data: BufferData,
+        extra: BufferData,
+        num_updates: jax.Array,
+        key: jax.Array,
+    ) -> tuple[TD3State, jax.Array]:
+        sizes = (data[0].shape[0], extra[0].shape[0])
+
+        def sample(k: jax.Array) -> Batch:
+            kd, ke = jax.random.split(k)
+            parts = (
+                sample_batch(data, jnp.asarray(sizes[0]), kd, half),
+                sample_batch(extra, jnp.asarray(sizes[1]), ke, half),
+            )
+            return jax.tree.map(lambda a, b: jnp.concatenate([a, b]), *parts)
+
+        return _fqe_loop(
+            cfg,
+            critic_optimizer,
+            state,
+            sample,
+            num_updates=num_updates,
+            key=key,
+        )
 
     return train

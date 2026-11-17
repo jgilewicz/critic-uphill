@@ -253,6 +253,9 @@ def curvature(nets: Any, meta: Record, spec: Record) -> Record:
     scale = leaf_scale(nets.actor)
     top = np.asarray(jnp.linalg.eigvalsh(hess)[:, -1])
     return {
+        "states": s,
+        "z": z,
+        "act": act,
         "theta": theta,
         "to_head": to_head,
         "h": h,
