@@ -2,7 +2,7 @@
 
 - **Status:** prerejestracja 2026-11-17, przed rolloutami krajobrazu, dotrenowaniem krytyka i krokami.
 - **Charakter:** offline, lokalnie na CPU (bez grantu). Bufory 600k/1M skopiowane z PD (`critic-degeneracy-v1/ckpt`, tylko odczyt).
-- **Code:** branch `critic-curvature-es-v1`.
+- **Code:** branch `landscape-critic-v1`.
 - **Spec:** `experiment.toml` (`[landscape]`, `[critic]`, `[direction]`, `[steps]`, `[evaluation]`, `[[hypotheses]]`). Checkpointy, σ i klucz zaburzeń: `critic-degeneracy-v1`. R_i: `local-search-v1`. Stany, dist_H, losowania k: `critic-curvature-es-v1`.
 - **Bez decyzji o metodzie:** wynik wraca do uzgodnienia.
 
@@ -59,3 +59,15 @@
 
 - Per komórka: sketch cos i surowy cos (przed, A-D × K, per poziom), strata TD, zyski kroków vs ES oracle, ES k = 1 i krok oryginalnego krytyka, koszt, werdykty L1, L2, HC.
 - `python -m analysis.landscape_critic ../experiments/landscape-critic-v1/experiment.toml` (z `src/`) → `landscape_critic.{json,html}`.
+
+## Wyniki (2026-11-17)
+
+- **Raport:** https://claude.ai/code/artifact/862b3d43-160c-49e2-afe1-47e823952112 (`landscape_critic.{json,html}`).
+- **L1: 0/6, niespełniona.** Sketch cos X* w Walker2d od +0.11 do +0.32 (mediana +0.21), najlepszy D mediana +0.15, T0 +0.15. Próg 0.3 osiągnięty raz (s1 300k, +0.32), ale D tam +0.20, margines 0.12 < 0.2.
+- **Reguła stopu:** L1 nie przechodzi → krajobraz nie uczy krytyka kierunku. Kierunek metody zamknięty, zostaje wynik analityczny.
+- **L2: 5/6, spełniona.** Zysk kroku X* > 0 i > D* w 5 komórkach Walker2d (wyjątek s0 1M: X* −548, D* −789). Mediana względna: X* +7.3%, D* +0.7%, T0 +1.3%, ES oracle σ małe +4.8%. s1 300k: CI X* [−297, +857], szerokie. Przy L1 = 0/6 nie wiąże się z lepszym kierunkiem, krok X* wygrywa z T0 w 4/6.
+- **HC: niespełniona.** Mediana zysku X* / |R aktora| = −6.07% (próg −2%). Krok 1× szkodzi w HalfCheetah każdej głowie: T0 −6.9%, D* −5.7%, ES oracle −6.3% / −7.2%. Długość kroku 1× odniesienia jest dla HalfCheetah za duża niezależnie od kierunku.
+- **Swimmer (opisowo):** sketch cos X* mediana −0.02, wszystkie kroki ujemne (X* −3.6%, ES oracle −5.0% / −3.0%).
+- **W próbie / poza próbą:** A (σ małe) w Walker2d na swoim poziomie sketch cos mediana 0.33 vs D20k 0.20, na drugim poziomie ok. 0.06. B na swoim poziomie ok. 0.09. Krytyk nie odtwarza kierunku nawet na zaburzeniach, które widział.
+- **Surowy cos:** |cos| X* ≤ 0.05 w Walker2d, sufit 0.159.
+- **Koszt:** 206 CPU-min łącznie (lokalnie, M4), krajobraz 20-71k kroków na komórkę Walker2d.

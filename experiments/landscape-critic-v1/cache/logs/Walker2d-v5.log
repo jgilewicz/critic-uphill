@@ -1,0 +1,17 @@
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s0_step_300000.json {'landscape': 1.9358580112457275, 'critics': 211.07629895210266, 'steps': 19.2428560256958}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/kuba/Home/research/hboot_erl/src/offline/landscape_critic.py", line 370, in <module>
+    main()
+  File "/Users/kuba/Home/research/hboot_erl/src/offline/landscape_critic.py", line 366, in main
+    run(load_spec(args.toml), args.checkpoint_root, args.env)
+  File "/Users/kuba/Home/research/hboot_erl/src/offline/landscape_critic.py", line 348, in run
+    raise FileNotFoundError(
+FileNotFoundError: ../data/critic-degeneracy-v1/ckpt/Walker2d-v5_s0/step_600000/buffer.npz missing. rsync the critic-degeneracy-v1 checkpoint buffers from PD and run local-search-v1 episodes first
+skip /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s0_step_300000.json: exists
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s0_step_600000.json {'landscape': 16.09083080291748, 'critics': 552.2828001976013, 'steps': 87.8927309513092}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s0_step_1000000.json {'landscape': 15.253781795501709, 'critics': 776.6376280784607, 'steps': 166.15750288963318}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s1_step_300000.json {'landscape': 11.541218996047974, 'critics': 600.8529291152954, 'steps': 169.87786293029785}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s1_step_600000.json {'landscape': 11.946506261825562, 'critics': 645.382570028305, 'steps': 167.2076427936554}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Walker2d-v5/s1_step_1000000.json {'landscape': 17.120571851730347, 'critics': 572.3247480392456, 'steps': 70.19868493080139}

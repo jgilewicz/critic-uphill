@@ -105,3 +105,6 @@ hc_min_rel = -0.02
 
 [analysis]
 cache = "cache/cells"
+
+[report]
+url = "https://claude.ai/code/artifact/862b3d43-160c-49e2-afe1-47e823952112"

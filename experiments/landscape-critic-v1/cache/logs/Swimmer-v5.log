@@ -1,0 +1,6 @@
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s0_step_300000.json {'landscape': 4.053858995437622, 'critics': 460.37747597694397, 'steps': 102.81479787826538}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s0_step_600000.json {'landscape': 8.875444889068604, 'critics': 561.8379030227661, 'steps': 125.19333815574646}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s0_step_1000000.json {'landscape': 12.415444135665894, 'critics': 740.8173377513885, 'steps': 128.53751301765442}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s1_step_300000.json {'landscape': 10.94652795791626, 'critics': 584.0407419204712, 'steps': 111.97012710571289}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s1_step_600000.json {'landscape': 9.695438861846924, 'critics': 637.7643051147461, 'steps': 101.69302296638489}
+-> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/Swimmer-v5/s1_step_1000000.json {'landscape': 8.510126113891602, 'critics': 577.3021011352539, 'steps': 61.59398889541626}
