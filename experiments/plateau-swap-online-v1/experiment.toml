@@ -56,7 +56,9 @@ max_phase_steps = 88_000
 # newest `state_window` buffer transitions (the pilot used 20 actor
 # episodes). reset seeds per phase k: seed_base + 1_000_000 seed + 10_000 k,
 # + r for round r, + 1000 + e line search, + 2000 + e verification. the
-# basis, GP and acquisition draw from rng [key, env, seed, t]
+# buffer states and the sigma perturbations draw from rng [key, env, seed,
+# t], the basis and the GP acquisition from the pilot's [subspace] key and
+# [gibo] key with the same [env, seed, t] (t = env steps at the phase start)
 [phase]
 states = 2000
 state_window = 20_000

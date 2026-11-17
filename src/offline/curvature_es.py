@@ -242,8 +242,15 @@ def level_steps(
 
 
 def curvature(nets: Any, meta: Record, spec: Record) -> Record:
-    # H_a and J on on-policy states, the Gauss-Newton H_theta, dist_H
     states = onpolicy_states(spec["states"], nets.embedding, nets.actor, meta)
+    cv = curvature_on(nets, states)
+    return cv | {
+        "eig": whitened(cv["h"], cv["scale"], spec["steps"]["damping"])
+    }
+
+
+def curvature_on(nets: Any, states: np.ndarray | jax.Array) -> Record:
+    # H_a and J on the given states, the Gauss-Newton H_theta, dist_H
     s = jnp.asarray(states)
     z = jax.vmap(nets.embedding)(s)
     theta, act, to_head = flat_head(nets.actor)
@@ -260,7 +267,6 @@ def curvature(nets: Any, meta: Record, spec: Record) -> Record:
         "to_head": to_head,
         "h": h,
         "scale": scale,
-        "eig": whitened(h, scale, spec["steps"]["damping"]),
         "dist": dist_fn(act, theta, z, hess),
         "h_a_not_concave": float(np.mean(top > 0)),
     }

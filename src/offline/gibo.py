@@ -173,14 +173,17 @@ def play(
 ) -> tuple[np.ndarray, np.ndarray]:
     # rows 0..n-1 = thetas, padded with actor copies to MIN_ROWS
     cv = pr["cv"]
+    # pr["buffer"] (online phase): the real rows' transitions are stored
     rows = list(thetas) + [cv["theta"]] * max(0, MIN_ROWS - len(thetas))
     batch = stack_heads([as_batch(cv["to_head"](t)) for t in rows])
+    buffer = pr.get("buffer")
     returns, lengths = episodes_matrix(
         pr["meta"]["env"],
         pr["nets"].embedding,
         batch,
         seeds,
         pr["meta"]["horizon"],
+        store=None if buffer is None else (buffer, len(thetas)),
     )
     return returns[: len(thetas)], lengths[: len(thetas)]
 
@@ -245,24 +248,28 @@ def direction(arm: Record, spec: Record) -> np.ndarray:
         return np.asarray(gp.grad_mean(p, x, ys), "f8")
 
 
+def new_arm(pr: Record, basis: np.ndarray, kind: str) -> Record:
+    axes, fallback = axis_map(pr["cv"], basis, pr["ref"])
+    return {
+        "kind": kind,
+        "basis": basis,
+        "map": axes,
+        "fallback_axes": fallback,
+        "dim": basis.shape[1],
+        "x": [],
+        "y": [],
+        "lengths": [],
+        "eps": [],
+        "hyper": [],
+    }
+
+
 def make_arms(pr: Record) -> dict[str, Record]:
     bases = {"G-b": pr["b"], "G-d": pr["random"][0], "ES-b": pr["b"]}
-    out = {}
-    for name, basis in bases.items():
-        axes, fallback = axis_map(pr["cv"], basis, pr["ref"])
-        out[name] = {
-            "kind": "es" if name.startswith("ES") else "gibo",
-            "basis": basis,
-            "map": axes,
-            "fallback_axes": fallback,
-            "dim": basis.shape[1],
-            "x": [],
-            "y": [],
-            "lengths": [],
-            "eps": [],
-            "hyper": [],
-        }
-    return out
+    return {
+        name: new_arm(pr, basis, "es" if name.startswith("ES") else "gibo")
+        for name, basis in bases.items()
+    }
 
 
 def run_rounds(pr: Record, arms: dict[str, Record], spec: Record) -> Record:

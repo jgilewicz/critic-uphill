@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-suite="${1:?usage: submit_suite.sh <core|controls|ablation-horizon|config-check|all> <env>...}"
+suite="${1:?usage: submit_suite.sh <core|controls|ablation-horizon|config-check|plateau-swap|all> <env>...}"
 shift
 (($# > 0)) || {
   echo "usage: submit_suite.sh ${suite} <env>..." >&2
@@ -13,6 +13,7 @@ core) array=0-29 ;;
 controls) array=0-19 ;;
 ablation-horizon) array=0-29 ;;
 config-check) array=0-9 ;;
+plateau-swap) array=0-4,10-14 ;;
 all) array=0-79 ;;
 *)
   echo "unknown suite '${suite}'" >&2

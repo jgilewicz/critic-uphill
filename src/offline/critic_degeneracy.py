@@ -15,6 +15,7 @@ import optax
 import environments
 from analysis.runs import load_spec
 from common.checkpoint import BUFFER, Checkpoint, load_checkpoint, load_nets
+from common.replay_buffer import Buffer, Transition
 from common.rollout import heads_policy
 from common.td3 import TD3Config, TD3State, make_fqe_train
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
@@ -67,8 +68,10 @@ def rollout(
     *,
     seeds: list[int],
     steps: int,
+    store: tuple[Buffer, int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    # one reset seed per env
+    # one reset seed per env. store = (buffer, k): alive transitions of the
+    # first k envs go to the buffer
     n = env.num_envs
     # Sync/AsyncVectorEnv take a per-env seed list, the base stub says int
     states, _ = env.reset(seed=seeds)  # ty: ignore[invalid-argument-type]
@@ -77,7 +80,10 @@ def rollout(
     alive = np.ones(n, dtype=bool)
     for _ in range(steps):
         actions = heads_policy(embedding, heads, jnp.asarray(states, "f4"))
+        prev = states
         states, reward, term, trunc, _ = env.step(np.asarray(actions))
+        if store is not None:
+            add_alive(store, alive, (prev, actions, reward, states, term))
         returns += np.asarray(reward) * alive
         lengths += alive
         alive &= ~(np.asarray(term) | np.asarray(trunc))
@@ -86,12 +92,26 @@ def rollout(
     return returns, lengths
 
 
+def add_alive(
+    store: tuple[Buffer, int], alive: np.ndarray, step: tuple[Any, ...]
+) -> None:
+    buffer, k = store
+    idx = np.flatnonzero(alive[:k])
+    if len(idx) == 0:
+        return
+    state, action, reward, next_state, term = (
+        jnp.asarray(np.asarray(x)[idx]) for x in step
+    )
+    buffer.add(Transition(state, action, reward, next_state, term))
+
+
 def episodes_matrix(
     env_name: str,
     embedding: SharedStateEmbedding,
     heads: ActorHead,
     seeds: list[int],
     steps: int,
+    store: tuple[Buffer, int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     # returns and lengths, each (heads, episodes)
     n = heads.out_layer.weight.shape[0]
@@ -99,7 +119,9 @@ def episodes_matrix(
     try:
         cols = [
             # every env resets with the same seed: all policies face one start
-            rollout(env, embedding, heads, seeds=[s] * n, steps=steps)
+            rollout(
+                env, embedding, heads, seeds=[s] * n, steps=steps, store=store
+            )
             for s in seeds
         ]
     finally:

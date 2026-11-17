@@ -100,6 +100,8 @@ Dropped: h-bootstrap and the TD-error horizon controller (negative results in `p
 | `rl.enabled` | `false` = pure CEM, no TD3 (needs `rl_to_ea.period=0`, `ea_to_rl.mode=off`, `cem.mean_anchor=none`, `eval.mode` full or prefix) | `true` |
 | `rl.*` | TD3 hyperparameters (gamma, lr, batch, warmup, train_ratio, ...) | see `conf/algorithm/erl.yaml` |
 | `eval.mode`, `eval.prefix_h`, `eval.p_real` | see above | `full`, 200, 0.21 |
+| `swap.enabled`, `swap.sigma` | plateau-triggered actor swap (`rl_only` only), sigma required when enabled | `false`, null |
+| `swap.*` | trigger (min_step, window, rel_slope, cooldown, max_phase_steps), phase (states, state_window, perturbations, seed_base, key), swap (critic_updates, rollback_evals) | see `conf/algorithm/erl.yaml` |
 
 - Unknown keys fail at startup (Hydra struct config + dataclass constructors).
 - Checkpoints (top-level, needs `rl.enabled`): `checkpoint.dir=<root> checkpoint.at=[0.3,0.6,1.0]` saves the TD3 nets (embedding, actor, both critics) and the filled replay buffer to `<root>/<env>_s<seed>/step_<N>/` (`src/common/checkpoint.py`).
@@ -196,6 +198,12 @@ python -m analysis.gibo ../experiments/gibo-pilot-v1/experiment.toml # G0, L, HC
 - GP in JAX (`common/gp.py`): RBF ARD, ML hyperparameters, GIBO acquisition = min trace of the posterior covariance of grad f(0). Paired episodes y = R(variant) - R(actor).
 - Decision gain = true gain of the chosen head if verification accepts, else 0, compared with the TD3 slope x decision cost.
 
+### Online actor swap at plateaus (`plateau-swap-online-v1`)
+- `algorithm.swap.enabled=true` (`src/algos/plateau_swap.py`): after every `perf/eval_rl`, a past-only plateau trigger (OLS slope over the last 100k steps <= 0.5% |mean| per 100k, t >= 200k, 100k cooldown, t + 88k <= budget).
+- Phase = one G-d decision of gibo-pilot-v1 (hyperparameters read from its toml): curvature on 2000 buffer states, dist_H reference from 40 sigma perturbations, random 16-dim basis, GIBO rounds, line search, verification.
+- Phase episodes count to the budget and go to the replay buffer, no TD3 updates. Accepted: online + target head swapped, 5k critic-only updates. Rollback to the pre-phase actor if the mean of the next 3 evals < the 3 before.
+- Logs `phase/*` (t, slope, cost, accepted, ci_lo/hi, stage, fallback, rolled_back, count, steps_frac).
+
 ---
 
 ## Quickstart
@@ -224,6 +232,7 @@ uv run python -m train total_steps=3000 algorithm.horizon=100 \
 | `controls` | td3 (`rl_only`), sc_erl-always | 0-19 |
 | `ablation-horizon` | prefix-h100, prefix-h400, prefix-h800 | 0-29 |
 | `config-check` | erl-evorainbow | 0-9 |
+| `plateau-swap` | td3, td3-swap (seeds 0-4) | 0-4,10-14 |
 | `all` | core + controls + ablation-horizon | 0-79 |
 
 ```bash
@@ -242,13 +251,14 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 ├── CLAUDE.md              # Developer rules and project architecture
 ├── README.md              # This file
 ├── TODO.md                # Experiment plan and open work
-├── slurm_run_array.sh     # SLURM array (suites: core, controls, ablation-horizon, all)
+├── slurm_run_array.sh     # SLURM array (suites: core, controls, ablation-horizon, config-check, plateau-swap, all)
 ├── scripts/submit_suite.sh# Submit one suite across envs
 ├── slurm_offline_degeneracy.sh, scripts/submit_degeneracy.sh  # critic-degeneracy-v1
 ├── src/
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
+│   ├── algos/plateau_swap.py # plateau trigger + G-d actor swap phase (td3-swap)
 │   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks

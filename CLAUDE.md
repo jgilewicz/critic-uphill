@@ -14,6 +14,7 @@ src/
   train.py           # Thin Hydra entrypoint (env workers re-import it)
   runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
   algos/erl.py       # ERL loop: eval modes, knobs (config dataclasses), diagnostics
+  algos/plateau_swap.py # td3-swap: plateau trigger, G-d phase (reuses offline.gibo), swap, rollback
   analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo
   offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate. local_search: per-episode returns + lengths. sa_chain: SA chains on the actor head. curvature_es: ES/Newton steps from perturbations. landscape_critic: critic fine-tuned on the perturbation landscape. gibo: GIBO decision on the actor head, gate + 3 arms)
   baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
@@ -31,6 +32,7 @@ src/
   - RL $\to$ EA: TD3 actor injected into the weakest member every `rl_to_ea.period = 5` gens (0 = never).
   - EA $\to$ RL: `ea_to_rl.mode` = `off | soft | soft_if_better`, `ea_to_rl.tau = 0.005` via `genetic_soft_update`.
   - `rl.enabled=false` = pure CEM, rejects any knob that needs the RL actor.
+- **Swap**: `swap.enabled` (rl_only only, `swap.sigma` required) runs a G-d phase of gibo-pilot-v1 at plateaus. Phase steps count to the budget, go to the buffer, train nothing. `offline.gibo.play` stores real rows when `pr["buffer"]` is set.
 - **Rollout Separation**: 1 vectorized env for the RL actor (always full $H$, seeds buffer); `pop_size` vectorized envs for the ES population.
 - **Thesis**: gain comes from cheap fitness evaluation, not the critic (prefix-h200 ≈ SC-ERL). `rl_only` = TD3 control (no population/gene flow). h-bootstrap, the TD horizon controller and critic uncertainty are negative results (code removed in protocol 3). Plan: `TODO.md`.
 - **Metrics**: WandB x-axis is always `env_steps` (`wandb.define_metric("*", step_metric="env_steps")`). Diagnostics outside the budget: `perf/eval_rl`, `perf/eval_champion`, `perf/eval_best`, `div/action_dist`, `div/param_dist`, `div/elite_origin` (0 RL actor, 1 its descendant, 2 population), `pop/std`. Also `cost/real_frac`, `gene/ea_to_rl`, `train/critic_loss`, `train/td_error`.
@@ -47,7 +49,7 @@ src/
 
 - Single benchmark runner: [`slurm_run_array.sh`](slurm_run_array.sh). `EXTRA` adds Hydra overrides.
 - `critic-degeneracy-v1`: `scripts/submit_degeneracy.sh <env>...` = td3 seeds 0-1 with checkpoints on PD, then `slurm_offline_degeneracy.sh` (`afterok`).
-- Suites (`SUITE`, task = cond×10+seed): `core` (erl, sc_erl-random, prefix-h200, 0-29), `controls` (td3 = rl_only, sc_erl-always, 0-19), `ablation-horizon` (h100/400/800, 0-29), `config-check` (erl-evorainbow, 0-9), `all` (0-79). Submit with `scripts/submit_suite.sh <suite> <env>...`.
+- Suites (`SUITE`, task = cond×10+seed): `core` (erl, sc_erl-random, prefix-h200, 0-29), `controls` (td3 = rl_only, sc_erl-always, 0-19), `ablation-horizon` (h100/400/800, 0-29), `config-check` (erl-evorainbow, 0-9), `plateau-swap` (td3, td3-swap, 0-4,10-14), `all` (0-79). Submit with `scripts/submit_suite.sh <suite> <env>...`.
 - Paper envs: MuJoCo v5 HalfCheetah, Hopper, Walker2d, Ant, Swimmer, Humanoid. DMC Dog and MyoSuite (`.venv-myosuite`) stay registered.
 - Run `uv sync` on the login node prior to submissions. Jobs execute `.venv/bin/python` directly on `lem-gpu` (1x NVIDIA H100, 8 CPUs, 16GB RAM).
 - Online wandb logging default; syncs to Lustre `$PD_ROOT/wandb_logs` when offline.

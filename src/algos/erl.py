@@ -15,6 +15,13 @@ import optax
 from jax.flatten_util import ravel_pytree
 
 import environments
+from algos.plateau_swap import (
+    SwapConfig,
+    SwapState,
+    after_eval,
+    init_swap,
+    run_phase,
+)
 from common.checkpoint import checkpoint_dir, save_checkpoint
 from common.replay_buffer import Buffer
 from common.rollout import (
@@ -134,6 +141,8 @@ class ERLConfig:
     rl_to_ea: RLToEAConfig = field(default_factory=RLToEAConfig)
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
+    # plateau-triggered actor swap (plateau-swap-online-v1), rl_only only
+    swap: SwapConfig = field(default_factory=SwapConfig)
     # performance evaluation, outside the step budget
     perf_env: str | None = None  # None: env_name
     perf_interval: int = 5_000
@@ -149,6 +158,11 @@ class ERLConfig:
         if not self.rl.enabled:
             _check_without_rl(self)
         _check_checkpoint(self)
+        if self.swap.enabled and self.eval.mode != "rl_only":
+            raise ValueError(
+                f"swap.enabled=true with eval.mode={self.eval.mode!r}; the "
+                "swap phase runs on the TD3 control only (eval.mode=rl_only)"
+            )
 
 
 def _check_checkpoint(cfg: ERLConfig) -> None:
@@ -219,6 +233,7 @@ class Run:
     origins: np.ndarray = field(default_factory=lambda: np.zeros(0, int))
     elite_origin: int = ORIGIN_POPULATION
     diag_states: jax.Array | None = None
+    swap: SwapState | None = None
 
     def close(self) -> None:
         for closer in self.closers:
@@ -323,6 +338,11 @@ def build_run(cfg: ERLConfig) -> Run:
         buffer=buffer,
         key=key,
         diag_key=jax.random.key(cfg.seed + _DIAG_KEY_OFFSET),
+        swap=(
+            init_swap(cfg.swap, td3_cfg, critic_opt)
+            if cfg.swap.enabled
+            else None
+        ),
     )
 
 
@@ -617,6 +637,36 @@ def _step_rl_only(run: Run, rl_env: gym.vector.VectorEnv) -> Metrics:
     return metrics | train_td3(run, run.horizon)
 
 
+def _step_phase(run: Run) -> Metrics:
+    # swap phase: its episodes count to the budget, no TD3 update
+    assert run.swap is not None
+    cfg = run.cfg
+    meta = {
+        "env": cfg.env_name,
+        "seed": cfg.seed,
+        "env_steps": run.env_steps,
+        "horizon": run.horizon,
+    }
+    run.td3_state, steps, metrics = run_phase(
+        run.swap, run.td3_state, _buffer(run), meta, next_key(run)
+    )
+    run.env_steps += steps
+    return metrics
+
+
+def _swap_after_eval(run: Run, metrics: Metrics) -> Metrics:
+    if run.swap is None or "perf/eval_rl" not in metrics:
+        return {}
+    run.td3_state, out = after_eval(
+        run.swap,
+        run.td3_state,
+        run.env_steps,
+        metrics["perf/eval_rl"],
+        run.cfg.step_budget,
+    )
+    return out
+
+
 def _score_rollout(
     run: Run, pop_env: gym.vector.VectorEnv, pop: Population, h: int
 ) -> Scored:
@@ -771,12 +821,15 @@ def train(
     try:
         while run.env_steps < cfg.step_budget:
             steps_before = run.env_steps
-            if pop_env is None:
+            if run.swap is not None and run.swap.due is not None:
+                metrics = _step_phase(run)
+            elif pop_env is None:
                 assert rl_env is not None
                 metrics = _step_rl_only(run, rl_env)
             else:
                 metrics = _step_generation(run, rl_env, pop_env)
             metrics |= maybe_evaluate(run, steps_before)
+            metrics |= _swap_after_eval(run, metrics)
             maybe_checkpoint(run, steps_before)
             metrics |= {
                 "generation": float(run.generation),

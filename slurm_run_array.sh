@@ -8,6 +8,7 @@
 #   controls         td3 (rl_only, no population), sc_erl-always             array 0-19
 #   ablation-horizon prefix-h100, prefix-h400, prefix-h800                  array 0-29
 #   config-check     erl-evorainbow (pop 5, ea_to_rl tau 0.3, RL->EA every gen) array 0-9
+#   plateau-swap     td3, td3-swap (plateau-swap-online-v1)               array 0-4,10-14
 #   all              core + controls + ablation-horizon (not config-check)  array 0-79
 #
 # Example usage:
@@ -48,6 +49,12 @@ ABLATION_HORIZON=(
   "prefix-h400|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=400"
   "prefix-h800|algorithm=erl algorithm.eval.mode=prefix algorithm.eval.prefix_h=800"
 )
+# plateau-swap-online-v1: sigma = critic-degeneracy-v1 Walker2d sigma-5%,
+# borrowed for Hopper (no calibration there)
+PLATEAU_SWAP=(
+  "td3|algorithm=erl algorithm.eval.mode=rl_only"
+  "td3-swap|algorithm=erl algorithm.eval.mode=rl_only algorithm.swap.enabled=true algorithm.swap.sigma=0.06012891983856429"
+)
 # EvoRainbow-style gene flow on full ERL; gamma kept at 0.99 for td3 parity
 CONFIG_CHECK=(
   "erl-evorainbow|algorithm=erl algorithm.eval.mode=full algorithm.pop_size=5 algorithm.ea_to_rl.tau=0.3 algorithm.rl_to_ea.period=1"
@@ -57,9 +64,10 @@ core) CONDITIONS=("${CORE[@]}") ;;
 controls) CONDITIONS=("${CONTROLS[@]}") ;;
 ablation-horizon) CONDITIONS=("${ABLATION_HORIZON[@]}") ;;
 config-check) CONDITIONS=("${CONFIG_CHECK[@]}") ;;
+plateau-swap) CONDITIONS=("${PLATEAU_SWAP[@]}") ;;
 all) CONDITIONS=("${CORE[@]}" "${CONTROLS[@]}" "${ABLATION_HORIZON[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose from: core, controls, ablation-horizon, config-check, all" >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose from: core, controls, ablation-horizon, config-check, plateau-swap, all" >&2
   exit 1
   ;;
 esac

@@ -18,6 +18,7 @@ from algos.erl import (
     evaluate_policy,
 )
 from algos.erl import train as train_erl
+from algos.plateau_swap import SwapConfig
 from baselines.agents import build_agent
 from baselines.envs import build_vec_env
 from baselines.wandb_logging import WandbLoggingCallback
@@ -40,6 +41,7 @@ def _erl_config(cfg: DictConfig) -> ERLConfig:
         rl_to_ea=RLToEAConfig(**algo.pop("rl_to_ea")),
         ea_to_rl=EAToRLConfig(**algo.pop("ea_to_rl")),
         eval=EvalConfig(**algo.pop("eval")),
+        swap=SwapConfig(**algo.pop("swap")),
         perf_env=cfg.eval_env.id,
         perf_interval=int(cfg.eval.interval),
         perf_episodes=int(cfg.eval.episodes),

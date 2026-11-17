@@ -61,7 +61,14 @@
 - **Odniesienie dist_H:** 40 nowych zaburzeń σ aktora w każdej fazie (w pilocie: zaburzenia z critic-degeneracy-v1). Bez epizodów.
 - **Seedy resetu:** świeże w każdej fazie (offset per seed runu i numer fazy). W pilocie jedna decyzja na komórkę.
 - **Urządzenie:** faza w jobie treningowym na lem-gpu (pilot na CPU). Batche dopełnione do 16 wierszy jak w pilocie.
-- **Budżet:** dodatkowy warunek t + 88k ≤ 1M (wyżej).
+- **Budżet:** dodatkowy warunek t + 88k ≤ 1M (wyżej). Koszt fazy nie jest wielokrotnością 1000, więc ostatni epizod RL td3-swap może skończyć run do 999 kroków po 1M (td3 kończy dokładnie na 1M). Pętla treningowa bez zmian.
+- **Cofnięcie:** „3 kolejne eval_rl” = 3 kolejne logowane `perf/eval_rl` po podmianie. Pierwsza wypada na końcu fazy, gdy faza przekracza granicę 5k (prawie zawsze). Podmiana bliżej końca niż 3 ewaluacje: bez decyzji, raport oznacza ją jako nierozstrzygniętą.
+
+## Implementacja (przed biegiem)
+
+- `src/algos/plateau_swap.py` (`algorithm.swap.*`), faza woła funkcje `offline.gibo` (G-d: `new_arm`, `run_rounds`, `line_search`, `verify`, `cost`) i `offline.curvature_es.curvature_on` bez zmian logiki. Hiperparametry fazy czytane z `gibo-pilot-v1/experiment.toml`, nadpisane tylko `seed_base` (świeże seedy na fazę).
+- Ścieżka td3 (`swap.enabled=false`) bez zmian: dodatkowy kod nie wykonuje się.
+- Smoke lokalnie (CPU, Walker2d, H = 100, progi zmniejszone tylko w smoke): faza przy 12k, koszt 5.8k kroków, akceptacja, 100 aktualizacji krytyka, decyzja o cofnięciu po 2 ewaluacjach, blokada t + max_phase_steps ≤ budżet działa. `restore_actor` sprawdzony osobno (aktor i Adam ze stanu sprzed fazy, krytyk bez zmian).
 
 ## Uruchomienia
 
