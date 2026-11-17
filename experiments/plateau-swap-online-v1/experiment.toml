@@ -1,0 +1,104 @@
+# Preregistration, fixed 2026-11-17 before any run. Do not edit question,
+# [trigger], [phase], [swap], [metric], [decision] or [[hypotheses]] after
+# the first job starts. phase hyperparameters are not repeated here: they
+# are read at run time from `phase_source` ([subspace] dim, [gibo], [step],
+# [verify]), arm G-d of gibo-pilot-v1
+name = "plateau-swap-online-v1"
+question = """Does TD3 with a plateau-triggered actor swap (arm G-d of
+gibo-pilot-v1) end higher than TD3 alone for the same 1M env steps?"""
+protocol = 3
+envs = ["Walker2d-v5", "Hopper-v5"]
+conditions = ["td3", "td3-swap"]
+seeds = [0, 1, 2, 3, 4]
+total_steps = 1_000_000
+phase_source = "../gibo-pilot-v1/experiment.toml"
+
+# td3 = rl_only, unchanged (paper-v2 controls). td3-swap = the same run plus
+# the phase below. both arms are fresh runs under this tag. code, TD3
+# config and logging as paper-v2, the only new keys are phase/* logs
+[wandb]
+entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
+project = "h_boostrap_"
+tag = "plateau-swap-online-v1"
+run_name = '^(?P<condition>.+)_(?P<env>[^_]+)_s(?P<seed>\d+)$'
+
+[metric]
+keys = ["perf/eval_rl"]
+x = ["env_steps"]
+label = "eval return"
+final_window = 0.1
+
+# checked after every perf/eval_rl (every 5k steps), past evals only:
+# t >= min_step, no phase in the last `cooldown` steps since the previous
+# phase ended (accepted or not), and the OLS slope of perf/eval_rl over the
+# evals in (t - window, t] <= rel_slope * |mean of those evals| per 100k
+# steps. no critic condition (G0 of gibo-pilot-v1 failed). a phase never
+# starts when t + max_phase_steps > total_steps (the run ends at 1M steps
+# in total): max_phase_steps = 88 episodes x 1000 = 32 queries + 8 actor
+# (rounds) + 6 candidates + 2 actor (line search) + 20 + 20 (verification)
+[trigger]
+min_step = 200_000
+window = 100_000
+rel_slope = 0.005
+cooldown = 100_000
+max_phase_steps = 88_000
+
+# one G-d decision of gibo-pilot-v1 per phase, hyperparameters from
+# phase_source unchanged: fresh random orthonormal 16-dim basis (QR of a
+# Gaussian) in u coordinates, axis map to one dist_H reference, GIBO
+# rounds, line search 0.25/0.5/1x, the negative-curvature fallback of the
+# pilot (flagged in the log), sequential verification, accept iff the CI
+# lower bound > 0. dist_H reference = mean dist_H of `perturbations`
+# sigma perturbations of the current actor (no episodes). sigma per env:
+# Walker2d = critic-degeneracy-v1 calibration (5% return drop, seed 0,
+# 300k). Hopper has no calibration and takes the Walker2d value (record.md,
+# Odstępstwa). H_a, J and dist_H on `states` distinct states from the
+# newest `state_window` buffer transitions (the pilot used 20 actor
+# episodes). reset seeds per phase k: seed_base + 1_000_000 seed + 10_000 k,
+# + r for round r, + 1000 + e line search, + 2000 + e verification. the
+# basis, GP and acquisition draw from rng [key, env, seed, t]
+[phase]
+states = 2000
+state_window = 20_000
+perturbations = 40
+seed_base = 20_000_000
+key = 20261124
+sigma = { "Walker2d-v5" = 0.06012891983856429, "Hopper-v5" = 0.06012891983856429 }
+
+# every phase episode (queries, line search, verification, the actor's
+# paired episodes) is charged to the budget at its true length and stored
+# in the replay buffer (padding rows are not). phase steps trigger no TD3
+# updates. accepted: online and target actor head <- the chosen head, then
+# `critic_updates` critic-only updates with the actor frozen, then normal
+# TD3. rollback: the 3 perf/eval_rl after the swap (the first at the end
+# of the phase) vs the 3 before the phase. mean after < mean before ->
+# restore the actor (embedding + head, online and target, and its Adam
+# state) from before the phase. the critic stays
+[swap]
+critic_updates = 5000
+rollback_evals = 3
+
+# final score = mean perf/eval_rl over the last 10% (>= 900k), AUC =
+# trapezoid mean of perf/eval_rl over env_steps (paper-v2). per env: IQM
+# of final scores with a 95% stratified unpaired bootstrap, AUC, lower
+# quartile. pooled: P(td3-swap > td3) = mean over envs of P for a random
+# seed pair (unpaired, as paper-v2), lower quartile of final / IQM(td3)
+# of its env
+[decision]
+p_min = 0.65
+max_env_drop = 0.05
+
+[[hypotheses]]
+id = "S"
+question = "td3-swap ends higher than td3"
+rule = """SIGNAL iff pooled P(td3-swap > td3) >= 0.65 and IQM(td3-swap) >=
+IQM(td3) of the final score in both envs, and in no env IQM(td3-swap) <
+0.95 IQM(td3). no signal -> the method direction is closed, no further
+variants. signal -> nothing claimed, next step 10 seeds with the same
+rule"""
+
+[analysis]
+caches = ["cache/full"]
+
+[cluster]
+ssh_host = "wcss"
