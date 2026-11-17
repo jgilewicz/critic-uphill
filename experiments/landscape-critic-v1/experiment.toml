@@ -1,0 +1,107 @@
+# Preregistration, fixed 2026-11-17 before any landscape rollout, critic
+# update or step. Do not edit question, [landscape], [critic], [direction],
+# [steps], [evaluation] or [[hypotheses]] after the first rollout.
+name = "landscape-critic-v1"
+question = """Does fine-tuning the TD3 critic on transitions of the actor-head
+perturbation landscape teach it the direction of improvement (the ES oracle
+gradient of critic-curvature-es-v1), and does a step along its gradient gain
+more than the same fine-tuning on the replay buffer alone?"""
+protocol = 3
+envs = ["Walker2d-v5", "HalfCheetah-v5", "Swimmer-v5"]
+seeds = [0, 1]
+# checkpoints (300k, 600k, 1M) + buffers, sigma levels, perturbation key
+source = "../critic-degeneracy-v1/experiment.toml"
+# R_i of the 81 heads x 30 episodes: the ES oracle gradient
+episodes_source = "../local-search-v1/experiment.toml"
+# on-policy states, dist_H reference, ES k-draws
+steps_source = "../critic-curvature-es-v1/experiment.toml"
+
+# cell = env x seed x checkpoint: 18 cells, 6 in Walker2d. data: python -m
+# offline.landscape_critic run <toml> <ckpt_root> <env> (from src/), all CPU
+
+# the 80 perturbations of critic-degeneracy-v1 (40 per sigma level, small =
+# 5% drop, large = 20% drop), one episode each. perturbation i of a level
+# resets with seed_base + i (the same i in both levels). stored: every alive
+# transition (s, a, r, s', terminated), as the TD3 buffer stores them
+[landscape]
+seed_base = 7_000_000
+
+# start from the checkpoint critics (target = online copy), target actor and
+# embedding frozen at the checkpoint (a' = actor(s') + clipped noise), TD3
+# critic update, fresh Adam. variants: A = landscape small, B = landscape
+# large, C = both, D = no landscape (control). batch: half from the buffer,
+# half from the variant's landscape transitions (D: all from the buffer).
+# snapshot after each of `updates`, same key for every variant
+[critic]
+updates = [5_000, 20_000]
+lr = 1e-3
+batch_size = 256
+gamma = 0.99
+tau = 0.005
+policy_noise = 0.2
+noise_clip = 0.5
+log_every = 1_000
+key = 20261121
+
+# whitened head coordinates u (critic-curvature-es-v1): delta_theta =
+# sigma S eps. g_crit = S grad_theta mean_s Q1(s, actor_theta(s)) at the actor
+# on the 2000 on-policy states of critic-curvature-es-v1 (Q1 as in the TD3
+# actor loss). g_ES = sum_i (R_i - R_actor) eps_i / (N sigma) per level,
+# oracle R (30 episodes). g_ES lies in the span of the level's N = 40 eps, so
+# raw cos(g_crit, g_ES) <= ~sqrt(N / (N + P)) even for a perfect critic
+# (0.16 for P = 1542, 0.27 for P = 514). primary measure: sketch cos =
+# cos(sum_i (eps_i . g_crit) eps_i / N, g_ES), the ES gradient of the critic's
+# first-order return prediction on the same 40 eps (1 for a critic whose
+# directional derivatives match the returns). per critic: mean over the two
+# levels. raw cos and the per-level split (in-sample level vs the other
+# level for A and B) are reported
+[direction]
+measure = "sketch"
+
+# d = S g_crit (as d_ES = S g_u), unit norm. alpha by bisection on dist_H of
+# the original critic (critic-curvature-es-v1: same states, H_a, reference =
+# mean dist_H of the 40 sigma-small perturbations) = multiple x reference
+[steps]
+multiple = 1.0
+
+# one batch per checkpoint, the same fresh reset seeds for every head: actor,
+# step of the original critic, steps of A-D x updates (8), oracle ES 1x per
+# level (2), ES k = 1 1x, 10 draws per level (20, the draws of
+# critic-curvature-es-v1). 32 heads. gain = mean over the episodes of
+# R(head) - R(actor), paired
+[evaluation]
+episodes = 30
+seed_base = 8_000_000
+
+# L1 per Walker2d cell: best of A-C x updates (sketch cos, level mean) vs the
+# best of D over updates. X* = the A-C x updates critic with the highest
+# sketch cos (chosen on cos, not gain), D* = D at the same updates
+[[hypotheses]]
+id = "L1"
+question = "the landscape teaches the critic the direction of improvement"
+rule = """sketch cos of X* >= 0.3 and >= best sketch cos of D + 0.2 in >= 4
+of the 6 Walker2d cells"""
+min_cos = 0.3
+min_margin = 0.2
+min_cells = 4
+
+[[hypotheses]]
+id = "L2"
+question = "a step along the landscape critic gains more than the control"
+rule = """gain(X* step) > 0 and > gain(D* step) in >= 4 of the 6 Walker2d
+cells"""
+min_cells = 4
+
+[[hypotheses]]
+id = "HC"
+question = "HalfCheetah control: no harm"
+rule = """median over the 6 HalfCheetah cells of gain(X* step) / |R_actor|
+>= -2%"""
+hc_min_rel = -0.02
+
+# Swimmer: descriptive only. stop rule: L1 fails -> the landscape does not
+# teach the critic a direction, the method direction is closed and the
+# analytic result written up
+
+[analysis]
+cache = "cache/cells"
