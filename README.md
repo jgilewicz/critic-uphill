@@ -186,6 +186,16 @@ python -m analysis.landscape_critic ../experiments/landscape-critic-v1/experimen
 - Landscape = the 80 critic-degeneracy-v1 perturbations, 1 episode each, all alive transitions. Critic fine-tuned with TD3 targets on half buffer, half landscape (A small sigma, B large, C both, D buffer only), snapshots at 5k and 20k updates (`make_mixed_fqe_train`).
 - Direction = sketch cos of the Q1 gradient over the head weights with the ES oracle gradient (raw cos is capped at sqrt(N / (N + P))). Step of 1x the dist_H reference, compared with ES oracle and k = 1 steps.
 
+### GIBO decision on the actor head (`gibo-pilot-v1`)
+```bash
+python -m offline.gibo gate <toml> <ckpt_root> <env>   # G0: energy of the ES oracle gradient in the behaviour subspace vs random (no rollouts)
+python -m offline.gibo run <toml> <ckpt_root> <env>    # 3 arms (G-b, G-d, ES-b): 8 x 4 queries, line search, sequential verification, 30-seed evaluation (CPU)
+python -m analysis.gibo ../experiments/gibo-pilot-v1/experiment.toml # G0, L, HC control, gibo.{json,html}
+```
+- Subspace b = top-16 eigenvectors of S (mean J^T J) S on 2000 on-policy states, d = random orthonormal. Axes scaled to 1x the dist_H reference.
+- GP in JAX (`common/gp.py`): RBF ARD, ML hyperparameters, GIBO acquisition = min trace of the posterior covariance of grad f(0). Paired episodes y = R(variant) - R(actor).
+- Decision gain = true gain of the chosen head if verification accepts, else 0, compared with the TD3 slope x decision cost.
+
 ---
 
 ## Quickstart
@@ -239,10 +249,10 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── train.py           # Hydra entrypoint
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
-│   ├── common/            # Buffer, TD3, rollout, surrogate, utils
+│   ├── common/            # Buffer, TD3, rollout, surrogate, GP, utils
 │   ├── modules/           # Equinox networks and CEM
 │   ├── environments/      # MuJoCo, DMC Dog, MyoSuite registries
 │   └── conf/              # Hydra configs

@@ -14,10 +14,10 @@ src/
   train.py           # Thin Hydra entrypoint (env workers re-import it)
   runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
   algos/erl.py       # ERL loop: eval modes, knobs (config dataclasses), diagnostics
-  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic
-  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate. local_search: per-episode returns + lengths. sa_chain: SA chains on the actor head. curvature_es: ES/Newton steps from perturbations. landscape_critic: critic fine-tuned on the perturbation landscape)
+  analysis/          # Experiment analysis: fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo
+  offline/           # Offline measures on checkpoints (critic_degeneracy: calibrate, evaluate, validate. local_search: per-episode returns + lengths. sa_chain: SA chains on the actor head. curvature_es: ES/Newton steps from perturbations. landscape_critic: critic fine-tuned on the perturbation landscape. gibo: GIBO decision on the actor head, gate + 3 arms)
   baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
-  common/            # Buffer, fused TD3, rollout, critic surrogate, utils
+  common/            # Buffer, fused TD3, rollout, critic surrogate, GP (gp.py: GIBO), utils
   modules/           # Equinox modules (ActorHead, SharedStateEmbedding) + CEM evolutionary module
   environments/      # Environment registry: mujoco (v5), dmc (dog-*), myosuite
   conf/              # Hydra configs (config.yaml, algorithm/*.yaml)

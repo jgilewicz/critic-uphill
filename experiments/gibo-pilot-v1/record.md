@@ -64,3 +64,26 @@
 ## Raport
 
 - Per komórka: energia w b i d, akceptacje, zyski decyzji i kandydatów, koszt, przyrost TD3, cos kierunku z rzutem g_u, krok ES oracle jako referencja, werdykty G0, L, HC.
+
+## Bramka G0 (2026-11-17)
+
+- **G0 nie przechodzi: 0/6.** Stosunek energii g_u (σ 5%) w b do średniej z 20 losowych: s0 300k 1.03, 600k 0.97, 1M 1.03, s1 300k 1.88, 600k 2.22, 1M 1.56. Poziom σ 20%: 0.55-1.57.
+- **Sufit miary (błąd prerejestracji):** g_u leży w rozpiętości 40 losowych ε, więc nawet idealna podprzestrzeń ma ograniczony udział. Symulacja (P = 1542, N = 40, d = 16, zwroty liniowe bez szumu): podprzestrzeń idealna średnio 3.38 (p5-p95 2.51-4.54), losowa 1.06 (0.53-1.75). Próg 3× przepuściłby idealną w ok. 60%.
+- Na uczciwej skali: s1 300k i s1 600k powyżej p95 losowej, 4 pozostałe jak losowa, żadna nie sięga p5 idealnej. b trzyma niewiele kierunku poprawy.
+
+## Odstępstwa
+
+- **Pilot mimo bramki (decyzja użytkownika 2026-11-17, opcja B):** rollouty puszczone eksploracyjnie, `[deviations] gate` w toml. Reguły L i HC bez zmian, werdykty niekonfirmacyjne. G-d (podprzestrzeń losowa) odpowiada na pytanie niezależnie od wyboru podprzestrzeni.
+- `[gibo]`: granice hiperparametrów, wartości początkowe i lr dopisane jako klucze przed bramką (te same wartości co w komentarzu prerejestracji).
+- **Ujemna krzywizna (2026-11-17, po pierwszej komórce):** w Walker2d s0 600k 2 osie bazy nigdy nie osiągają dist_H odniesienia (H_a dodatnie wzdłuż nich), bisekcja z critic-curvature-es-v1 przerywała przebieg. Poprawka: takie osie dostają medianę α pozostałych osi, kroki line search wracają do |x| = √wielokrotność wzdłuż g_x, kroki ES oracle do mediany długości osi b. Każdy zastępczy krok oznaczony w JSON (`fallback_axes`, `fallback`). Komórki bez takich osi bez zmian (s0 300k policzona ponownie, te same liczby).
+
+## Wyniki (2026-11-17, eksploracyjnie)
+
+- **Raport:** https://claude.ai/code/artifact/57db803d-4e40-40a1-83da-21ce5acf7732 (`gibo.html`, `gibo.json`).
+- **G0:** 0/6 (bramka wyżej). **L:** 4/6 nominalnie spełniona (s0 300k, s0 600k, s1 600k, s1 1M). **HC:** mediana +0.00% (większość decyzji odrzucona), spełniona. Werdykty niekonfirmacyjne.
+- **G-d (losowa podprzestrzeń) też 4/6 i większy średni zysk** (Walker2d 204 wobec 121 dla G-b). ES-b 3/6, średnio 130. Podprzestrzeń behawioralna nie pomaga, GP pomaga słabo.
+- 2 z 4 komórek L mają ujemne nachylenie TD3 (s1 600k, s1 1M): tam wystarcza zysk > 0. Przy szybko rosnącym TD3 (s0 1M, s1 300k) decyzja przegrywa z TD3.
+- **Weryfikacja:** 0 fałszywych akceptacji w 54 decyzjach. HalfCheetah: 4 z 18 decyzji zaakceptowane, wszystkie z prawdziwym zyskiem > 0.
+- Swimmer: zyski ok. 1-4% zwrotu, G-b bije TD3 w 2/6.
+- Kroki zastępcze (ujemna krzywizna osi b): 4/6 Walker2d, 1-2 osie na komórkę, G-d bez.
+- Czas: 0.28 h CPU łącznie (3 procesy równolegle, lokalnie).

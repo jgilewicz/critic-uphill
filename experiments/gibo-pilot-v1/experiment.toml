@@ -49,9 +49,13 @@ key = 20261122
 rounds = 8
 queries = 4
 radius = 1.0
+length_bounds = [0.5, 2.0]
+std_bounds = [1e-3, 10.0]
+init = { length = 1.0, signal = 1.0, noise = 0.5 }
 fit_steps = 300
 acq_steps = 200
 starts = 32
+lr = 0.05
 seed_base = 9_000_000
 key = 20261123
 
@@ -131,3 +135,12 @@ hc_min_rel = -0.02
 [analysis]
 gate_cache = "cache/gate"
 cells_cache = "cache/cells"
+
+# added 2026-11-17 after the gate, before any rollout (record.md, Odstępstwa)
+[deviations]
+gate = """G0 fails (0/6) but its 3x threshold sits at the construction
+ceiling (perfect subspace: mean 3.38, p5 2.51). the pilot runs as
+exploratory, L and HC unchanged, verdicts not confirmatory"""
+
+[report]
+url = "https://claude.ai/code/artifact/57db803d-4e40-40a1-83da-21ce5acf7732"
