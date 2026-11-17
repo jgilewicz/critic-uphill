@@ -1,0 +1,133 @@
+# Preregistration, fixed 2026-11-17 before any gate value, GP fit or
+# rollout. Do not edit question, [subspace], [gibo], [es], [step],
+# [verify], [evaluation], [compare] or [[hypotheses]] after the gate runs.
+name = "gibo-pilot-v1"
+question = """Does one GIBO decision on the TD3 actor head (GP-based local
+gradient search in a 16-dim subspace of behaviour-sensitive directions,
+paired episodes, verified before the swap) gain more than TD3 for the same
+env steps?"""
+protocol = 3
+envs = ["Walker2d-v5", "HalfCheetah-v5", "Swimmer-v5"]
+seeds = [0, 1]
+# checkpoints (300k, 600k, 1M), sigma levels, perturbation key, td3 curves
+source = "../critic-degeneracy-v1/experiment.toml"
+# R_i of the 81 heads x 30 episodes: the ES oracle gradient g_u
+episodes_source = "../local-search-v1/experiment.toml"
+# on-policy states, whitened coordinates u, dist_H and its reference
+steps_source = "../critic-curvature-es-v1/experiment.toml"
+
+# cell = env x seed x checkpoint: 18 cells, 6 in Walker2d, one decision per
+# cell and arm. data (from src/, all CPU): python -m offline.gibo gate <toml>
+# <ckpt_root> <env>, then python -m offline.gibo run <toml> <ckpt_root> <env>
+
+# u coordinates of critic-curvature-es-v1: delta_theta = S delta_u, S = leaf
+# std of the actor. M = S (mean_s J_s^T J_s) S on its 2000 on-policy states
+# (J_s = d action / d head weights). b = top-`dim` eigenvectors of M (the
+# directions that move the actions most). d = random orthonormal bases
+# (QR of a Gaussian), `random_draws` of them for the gate, draw 0 for the
+# G-d arm. per basis vector v_k: c_k = alpha with dist_H(theta + alpha S v_k
+# / |S v_k|) = reference (mean dist_H of the 40 sigma-5% perturbations), so
+# x_k = 1 moves dist_H by one reference. queries: theta + sum_k x_k c_k
+# S v_k / |S v_k|
+[subspace]
+dim = 16
+random_draws = 20
+key = 20261122
+
+# GP on x in R^dim: y = R(head) - R(actor) on the same reset seed, scaled by
+# the std of the observed y. prior mean 0, the exact point (x = 0, y = 0)
+# added once. RBF kernel with ARD lengthscales in [0.5, 2] (1 = one sigma-5%
+# reference), signal and noise std in [1e-3, 10], fitted by log marginal
+# likelihood (Adam, `fit_steps` from l = 1, signal 1, noise 0.5) after
+# every round. round 1 uses the initial values. acquisition (GIBO, Mueller
+# et al. 2021): greedy, each query minimizes the trace of the posterior
+# covariance of grad f(0) given the queries so far, over the ball |x| <=
+# `radius`, projected Adam from `starts` random starts. the centre stays at
+# the actor. round r: every query of every arm and the actor play one
+# episode on reset seed seed_base + r
+[gibo]
+rounds = 8
+queries = 4
+radius = 1.0
+fit_steps = 300
+acq_steps = 200
+starts = 32
+seed_base = 9_000_000
+key = 20261123
+
+# ES-b control: the same rounds and seeds, `pairs` antithetic pairs per
+# round in b, x = +-eps, eps ~ N(0, I / dim) (E|x|^2 = 1).
+# g_x = sum_j (y+_j - y-_j) eps_j / (2 n / dim)
+[es]
+pairs = 2
+
+# per arm (G-b, G-d, ES-b): direction g_x (G: posterior mean of grad f(0)),
+# d = sum_k g_x,k c_k S v_k / |S v_k|, unit norm. line search: alpha by
+# bisection with dist_H(theta + alpha d) = multiple x reference, one head
+# per multiple, `episodes` paired episodes each on seeds seed_base + e
+# (shared by the arms). chosen = highest mean y, ties to the smaller
+# multiple
+[step]
+multiples = [0.25, 0.5, 1.0]
+episodes = 2
+seed_base = 9_100_000
+
+# sequential paired t-interval (95%, two-sided) of R(chosen) - R(actor) on
+# fresh seeds seed_base + e: after `first` episodes accept if the lower
+# bound > 0, reject if the upper bound < 0, else play up to `max` and
+# accept iff the lower bound > 0. accept = swap the actor
+[verify]
+first = 5
+max = 20
+seed_base = 9_200_000
+
+# one batch per checkpoint (>= 16 rows, padded with actor copies, as every
+# batch of this experiment), the same fresh seeds for every head: actor,
+# the 9 line-search heads (3 arms x 3 multiples), the ES oracle step
+# (sigma-5% g_u, 1x reference) and the ES oracle step projected on b (1x).
+# true gain = mean over the episodes of R(head) - R(actor), paired.
+# decision gain = true gain of the chosen head if accepted, else 0
+[evaluation]
+episodes = 30
+seed_base = 9_300_000
+
+# cost of a decision = env steps of every episode it played: queries, line
+# search, verification, and the actor's episodes on those seeds (each arm
+# charged in full, as if alone). td3 increment for cost c = OLS slope of
+# perf/eval_rl in [t - 100k, t + 100k] cut to [0, 1M] x c (as
+# critic-curvature-es-v1). budget: 32 queries + 6 line-search + <= 20
+# verification = <= 58 variant episodes, + <= 30 actor episodes
+[compare]
+td3_window = 100_000
+
+# per cell: energy of the sigma-5% oracle g_u in a subspace = |V^T g_u|^2 /
+# |g_u|^2. expected for a random subspace: dim / P (1.0% for P = 1542)
+[[hypotheses]]
+id = "G0"
+question = "the behaviour subspace holds the direction of improvement"
+rule = """energy of g_u in b >= 3x the mean energy over the 20 random
+subspaces in >= 4 of the 6 Walker2d cells"""
+min_ratio = 3.0
+min_cells = 4
+
+[[hypotheses]]
+id = "L"
+question = "a GIBO decision beats TD3 for the same env steps"
+rule = """G-b decision gain > 0 and > td3 increment for its cost in >= 4 of
+the 6 Walker2d cells"""
+min_cells = 4
+
+[[hypotheses]]
+id = "HC"
+question = "HalfCheetah control: no harm"
+rule = """median over the 6 HalfCheetah cells of G-b decision gain /
+|R_actor| >= -2%"""
+hc_min_rel = -0.02
+
+# G-d and ES-b: compared with G-b descriptively (is it the GP or the
+# subspace). Swimmer: descriptive. stop rule: G0 fails -> no rollouts, the
+# analytic result written up. L fails -> the direction is closed
+
+[analysis]
+gate_cache = "cache/gate"
+cells_cache = "cache/cells"
