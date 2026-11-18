@@ -1,0 +1,41 @@
+# @package algorithm
+name: evorainbow
+
+horizon: 1000
+embedding_dim: 256
+pop_size: 5
+
+cem:
+  sigma_init: 1e-3
+  damp: 1e-3
+  damp_limit: 1e-5
+  elitism: true
+
+rl:
+  critic_hidden_dims: [400, 300]
+  gamma: 0.99
+  tau: 0.005
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
+  exploration_noise: 0.1
+  actor_lr: 1e-3
+  critic_lr: 1e-3
+  batch_size: 256
+  buffer_capacity: 1_000_000
+  warmup_steps: 10_000
+  train_ratio: 1.0
+
+rl_to_ea:
+  period: 1
+
+ea_to_rl:
+  tau: 0.3
+
+# Population fitness estimator: full | critic | hboot.
+# Critic surrogate (critic and hboot bootstrap) uses online critic Q1.
+eval:
+  mode: hboot
+  h: 200
+  critic_states: 50_000
+  p_real: 0.0

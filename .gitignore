@@ -17,3 +17,9 @@ wandb/
 *notes*
 
 stan.md
+
+# wandb history caches, refetched by the analysis scripts
+experiments/*/cache/full/
+
+# local copies of PD checkpoints (offline measures)
+data/

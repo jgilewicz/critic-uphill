@@ -1,27 +1,13 @@
-from collections.abc import Callable
+from __future__ import annotations
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-Activation = Callable[[jax.Array], jax.Array]
-
-
-def _activation(name: str) -> Activation:
-    match name.lower():
-        case "relu":
-            return jax.nn.relu
-        case "elu":
-            return jax.nn.elu
-        case "tanh":
-            return jax.nn.tanh
-        case other:
-            raise ValueError(
-                f"unknown activation {other!r}; expected 'relu', 'elu' or 'tanh'"
-            )
-
 
 class Critic(eqx.Module):
+    """Q(s, a) network with LayerNorm + ReLU MLP."""
+
     state_net: eqx.nn.Sequential
     net: eqx.nn.Sequential
 
@@ -31,48 +17,39 @@ class Critic(eqx.Module):
         action_dim: int,
         *,
         key: jax.Array,
-        dropout: float = 0.0,
-        activation: str = "relu",
         hidden_dims: tuple[int, int] = (400, 300),
     ) -> None:
         k1, k2, k3, k4 = jax.random.split(key, 4)
-        act = _activation(activation)
         dim1, dim2 = hidden_dims
 
         self.state_net = eqx.nn.Sequential(
             [
                 eqx.nn.Linear(state_dim, dim1, key=k1),
                 eqx.nn.LayerNorm(dim1),
-                eqx.nn.Lambda(act),
+                eqx.nn.Lambda(jax.nn.relu),
             ]
         )
         self.net = eqx.nn.Sequential(
             [
                 eqx.nn.Linear(dim1 + action_dim, dim2, key=k2),
                 eqx.nn.LayerNorm(dim2),
-                eqx.nn.Lambda(act),
-                eqx.nn.Dropout(dropout),
+                eqx.nn.Lambda(jax.nn.relu),
                 eqx.nn.Linear(dim2, dim2, key=k3),
                 eqx.nn.LayerNorm(dim2),
-                eqx.nn.Lambda(act),
-                eqx.nn.Dropout(dropout),
+                eqx.nn.Lambda(jax.nn.relu),
                 eqx.nn.Linear(dim2, 1, key=k4),
             ]
         )
 
-    def __call__(
-        self,
-        state: jax.Array,
-        action: jax.Array,
-        *,
-        key: jax.Array | None = None,
-    ) -> jax.Array:
+    def __call__(self, state: jax.Array, action: jax.Array) -> jax.Array:
         features = self.state_net(state)
         x = jnp.concatenate([features, action], axis=-1)
-        return self.net(x, key=key)
+        return self.net(x)
 
 
 class ActorHead(eqx.Module):
+    """Linear + tanh policy head over the shared state embedding."""
+
     out_layer: eqx.nn.Linear
     action_limit: float = eqx.field(static=True)
 
@@ -85,8 +62,8 @@ class ActorHead(eqx.Module):
         action_limit: float = 1.0,
     ) -> None:
         self.action_limit = action_limit
-        out = eqx.nn.Linear(embedding_dim, action_dim, key=key)
-        wk, bk = jax.random.split(key)
+        k_lin, wk, bk = jax.random.split(key, 3)
+        out = eqx.nn.Linear(embedding_dim, action_dim, key=k_lin)
         weight = jax.random.uniform(
             wk, (action_dim, embedding_dim), minval=-3e-3, maxval=3e-3
         )
@@ -100,15 +77,17 @@ class ActorHead(eqx.Module):
 
 
 class SharedStateEmbedding(eqx.Module):
+    """Shared state encoder Z(s) trained by TD3 and read by ES heads."""
+
     embedding: eqx.nn.Sequential
 
     def __init__(
         self,
         state_dim: int,
-        hidden_dim: int = 400,
-        embedding_dim: int = 4,
+        embedding_dim: int,
         *,
         key: jax.Array,
+        hidden_dim: int = 400,
     ) -> None:
         k1, k2 = jax.random.split(key)
         self.embedding = eqx.nn.Sequential(

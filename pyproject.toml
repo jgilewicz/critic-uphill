@@ -1,25 +1,18 @@
 [project]
-name = "hboot-erl"
+name = "critic-uphill"
 version = "0.1.0"
-description = "Horizon-Bootstrapped & Adaptive Prefix Evolutionary Reinforcement Learning in JAX"
+description = "Why critic surrogates in evolutionary RL fail to beat plain TD3 under a fair step budget"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "equinox>=0.13.8",
-    "flax>=0.12.9",
     "jax>=0.11.1",
     "jax[cuda12]>=0.11.1; sys_platform == 'linux'",
     "optax>=0.2.8",
     "wandb>=0.29.0",
     "gymnasium[mujoco]==1.2.3",
     "mujoco==3.6.0",
-    "dm-control==1.0.38",
-    "shimmy==2.0.1",
-    "myosuite==2.12.2",
-    "sbx-rl>=0.28.0",
     "hydra-core>=1.3.6",
-    "scipy>=1.18.1",
-    "dotenv>=0.9.9",
 ]
 
 [build-system]
@@ -28,14 +21,22 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "src/agents",
     "src/algos",
-    "src/baselines",
+    "src/analysis",
     "src/common",
     "src/environments",
+    "src/fitness",
     "src/modules",
 ]
 
 [tool.ruff]
 line-length = 80
+
+[tool.ruff.lint]
+extend-select = ["E501", "C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
 
 [tool.ty.rules]

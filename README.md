@@ -1,194 +1,113 @@
-# Do We Need the Critic? Truncated Fitness Evaluation in Budget-Constrained ERL
+# critic-uphill
 
-[![JAX](https://img.shields.io/badge/JAX-0.11+-blue.svg)](https://github.com/google/jax)
-[![Equinox](https://img.shields.io/badge/Equinox-0.13+-9cf.svg)](https://github.com/patrick-kidger/equinox)
-[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL) do not beat plain TD3 under a fair step budget.
 
-JAX + Equinox ERL (TD3 + CEM population on a shared embedding) with every fitness
-estimator behind one `eval_mode` switch: full rollouts, truncated prefixes,
-critic bootstrap, TD-adaptive horizons, SC-ERL surrogates and a TD3-only control.
+## Research Question and Thesis
 
-Open work: [TODO.md](TODO.md).
+- **Question**: Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair 1M-step budget?
+- **Thesis**: The TD3 actor is trained to sit at the top of its own critic's estimate, so the critic sees every change to the actor as worse and ranks population members only by their distance from the actor, not by whether they are actually better.
+- **Measurement plan**: Compare returns of TD3 and EvoRainbow (`full`, `critic`, `hboot`) on 5 MuJoCo v5 tasks under the same 1M-step budget, alongside surrogate ranking quality and critic degeneration (`deg/*`) in a follow-up task.
+- **Priorities**: Simple clean code, every population step counted in the budget, one frozen commit per run series, no hyperparameter changes mid-run.
 
----
+## Implemented Algorithms
 
-## Research question
+Paper reference: EvoRainbow (Li et al., ICML 2024, PMLR v235).
 
-### The bottleneck
-- Step budget $10^6$, population $P=10$, horizon $H=1000$ → one generation costs $11{,}000$ steps → **~90 generations**.
-- Prefix $h=200$ → $3{,}000$ steps per generation → **~330 generations** in the same budget.
+- **TD3** (`algorithm=td3`): Standalone TD3 using the same networks (`SharedStateEmbedding`, `ActorHead`, twin `Critic`), same TD3 hyperparameters, same warmup, and same episode-by-episode RL rollout loop as EvoRainbow's RL side.
+- **EvoRainbow** (`algorithm=evorainbow`):
+  - Parallel mode: RL actor and CEM population share one replay buffer.
+  - Shared architecture: `SharedStateEmbedding` Z(s) trained by TD3, CEM over per-individual `ActorHead`.
+  - Genetic Soft Update: `theta_rl = tau * theta_elite + (1 - tau) * theta_rl` applied to both online and target RL actor heads (`ea_to_rl.tau = 0.3`).
+  - RL-to-EA injection: RL actor head injected into the weakest individual every `rl_to_ea.period` generations (`1`).
+- **Population fitness modes** (`algorithm.eval.mode`):
+  - `full`: One full real episode (up to `horizon=1000` steps) per individual.
+  - `critic`: Critic(Buffer) from EvoRainbow. Mean of online `Q1(s, pi_i(s))` over `eval.critic_states` (default `50_000`) replay-buffer states, 0 real steps.
+  - `hboot`: Critic(H-step Bootstrap) from EvoRainbow. `sum_{t=0}^{H-1} gamma^t r_t + gamma^H Q1(s_H, pi_i(s_H))` with `H = eval.h` (default `200`). Episodes terminating before `H` omit the bootstrap term. All real steps go to the buffer and count toward the budget.
+  - **Generation control**: With probability `eval.p_real` (default `0.0`) per generation, the whole population is scored with `full` instead of the surrogate. Valid only for `critic` and `hboot`.
 
-### Thesis
-> Under a fixed environment-step budget, the gain of surrogate-assisted ERL comes
-> from cheaper fitness evaluation, not from the critic. A plain truncated prefix
-> ($h=200$, no critic in selection) matches SC-ERL; critic bootstrap on the
-> prefix ($h$-bootstrap) adds nothing detectable.
+## Hyperparameters (`algorithm.*`)
 
-### Paper axis
-1. **Main comparison**: ERL vs SC-ERL vs prefix-h200, TD3 (`rl_only`) as reference.
-2. **Where the gain comes from**: `rl_only` (no population) and `sc_erl_always` controls.
-3. **Horizon tradeoff**: $h$ → generations → score (`ablation-horizon`: $h \in \{100, 200, 400, 800\}$).
-4. **Does the critic help selection**: `hboot_td` vs `prefix_td`; TD-error controller kept as a diagnosed negative result.
+| Key | Description | Default |
+|---|---|---|
+| `pop_size` | CEM population size | `5` |
+| `horizon` | Max steps per episode | `1000` |
+| `embedding_dim` | Shared state embedding Z(s) size | `256` |
+| `cem.sigma_init` | Initial CEM diagonal variance | `1e-3` |
+| `cem.damp`, `cem.damp_limit`, `cem.elitism` | CEM covariance damping and elitism | `1e-3`, `1e-5`, `true` |
+| `rl.critic_hidden_dims` | Twin critic MLP widths | `[400, 300]` |
+| `rl.gamma`, `rl.tau`, `rl.policy_freq` | Discount, Polyak tau, actor delay | `0.99`, `0.005`, `2` |
+| `rl.policy_noise`, `rl.noise_clip`, `rl.exploration_noise` | Target and exploration noise | `0.2`, `0.5`, `0.1` |
+| `rl.actor_lr`, `rl.critic_lr`, `rl.batch_size` | Adam LRs and batch size | `1e-3`, `1e-3`, `256` |
+| `rl.buffer_capacity`, `rl.warmup_steps`, `rl.train_ratio` | Replay capacity, uniform warmup, updates/step | `1_000_000`, `10_000`, `1.0` |
+| `rl_to_ea.period` | Generations between RL injections (0 disables) | `1` |
+| `ea_to_rl.tau` | Genetic Soft Update weight on online + target actor | `0.3` |
+| `eval.mode`, `eval.h`, `eval.critic_states`, `eval.p_real` | Population fitness estimator and generation control | `hboot`, `200`, `50_000`, `0.0` |
 
-Dropped as contributions: fixing the TD controller, `hboot_td` as the flagship method.
+## Budget Accounting Rule
 
-### Results so far (`paper-core-v1`, 4 envs × 10 seeds)
-- Normalized final score, IQM [95% CI]: SC-ERL 0.85 [0.67, 1.00], prefix-h200 0.84 [0.67, 0.95], prefix-td 0.81 [0.63, 0.99], hboot-td 0.73 [0.53, 0.92], ERL 0.08 [−0.23, 0.37].
-- All cheap estimators ≫ ERL; no separation among them.
-- `hboot_td` vs `prefix_td`: P(A>B) = 0.46.
-- TD controller saturates ($\delta_{\text{ema}}$ grows with return scale) → $h \approx 700$–$800$, 128–148 generations vs 330.
-- Report: https://claude.ai/code/artifact/0a041ade-99cb-4345-b742-48dc4ba03d7f
-
-### Prior negative result
-- Critic uncertainty ($\sigma$ from MC-dropout / ensembles / evidential) does not track $Q$-error (AUC ≈ 0.5); uncertainty gating ≈ random gate.
-
----
-
-## System Architecture
-
-```text
-               ┌──────────────────────────────────────────────────┐
-               │           SharedStateEmbedding  Z(s)             │
-               └────────────────────────┬─────────────────────────┘
-                                        │
-                 ┌──────────────────────┴──────────────────────┐
-                 ▼                                             ▼
-     ┌───────────────────────┐                     ┌───────────────────────┐
-     │   TD3 Gradient Agent  │◄── soft merge (ea_tau) ──┤   CEM ES Population   │
-     │      (RL Actor)       │── periodic inject (5 gen)─►│ (10x ActorHead)       │
-     └───────────┬───────────┘                     └───────────┬───────────┘
-                 │ (1x VecEnv, full H)                         │ (10x VecEnv)
-                 ▼                                             ▼
-     ┌───────────────────────┐                     ┌───────────────────────┐
-     │  Replay Buffer (1M)   │                     │ Fitness Evaluation:   │
-     └───────────────────────┘                     │ • Full (H=1000)       │
-                 ▲                                 │ • Prefix (h=100-800)  │
-                 │ updates (fused JAX JIT)         │ • H-Bootstrap         │
-     ┌───────────┴───────────┐                     │ • Adaptive TD Horizon │
-     │ Twin Critic Q1 / Q2   │────────────────────►│ • Gated Surrogates    │
-     └───────────────────────┘                     └───────────────────────┘
-```
-
----
-
-## Fitness Evaluation Strategies (`eval_mode`)
-
-Selected via `algorithm.eval_mode`:
-
-| Mode | Evaluation | Critic role | Real ES steps per gen |
-|---|---|---|---|
-| `full` | Full rollout ($H=1000$) | none | $P \times 1000$ |
-| `prefix` | Truncated rollout, fixed $h$ (`prefix_steps`) | none | $P \times h$ |
-| `prefix_random` | Random $h$ from `prefix_grid` per gen | none | ~42% on average |
-| `prefix_td` | Prefix with $h(\delta_{\text{ema}})$ | sets $h$ | dynamic |
-| `hboot` | Prefix + $\gamma^h \min(Q_1, Q_2)(s_h)$ | terminal bootstrap | $P \times h$ |
-| `hboot_td` | `hboot` with $h(\delta_{\text{ema}})$ | bootstrap + sets $h$ | dynamic |
-| `sc_erl_random` | Replay-batch critic scoring, random gate ($\omega=0.79$) | surrogate fitness | ~21% |
-| `sc_erl_always` | Surrogate fitness for all members after warmup | surrogate fitness | 0 |
-| `ensemble` | $K=5$ critic heads, MAD gate + LCB | surrogate + $\sigma$ gate | varies |
-| `semarl_td` | SEMARL TD-error surrogate schedule | surrogate gate | varies |
-| `rl_only` | No population, no gene flow: TD3 control | — | 0 (RL actor only) |
-
-- The RL actor always rolls out the full $H$ into the replay buffer (all modes).
-- `rl_only` trains TD3 with `train_ratio × H` updates per episode; same networks, budget and evaluation as ERL.
-
-### Adaptive TD-error schedule (`resolve_adaptive_h`)
-```python
-ratio = 1.0 - math.exp(-max(beta * td_error_ema, 0.0))
-target_h = h_min + ratio * (h_max - h_min)
-h = min(grid, key=lambda g: abs(g - target_h))
-```
-- Uses raw (unnormalized) TD error, so `ratio → 1` as returns grow: the controller saturates at $h \approx 800$.
-
----
+- `total_steps` (default `1_000_000`) is a hard cap on real environment steps.
+- Every real step (warmup, RL actor rollouts, `full` episodes, `hboot` prefixes, generation-control full evals) goes through one `Budget` counter.
+- Finished environments stop stepping immediately (no auto-reset dummy steps).
+- Any rollout reaching the remaining budget stops immediately and marks the last transition as truncated (`done=False`), so TD targets still bootstrap.
+- Result: `final env_steps <= total_steps` holds strictly, and `rl_steps + pop_steps == env_steps`.
+- Deterministic performance evaluations (`perf/eval_rl` every `eval.interval` steps for `eval.episodes` episodes) run on a separate environment outside the budget.
 
 ## Environments
 
-| Suite | Environments | Role |
-|---|---|---|
-| **MuJoCo v5** | `HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`, `Humanoid-v5` | paper benchmark |
-| **DMC Dog** | `dog-stand`, `dog-walk`, `dog-trot`, `dog-run`, `dog-fetch` | registered, not in the paper plan |
-| **MyoSuite** | `myoElbowPose1D6MRandom-v0`, `myoHandReachRandom-v0`, `myoHandPenTwirlRandom-v0`, `myoHandObjHoldRandom-v0`, `myoLegWalk-v0` | registered, needs `.venv-myosuite` |
+MuJoCo v5 only (any other ID fails fast):
+- `HalfCheetah-v5`
+- `Hopper-v5`
+- `Walker2d-v5`
+- `Ant-v5`
+- `Swimmer-v5`
 
----
+## Running
 
-## Metrics
+- Install and verify:
+  ```bash
+  uv sync
+  just check
+  ```
+- Train locally:
+  ```bash
+  just train td3 Hopper-v5
+  just train evorainbow HalfCheetah-v5 algorithm.eval.mode=hboot
+  just train evorainbow HalfCheetah-v5 algorithm.eval.mode=critic
+  just train evorainbow HalfCheetah-v5 algorithm.eval.mode=full
+  ```
+- Smoke run (`wandb.enabled=false`, 3000 steps):
+  ```bash
+  just smoke evorainbow Hopper-v5 algorithm.eval.mode=hboot algorithm.eval.h=50
+  ```
+- SLURM array on WCSS Lem (suite `main`: `td3`, `evorainbow-full`, `evorainbow-critic`, `evorainbow-hboot`, array `0-39`):
+  ```bash
+  ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+  ```
 
-### Online (wandb, x-axis `env_steps`)
-- `perf/eval_rl`: deterministic RL-actor return, mean of `eval.episodes`.
-- `generation`, `env_steps`.
-- `cost/real_frac`: real-step fraction used by the population.
-- `prefix/h`: current prefix depth (adaptive / random modes).
-- `p_surr`: surrogate assignment probability (surrogate modes).
-- `train/critic_loss`, `train/td_error`, `train/td_error_ema`.
-- `screen/cem_std`: CEM population dispersion.
-
-### Analysis (post-training)
-- Final score: mean `perf/eval_rl` over the last 10% of the budget.
-- Per-env normalization (0 = worst condition mean, 1 = best); IQM with stratified bootstrap CI over (env, seed).
-- P(A>B) per pair; Wilcoxon + Holm across envs (needs ≥ 6 envs).
-- AUC over $[0, 10^6]$; steps to threshold and speedup vs ERL.
-
----
-
-## Quickstart
-
-```bash
-uv sync
-just train erl HalfCheetah-v5                                        # full ERL
-just train erl HalfCheetah-v5 algorithm.eval_mode=prefix algorithm.prefix_steps=200
-just train erl HalfCheetah-v5 algorithm.eval_mode=rl_only            # TD3 control
-just train sac Hopper-v5                                             # SBX baseline
-```
-
-Smoke run:
-```bash
-uv run python -m train total_steps=3000 algorithm.horizon=100 \
-  algorithm.pop_size=4 eval.interval=1000 eval.episodes=1 wandb.enabled=false
-```
-
-## Cluster (SLURM on WCSS Lem)
-
-`slurm_run_array.sh` picks conditions via `SUITE`; task ID = condition × 10 + seed.
-
-| Suite | Conditions | Array |
-|---|---|---|
-| `core` | erl, sc_erl-random, prefix-h200, prefix-td, hboot-td | 0-49 |
-| `controls` | rl-only, sc_erl-always | 0-19 |
-| `ablation-horizon` | prefix-h100, prefix-h400, prefix-h800 | 0-29 |
-| `all` | union of the above | 0-99 |
-
-```bash
-uv sync                                                    # login node, once
-TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
-./scripts/submit_suite.sh controls HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5
-```
-- `submit_suite.sh` sets the array range per suite; tag defaults to `paper-<suite>-v1` (override with `TAG=`).
-- `WANDB_API_KEY` is read from the environment or `wandb login` / netrc.
-
----
-
-## Repository Structure
+## Repository Layout
 
 ```text
-├── CLAUDE.md              # Developer rules and project architecture
-├── README.md              # This file
-├── TODO.md                # Experiment plan and open work
-├── slurm_run_array.sh     # SLURM array (suites: core, controls, ablation-horizon, all)
-├── scripts/submit_suite.sh# Submit one suite across envs
-├── src/
-│   ├── train.py           # Hydra entrypoint
-│   ├── runner.py          # Training dispatch and wandb logging
-│   ├── algos/erl.py       # ERL loop and all eval modes (incl. rl_only)
-│   ├── baselines/         # SBX agents and logging callbacks
-│   ├── common/            # Buffer, TD3, rollout, critic heads, surrogate, metrics
-│   ├── modules/           # Equinox networks and CEM
-│   ├── environments/      # MuJoCo, DMC Dog, MyoSuite registries
-│   └── conf/              # Hydra configs
+├── CLAUDE.md               # Project conventions and architecture
+├── README.md               # Study overview and usage
+├── justfile                # Dev, lint, typecheck, train, smoke recipes
+├── pyproject.toml          # Dependencies and hatch/ruff/ty config
+├── slurm_run_array.sh      # WCSS SLURM array runner (suite: main)
+├── scripts/submit_suite.sh # Submit suite across envs
+└── src/
+    ├── train.py            # Thin Hydra entrypoint
+    ├── runner.py           # Hydra config validation and wandb/trainer dispatch
+    ├── config.py           # Frozen config dataclasses (1:1 with YAML)
+    ├── agents/             # TD3 class wrapping jitted updates and actor/critic calls
+    ├── algos/              # TD3Trainer and EvoRainbowTrainer loops
+    ├── analysis/           # Wandb run fetching, loading, and bootstrap stats
+    ├── common/             # ReplayBuffer, Budget, PerfEvaluator, rollouts, jitted TD3
+    ├── conf/               # Hydra config.yaml and algorithm/{td3,evorainbow}.yaml
+    ├── environments/       # MuJoCo v5 registry and EnvPool
+    ├── fitness/            # FullEpisode, CriticBuffer, HStepBootstrap, GenerationControl
+    └── modules/            # Equinox networks and CEM optimizer
 ```
 
----
+## Planned Next Steps
 
-## License
-MIT License. See [LICENSE](LICENSE) for details.
+- Online training diagnostics (separate task): surrogate ranking quality metrics and critic degeneration metrics (`deg/*`).
+- First experiment after diagnostics: periodic network resets in TD3 (testing whether resets briefly break degeneration as measured by `deg/*`).

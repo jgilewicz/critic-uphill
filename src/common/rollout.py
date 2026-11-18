@@ -1,116 +1,162 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
-import equinox as eqx
 import gymnasium as gym
-import jax
-import jax.numpy as jnp
 import numpy as np
 
-from common.replay_buffer import Buffer, Transition
-from modules.deep_modules import ActorHead, SharedStateEmbedding
-
-BatchPolicy = Callable[[jax.Array, jnp.ndarray], jnp.ndarray]
-StepHook = Callable[
-    [int, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray], None
-]
+from common.replay_buffer import ReplayBuffer, Transition
+from environments import EnvPool
 
 
-@jax.jit
-def _update_returns(
-    returns: jnp.ndarray,
-    alive: jnp.ndarray,
-    reward: jnp.ndarray,
-    terminated: jnp.ndarray,
-    truncated: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    returns = returns + reward * alive
-    alive = alive & ~(terminated | truncated)
-    return returns, alive
+class Budget:
+    """Shared hard cap on real environment interactions."""
 
+    def __init__(self, total_steps: int) -> None:
+        if total_steps < 1:
+            raise ValueError(f"total_steps must be >= 1, got {total_steps}")
+        self.total_steps = total_steps
+        self.rl_steps = 0
+        self.pop_steps = 0
 
-def collect_parallel_episode(
-    vec_env: gym.vector.VectorEnv,
-    key: jax.Array,
-    policy: BatchPolicy,
-    buffer: Buffer | None,
-    horizon: int,
-    *,
-    on_step: StepHook | None = None,
-    store_mask: np.ndarray | None = None,
-) -> tuple[jnp.ndarray, jax.Array]:
-    states, _ = vec_env.reset(
-        seed=int(jax.random.randint(key, (), 0, 2**31 - 1))
-    )
-    states = jnp.asarray(states)
-    num_envs = states.shape[0]
-    returns = jnp.zeros(num_envs)
-    alive = jnp.ones(num_envs, dtype=bool)
-    prev_done = np.zeros(num_envs, dtype=bool)
-    # envs outside store_mask still step (shadow rollout) but never reach
-    # the buffer
-    stored = (
-        np.ones(num_envs, dtype=bool)
-        if store_mask is None
-        else np.asarray(store_mask, dtype=bool)
-    )
+    @property
+    def env_steps(self) -> int:
+        """Total real environment steps consumed so far."""
+        return self.rl_steps + self.pop_steps
 
-    for step in range(horizon):
-        key, act_key = jax.random.split(key)
-        actions = policy(act_key, states)
-        next_states, reward, terminated, truncated, _ = vec_env.step(actions)
-        returns, alive = _update_returns(
-            returns, alive, reward, terminated, truncated
-        )
-        if on_step is not None:
-            on_step(step, reward, terminated, truncated, next_states)
+    @property
+    def remaining(self) -> int:
+        """Remaining step budget (>= 0)."""
+        return max(0, self.total_steps - self.env_steps)
 
-        valid = ~prev_done & stored
-        if buffer is not None and valid.any():
-            idx = jnp.asarray(np.nonzero(valid)[0])
-            buffer.add(
-                Transition(
-                    state=states[idx],
-                    action=jnp.asarray(actions)[idx],
-                    reward=reward[idx],
-                    next_state=next_states[idx],
-                    done=terminated[idx],
-                )
+    @property
+    def exhausted(self) -> bool:
+        """Whether the step budget has been reached."""
+        return self.env_steps >= self.total_steps
+
+    def consume_rl(self, steps: int) -> None:
+        """Record real steps taken by the RL actor."""
+        self._consume(steps)
+        self.rl_steps += steps
+
+    def consume_pop(self, steps: int) -> None:
+        """Record real steps taken by the population."""
+        self._consume(steps)
+        self.pop_steps += steps
+
+    def _consume(self, steps: int) -> None:
+        if steps < 0:
+            raise ValueError(f"steps must be >= 0, got {steps}")
+        if self.env_steps + steps > self.total_steps:
+            raise RuntimeError(
+                f"budget exceeded: {self.env_steps} + {steps} > "
+                f"{self.total_steps}"
             )
 
-        prev_done = np.asarray(terminated | truncated)
-        states = next_states
 
-    return returns, key
+@dataclass(frozen=True)
+class PopRolloutResult:
+    """Outcome of a population rollout over an EnvPool."""
 
-
-@eqx.filter_jit
-def heads_policy(
-    embedding: SharedStateEmbedding, heads: ActorHead, states: jnp.ndarray
-) -> jnp.ndarray:
-    z = jax.vmap(embedding)(states)
-    return jax.vmap(lambda head, zi: head(zi))(heads, z)
+    returns: np.ndarray
+    last_states: np.ndarray
+    terminated: np.ndarray
+    steps_taken: np.ndarray
+    total_steps: int
 
 
-def evaluate_heads(
-    vec_env: gym.vector.VectorEnv,
-    key: jax.Array,
-    embedding: SharedStateEmbedding,
-    heads: ActorHead,
-    horizon: int,
-) -> np.ndarray:
-    # heads: (n,)-stacked ActorHead; vec_env holds n * episodes envs, one
-    # deterministic episode per env, grouped by head
-    n_heads = jax.tree.leaves(heads)[0].shape[0]
-    episodes = vec_env.num_envs // n_heads
-    repeated = jax.tree.map(
-        lambda x: jnp.repeat(x, episodes, axis=0) if eqx.is_array(x) else x,
-        heads,
+def rollout_single_episode(
+    env: gym.Env,
+    act_fn: Callable[[np.ndarray], np.ndarray],
+    buffer: ReplayBuffer,
+    budget: Budget,
+    *,
+    max_steps: int,
+    seed: int,
+) -> tuple[float, int]:
+    """Run one episode up to max_steps and remaining budget."""
+    if budget.exhausted or max_steps <= 0:
+        return 0.0, 0
+    state_raw, _ = env.reset(seed=seed)
+    state = np.asarray(state_raw, dtype=np.float32)
+    ep_return = 0.0
+    steps = 0
+    limit = min(max_steps, budget.remaining)
+    for _ in range(limit):
+        action = act_fn(state)
+        next_raw, reward, terminated, truncated, _ = env.step(action)
+        next_state = np.asarray(next_raw, dtype=np.float32)
+        budget.consume_rl(1)
+        buffer.add(
+            Transition(
+                state=state[None],
+                action=action[None],
+                reward=np.asarray([reward], dtype=np.float32),
+                next_state=next_state[None],
+                done=np.asarray([float(terminated)], dtype=np.float32),
+            )
+        )
+        ep_return += float(reward)
+        steps += 1
+        state = next_state
+        if terminated or truncated:
+            break
+    return ep_return, steps
+
+
+def rollout_population(
+    pool: EnvPool,
+    pop_act_fn: Callable[[np.ndarray], np.ndarray],
+    buffer: ReplayBuffer,
+    budget: Budget,
+    *,
+    max_steps: int,
+    discount: float,
+    seed: int,
+) -> PopRolloutResult:
+    """Roll out a population in parallel, stopping each env when done."""
+    states = pool.reset(seed)
+    pop_size = pool.num_envs
+    alive = np.ones(pop_size, dtype=bool)
+    terminated_all = np.zeros(pop_size, dtype=bool)
+    returns = np.zeros(pop_size, dtype=np.float64)
+    steps_taken = np.zeros(pop_size, dtype=np.int32)
+    total_steps = 0
+    factor = 1.0
+
+    for _ in range(max_steps):
+        active = np.flatnonzero(alive)
+        if len(active) == 0 or budget.remaining == 0:
+            break
+        if len(active) > budget.remaining:
+            active = active[: budget.remaining]
+        actions = pop_act_fn(states)
+        active_actions = actions[active]
+        next_s, rewards, terms, truncs = pool.step(active, active_actions)
+        step_count = len(active)
+        budget.consume_pop(step_count)
+        total_steps += step_count
+        buffer.add(
+            Transition(
+                state=states[active],
+                action=active_actions,
+                reward=rewards,
+                next_state=next_s,
+                done=terms.astype(np.float32),
+            )
+        )
+        states[active] = next_s
+        steps_taken[active] += 1
+        returns[active] += factor * rewards
+        terminated_all[active] |= terms
+        alive[active] &= ~(terms | truncs)
+        factor *= discount
+
+    return PopRolloutResult(
+        returns=returns,
+        last_states=states,
+        terminated=terminated_all,
+        steps_taken=steps_taken,
+        total_steps=total_steps,
     )
-
-    def policy(act_key: jax.Array, states: jnp.ndarray) -> jnp.ndarray:
-        return heads_policy(embedding, repeated, states)
-
-    returns, _ = collect_parallel_episode(vec_env, key, policy, None, horizon)
-    return np.asarray(returns).reshape(n_heads, episodes).mean(axis=1)

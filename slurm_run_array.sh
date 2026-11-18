@@ -1,24 +1,22 @@
 #!/bin/bash -l
-# Truncated fitness evaluation in budget-constrained ERL (MuJoCo v5).
-# Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5, Humanoid-v5
-#   (DMC dog-* and MyoSuite myo* are registered too; myo* uses .venv-myosuite)
+# critic-uphill benchmark array on WCSS Lem (MuJoCo v5).
+# Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5
 #
-# Suites (SUITE env var, default core); task ID = condition_index * 10 + seed:
-#   core             erl, sc_erl-random, prefix-h200, prefix-td, hboot-td  array 0-49
-#   controls         rl-only (TD3, no population), sc_erl-always            array 0-19
-#   ablation-horizon prefix-h100, prefix-h400, prefix-h800                  array 0-29
-#   all              core + controls + ablation-horizon                     array 0-99
+# Suite: main (task ID = condition_index * 10 + seed, array 0-39)
+#   0-9   td3
+#   10-19 evorainbow-full
+#   20-29 evorainbow-critic
+#   30-39 evorainbow-hboot
 #
 # Example usage:
-#   TARGET_ENV=Humanoid-v5 TAG=paper-core-v1 sbatch --array=0-49 slurm_run_array.sh
-#   SUITE=controls TARGET_ENV=Hopper-v5 TAG=paper-controls-v1 sbatch --array=0-19 slurm_run_array.sh
-#   ./scripts/submit_suite.sh ablation-horizon HalfCheetah-v5 Hopper-v5
+#   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-39 slurm_run_array.sh
+#   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
 #SBATCH -N 1
 #SBATCH -c 4
 #SBATCH --mem=16gb
 #SBATCH --time=0-12:00:00
-#SBATCH --job-name=erl-bench
+#SBATCH --job-name=critic-uphill
 #SBATCH -p lem-gpu
 #SBATCH --gres=gpu:hopper:1
 #SBATCH --output=logs/slurm-%A_%a.out
@@ -29,33 +27,20 @@ set -euo pipefail
 ENV="${TARGET_ENV:?set TARGET_ENV, e.g. TARGET_ENV=HalfCheetah-v5}"
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:?run sbatch from the checkout or set PROJECT_DIR}}"
 TOTAL_STEPS="${TOTAL_STEPS:-1_000_000}"
-TAG="${TAG:-paper-benchmark-v1}"
-SUITE="${SUITE:-core}"
+TAG="${TAG:-critic-uphill-main-v1}"
+SUITE="${SUITE:-main}"
 
-# Define condition suites: name|overrides
-CORE=(
-  "erl|algorithm=erl algorithm.eval_mode=full"
-  "sc_erl-random|algorithm=erl algorithm.eval_mode=sc_erl_random algorithm.omega=0.79"
-  "prefix-h200|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=200"
-  "prefix-td|algorithm=erl algorithm.eval_mode=prefix_td"
-  "hboot-td|algorithm=erl algorithm.eval_mode=hboot_td"
+MAIN=(
+  "td3|algorithm=td3"
+  "evorainbow-full|algorithm=evorainbow algorithm.eval.mode=full"
+  "evorainbow-critic|algorithm=evorainbow algorithm.eval.mode=critic"
+  "evorainbow-hboot|algorithm=evorainbow algorithm.eval.mode=hboot"
 )
-CONTROLS=(
-  "rl-only|algorithm=erl algorithm.eval_mode=rl_only"
-  "sc_erl-always|algorithm=erl algorithm.eval_mode=sc_erl_always"
-)
-ABLATION_HORIZON=(
-  "prefix-h100|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=100"
-  "prefix-h400|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=400"
-  "prefix-h800|algorithm=erl algorithm.eval_mode=prefix algorithm.prefix_steps=800"
-)
+
 case "${SUITE}" in
-core) CONDITIONS=("${CORE[@]}") ;;
-controls) CONDITIONS=("${CONTROLS[@]}") ;;
-ablation-horizon) CONDITIONS=("${ABLATION_HORIZON[@]}") ;;
-all) CONDITIONS=("${CORE[@]}" "${CONTROLS[@]}" "${ABLATION_HORIZON[@]}") ;;
+main) CONDITIONS=("${MAIN[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose from: core, controls, ablation-horizon, all" >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Only 'main' is supported." >&2
   exit 1
   ;;
 esac
@@ -80,20 +65,11 @@ echo "Task ${TASK_ID} | ${NAME} | ${ENV} | seed ${SEED}"
 
 cd "${PROJECT_DIR}"
 
-# Select environment venv (MyoSuite requires dedicated python stack)
-if [[ "${ENV}" == myo* ]]; then
-  VENV="${PROJECT_DIR}/.venv-myosuite/bin"
-  [[ -x "${VENV}/python" ]] || {
-    echo "no myosuite venv at ${VENV} - ensure .venv-myosuite is installed" >&2
-    exit 1
-  }
-else
-  VENV="${PROJECT_DIR}/.venv/bin"
-  [[ -x "${VENV}/python" ]] || {
-    echo "no venv at ${VENV} - run 'uv sync' in ${PROJECT_DIR} on the login node" >&2
-    exit 1
-  }
-fi
+VENV="${PROJECT_DIR}/.venv/bin"
+[[ -x "${VENV}/python" ]] || {
+  echo "no venv at ${VENV} - run 'uv sync' in ${PROJECT_DIR} on the login node" >&2
+  exit 1
+}
 
 if [[ -z "${WANDB_API_KEY:-}" ]]; then
   WANDB_API_KEY="$("${VENV}/python" -c 'import wandb; print(wandb.api.api_key or "")' 2>/dev/null || true)"
@@ -115,7 +91,6 @@ if "${VENV}/python" -m train \
   env.id="${ENV}" \
   eval_env.id="${ENV}" \
   total_steps="${TOTAL_STEPS}" \
-  n_envs="${SLURM_CPUS_PER_TASK:-4}" \
   wandb.enabled=true \
   "wandb.name=${RUN_NAME}" \
   "wandb.tags=[${TAG},${NAME},${ENV_SLUG}]" \

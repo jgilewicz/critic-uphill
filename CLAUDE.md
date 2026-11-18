@@ -1,45 +1,45 @@
-# CLAUDE.md — hboot-erl (usc_erl_jax)
+# CLAUDE.md - critic-uphill
 
-Extends the global CLAUDE.md. Project-specific deltas only.
+Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule: this repository uses modular, class-based Python with one responsibility per class, keeping pure jitted JAX math inside focused helper functions called by the classes.
 
-## Stack
+## Study Context
 
-- Python 3.12+, JAX + Equinox + Optax for ERL, [SBX](https://github.com/araffin/sbx) for baselines, Hydra for config, wandb for logging.
-- Package manager: `uv`. Quality tools: `ruff`, `ty` (type checking). No pytest suite; verify via smoke runs.
+- **Research question**: Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget?
+- **Thesis**: The TD3 actor is trained to sit at the top of its own critic's estimate, so the critic sees every change to the actor as worse and ranks population members only by their distance from the actor, not by whether they are actually better.
+- **Planned follow-ups** (do not stub or implement unless asked):
+  - Surrogate ranking quality metrics and critic degeneration metrics (`deg/*`).
+  - First experiment after diagnostics: network resets in TD3 to test if resets briefly break `deg/*` degeneration.
+- **Experimental discipline**: Simple clean code, every population step counted in the budget, one frozen commit per run series, no hyperparameter changes mid-run.
 
-## Layout
+## Stack and Quality Tools
 
-```text
-src/
-  train.py           # Thin Hydra entrypoint (env workers re-import it)
-  runner.py          # run_training + dispatch (ERL, SC-ERL, SBX baselines)
-  algos/erl.py       # Unified ERL & fitness evaluation (prefix, hboot, gates, adaptive TD)
-  baselines/         # SBX agent builders, vec-env wrapping, wandb logging callback
-  common/            # Buffer, fused TD3, rollout, critic heads, surrogate gating, metrics, utils
-  modules/           # Equinox modules (ActorHead, SharedStateEmbedding) + CEM evolutionary module
-  environments/      # Environment registry: mujoco (v5), dmc (dog-*), myosuite
-  conf/              # Hydra configs (config.yaml, algorithm/*.yaml)
-```
+- Python 3.12+, JAX + Equinox + Optax, Gymnasium MuJoCo v5, Hydra, wandb.
+- Package manager: `uv`. Linters/typecheck: `ruff check .`, `ruff format --check .`, `ty check src`.
+- No pytest suite yet: verify with `just check` and `just smoke`.
+
+## Architecture and Layout
+
+- `src/train.py`: Thin Hydra entrypoint delegating to `runner.run_training`.
+- `src/runner.py`: Validates Hydra `DictConfig` into `config.RunConfig`, initializes wandb (`env_steps` metric), and dispatches `TD3Trainer` or `EvoRainbowTrainer`.
+- `src/config.py`: Frozen dataclasses (`RLConfig`, `TD3AlgoConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `EvoRainbowAlgoConfig`, `RunConfig`) mirrored 1:1 by `src/conf/config.yaml` and `src/conf/algorithm/{td3,evorainbow}.yaml`. Unknown keys fail fast.
+- `src/environments/`: MuJoCo v5 registry (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5` only, others fail fast) and `EnvPool` (steps only active envs, no auto-reset).
+- `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
+- `src/common/`:
+  - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`.
+  - `td3.py`: Pure jitted TD3 training loop (`make_td3_train`) and `critic_point`.
+  - `rollout.py`: `Budget`, `rollout_single_episode`, `rollout_population`.
+  - `training.py`: `PerfEvaluator`, `run_warmup`, `print_summary`.
+  - `utils.py`: `genetic_soft_update`.
+- `src/agents/td3.py`: `TD3` class owning networks, targets, optimizers, action sampling, Q1 queries, fused updates, and `soft_update_actor_from` (updates both online and target actor heads).
+- `src/fitness/estimators.py`: `FitnessEstimator` protocol, `FullEpisodeFitness`, `CriticBufferFitness` (Q1 over `eval.critic_states`), `HStepBootstrapFitness` (H-step discounted return + `gamma^H * Q1`), and `GenerationControlFitness` (`eval.p_real`).
+- `src/algos/`: `TD3Trainer` and `EvoRainbowTrainer`.
+- `src/analysis/`: Kept utilities (`stats.py`, `fetch.py`, `runs.py`).
 
 ## Conventions
 
-- **Functional JAX style**: Pure functions across `algos/`, `common/`, `modules/`. Classes hold state (e.g. `CEM`), not logic.
-- **Unified ERL Runner**: All fitness modes (`full`, `prefix`, `prefix_random`, `prefix_td`, `hboot`, `hboot_td`, `sc_erl_random`, `sc_erl_always`, `ensemble`, `semarl_td`, `rl_only`) are handled in [`src/algos/erl.py`](file:///Users/kuba/Home/research/usc_erl_jax/src/algos/erl.py) via `EvalMode`.
-- **Gene Flow**:
-  - RL $\to$ EA: TD3 actor periodically injected into weakest population member (`rl_to_ea_sync_period = 5`).
-  - EA $\to$ RL: Champion softly updates TD3 actor (`ea_tau = 0.005` via `genetic_soft_update`).
-- **Rollout Separation**: 1 vectorized env for the RL actor (always full $H$, seeds buffer); `pop_size` vectorized envs for the ES population.
-- **Thesis**: gain comes from cheap fitness evaluation, not the critic (prefix-h200 ≈ SC-ERL). `rl_only` = TD3 control (no population/gene flow). TD controller and critic uncertainty are diagnosed negative results, not methods to fix. Plan: `TODO.md`.
-- **Metrics**: WandB x-axis is always `env_steps` (`wandb.define_metric("*", step_metric="env_steps")`). Key metrics: `perf/eval_rl`, `cost/real_frac`, `prefix/h`, `p_surr`, `train/critic_loss`, `train/td_error_ema`, `screen/cem_std`.
-- **Verification**: Run `ruff check .`, `ty check`, and a tiny-budget smoke run:
-  ```bash
-  uv run python -m train total_steps=3000 algorithm.horizon=100 algorithm.pop_size=4 eval.interval=1000 eval.episodes=1 wandb.enabled=false
-  ```
-
-## Slurm (WCSS Lem)
-
-- Single benchmark runner: [`slurm_run_array.sh`](file:///Users/kuba/Home/research/usc_erl_jax/slurm_run_array.sh).
-- Suites (`SUITE`, task = cond×10+seed): `core` (5 conds, 0-49), `controls` (rl-only, sc_erl-always; 0-19), `ablation-horizon` (h100/400/800; 0-29), `all` (0-99). Submit with `scripts/submit_suite.sh <suite> <env>...`.
-- Paper envs: MuJoCo v5 HalfCheetah, Hopper, Walker2d, Ant, Swimmer, Humanoid. DMC Dog and MyoSuite (`.venv-myosuite`) stay registered.
-- Run `uv sync` on the login node prior to submissions. Jobs execute `.venv/bin/python` directly on `lem-gpu` (1x NVIDIA H100, 8 CPUs, 16GB RAM).
-- Online wandb logging default; syncs to Lustre `$PD_ROOT/wandb_logs` when offline.
+- **Budget accounting**: Every real env step goes through one `Budget` instance (`rl_steps + pop_steps == env_steps <= total_steps`). Rollouts stop stepping finished envs immediately and stop at `budget.remaining == 0` as truncation (`done=False`), so `final env_steps <= total_steps` holds strictly.
+- **Warmup**: Both `td3` and `evorainbow` collect uniform-random RL episodes only until `len(buffer) >= rl.warmup_steps` (no population rollouts or CEM updates during warmup).
+- **TD3 parity**: Standalone `td3` runs episode-by-episode (collect one RL episode, run `int(train_ratio * ep_steps)` updates), matching EvoRainbow's RL side.
+- **Logging**: Runs log `config.protocol = 4` and x-axis `env_steps` (`wandb.define_metric("*", step_metric="env_steps")`). Currently logged: `env_steps`, `perf/eval_rl`, `cost/pop_steps`, and `train/critic_loss`.
+- **Style**: 80-char line length, absolute imports only, type annotations everywhere, <=100 lines and cyclomatic complexity <=8 per function, <=5 positional parameters. No em dashes or semicolons in prose.
+- **Slurm (WCSS Lem)**: `slurm_run_array.sh` and `scripts/submit_suite.sh` run suite `main` (`td3`, `evorainbow-full`, `evorainbow-critic`, `evorainbow-hboot`, array `0-39`).

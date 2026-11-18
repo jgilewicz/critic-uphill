@@ -4,57 +4,17 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 class Transition(NamedTuple):
-    state: jnp.ndarray
-    action: jnp.ndarray
-    reward: jnp.ndarray
-    next_state: jnp.ndarray
-    done: jnp.ndarray
+    """Batch of environment transitions."""
 
-
-@jax.jit
-def _scatter(
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    next_state: jnp.ndarray,
-    done: jnp.ndarray,
-    indices: jnp.ndarray,
-    transition: Transition,
-) -> tuple[
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-]:
-    return (
-        state.at[indices].set(transition.state),
-        action.at[indices].set(transition.action),
-        reward.at[indices].set(transition.reward),
-        next_state.at[indices].set(transition.next_state),
-        done.at[indices].set(transition.done),
-    )
-
-
-@jax.jit
-def _gather(
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    next_state: jnp.ndarray,
-    done: jnp.ndarray,
-    indices: jnp.ndarray,
-) -> dict[str, jnp.ndarray]:
-    return {
-        "state": state[indices],
-        "action": action[indices],
-        "reward": reward[indices],
-        "next_state": next_state[indices],
-        "done": done[indices],
-    }
+    state: np.ndarray | jax.Array
+    action: np.ndarray | jax.Array
+    reward: np.ndarray | jax.Array
+    next_state: np.ndarray | jax.Array
+    done: np.ndarray | jax.Array
 
 
 BufferData = tuple[
@@ -62,10 +22,32 @@ BufferData = tuple[
 ]
 
 
+@jax.jit
+def _scatter(
+    data: BufferData,
+    indices: jnp.ndarray,
+    batch: BufferData,
+) -> BufferData:
+    s, a, r, ns, d = data
+    state, action, reward, next_state, done = batch
+    return (
+        s.at[indices].set(state),
+        a.at[indices].set(action),
+        r.at[indices].set(reward),
+        ns.at[indices].set(next_state),
+        d.at[indices].set(done),
+    )
+
+
+@jax.jit
+def _gather_states(data: BufferData, indices: jnp.ndarray) -> jax.Array:
+    return data[0][indices]
+
+
 def sample_batch(
     data: BufferData, size: jax.Array, key: jax.Array, batch_size: int
 ) -> dict[str, jnp.ndarray]:
-    # traceable: lets the whole TD3 update loop run inside one jit
+    """Sample a traceable uniform batch inside a jitted training loop."""
     indices = jax.random.randint(key, (batch_size,), 0, size)
     state, action, reward, next_state, done = data
     return {
@@ -77,70 +59,51 @@ def sample_batch(
     }
 
 
-class Buffer:
+class ReplayBuffer:
+    """Fixed-capacity ring replay buffer backed by JAX arrays."""
+
     def __init__(self, capacity: int, state_dim: int, action_dim: int) -> None:
         self.capacity = capacity
-        self.state = jnp.zeros((capacity, state_dim), dtype=jnp.float32)
-        self.action = jnp.zeros((capacity, action_dim), dtype=jnp.float32)
-        self.reward = jnp.zeros((capacity, 1), dtype=jnp.float32)
-        self.next_state = jnp.zeros((capacity, state_dim), dtype=jnp.float32)
-        self.done = jnp.zeros((capacity, 1), dtype=jnp.float32)
+        self._data: BufferData = (
+            jnp.zeros((capacity, state_dim), dtype=jnp.float32),
+            jnp.zeros((capacity, action_dim), dtype=jnp.float32),
+            jnp.zeros((capacity, 1), dtype=jnp.float32),
+            jnp.zeros((capacity, state_dim), dtype=jnp.float32),
+            jnp.zeros((capacity, 1), dtype=jnp.float32),
+        )
         self.ptr = 0
         self.size = 0
 
-    def add(self, transition: Transition) -> None:
-        num_envs = transition.state.shape[0]
-        indices = (self.ptr + jnp.arange(num_envs)) % self.capacity
-        transition = Transition(
-            state=transition.state.astype(jnp.float32),
-            action=transition.action.astype(jnp.float32),
-            reward=transition.reward.reshape(num_envs, 1).astype(jnp.float32),
-            next_state=transition.next_state.astype(jnp.float32),
-            done=transition.done.reshape(num_envs, 1).astype(jnp.float32),
-        )
-        (
-            self.state,
-            self.action,
-            self.reward,
-            self.next_state,
-            self.done,
-        ) = _scatter(
-            self.state,
-            self.action,
-            self.reward,
-            self.next_state,
-            self.done,
-            indices,
-            transition,
-        )
-        self.ptr = (self.ptr + num_envs) % self.capacity
-        self.size = min(self.size + num_envs, self.capacity)
-
-    def sample(self, rng: jax.Array, batch_size: int) -> dict[str, jnp.ndarray]:
-        if batch_size <= 0:
-            raise ValueError(f"batch_size must be > 0, got {batch_size}")
-        indices = jax.random.randint(rng, (batch_size,), 0, self.size)
-        return self[indices]
-
     @property
     def data(self) -> BufferData:
-        return (
-            self.state,
-            self.action,
-            self.reward,
-            self.next_state,
-            self.done,
-        )
+        """Return underlying tuple of buffer arrays."""
+        return self._data
 
-    def __getitem__(self, indices: jnp.ndarray) -> dict[str, jnp.ndarray]:
-        return _gather(
-            self.state,
-            self.action,
-            self.reward,
-            self.next_state,
-            self.done,
-            indices,
+    def add(self, transition: Transition) -> None:
+        """Insert a batch of transitions into the ring buffer."""
+        n = int(transition.state.shape[0])
+        if n == 0:
+            return
+        indices = (self.ptr + jnp.arange(n)) % self.capacity
+        batch: BufferData = (
+            jnp.asarray(transition.state, dtype=jnp.float32),
+            jnp.asarray(transition.action, dtype=jnp.float32),
+            jnp.asarray(transition.reward, dtype=jnp.float32).reshape(n, 1),
+            jnp.asarray(transition.next_state, dtype=jnp.float32),
+            jnp.asarray(transition.done, dtype=jnp.float32).reshape(n, 1),
         )
+        self._data = _scatter(self._data, indices, batch)
+        self.ptr = (self.ptr + n) % self.capacity
+        self.size = min(self.size + n, self.capacity)
+
+    def sample_states(self, key: jax.Array, count: int) -> jax.Array:
+        """Sample `count` states uniformly with replacement."""
+        if count <= 0:
+            raise ValueError(f"count must be > 0, got {count}")
+        if self.size == 0:
+            raise RuntimeError("cannot sample from an empty replay buffer")
+        indices = jax.random.randint(key, (count,), 0, self.size)
+        return _gather_states(self._data, indices)
 
     def __len__(self) -> int:
         return self.size

@@ -1,8 +1,19 @@
-from environments import deepmind_control_env as deepmind_control_env
-from environments import mujoco_env as mujoco_env
-from environments import myo_suite_env as myo_suite_env
-from environments.base import EnvSpec as EnvSpec
-from environments.base import get_spec as get_spec
-from environments.base import make_env as make_env
-from environments.base import make_vec_env as make_vec_env
-from environments.base import registered_envs as registered_envs
+from environments.base import (
+    EnvDims as EnvDims,
+)
+from environments.base import (
+    EnvPool as EnvPool,
+)
+from environments.base import (
+    env_dims as env_dims,
+)
+from environments.base import (
+    make_env as make_env,
+)
+from environments.base import (
+    make_vec_env as make_vec_env,
+)
+from environments.base import (
+    validate_env_id as validate_env_id,
+)
+from environments.mujoco_env import ALLOWED_ENVS as ALLOWED_ENVS
