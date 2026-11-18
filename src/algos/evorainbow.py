@@ -3,11 +3,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.flatten_util import ravel_pytree
 
 from agents.td3 import TD3
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
-from common.training import LogFn, PerfEvaluator, print_summary, run_warmup
+from common.training import LogFn, PerfEvaluator, print_summary
 from config import EvoRainbowAlgoConfig, RunConfig
 from environments import env_dims, make_env, make_vec_env
 from fitness import build_fitness_estimator
@@ -54,8 +55,14 @@ class EvoRainbowTrainer:
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
         )
+        init_head = ActorHead(
+            algo_cfg.embedding_dim,
+            dims.action_dim,
+            key=self._next_key(),
+            action_limit=dims.action_limit,
+        )
         self._cem = CEM(
-            jnp.zeros_like(self._agent.actor_head_flat()),
+            ravel_pytree(init_head)[0],
             self._next_key(),
             pop_size=algo_cfg.pop_size,
             sigma_init=algo_cfg.cem.sigma_init,
@@ -77,63 +84,102 @@ class EvoRainbowTrainer:
         self._key, sub = jax.random.split(self._key)
         return sub
 
-    def _step_generation(
-        self, generation: int, pending_injection: int | None
-    ) -> int | None:
-        flat_pop = self._cem.ask(self._next_key())
-        if pending_injection is not None:
-            flat_pop = flat_pop.at[pending_injection].set(
-                self._agent.actor_head_flat()
-            )
-        heads = jax.vmap(self._agent.unravel_head)(flat_pop)
+    def _random_action(self, _state: np.ndarray) -> np.ndarray:
+        limit = self._agent.action_limit
+        shape = (self._agent.action_dim,)
+        return self._seed_rng.uniform(-limit, limit, size=shape).astype(
+            np.float32
+        )
 
+    def _evaluate_population(
+        self, flat_pop: jax.Array, *, in_warmup: bool
+    ) -> tuple[jax.Array, int, int]:
+        if in_warmup or (
+            self._budget.exhausted and self._estimator.uses_real_steps
+        ):
+            zeros = jnp.zeros(self._algo.pop_size, dtype=jnp.float32)
+            return zeros, 0, 0
+        heads = jax.vmap(self._agent.unravel_head)(flat_pop)
+        pop_seed = int(self._seed_rng.integers(0, 2**31 - 1))
+        result = self._estimator.evaluate(
+            heads, self._next_key(), seed=pop_seed
+        )
+        return result.fitness, result.steps, result.real_evals
+
+    def _rollout_rl(self, *, in_warmup: bool) -> int:
         rl_seed = int(self._seed_rng.integers(0, 2**31 - 1))
+        act_fn = (
+            self._random_action
+            if in_warmup
+            else lambda s: self._agent.act(s, self._next_key())
+        )
         _, rl_steps = rollout_single_episode(
             self._rl_env,
-            lambda s: self._agent.act(s, self._next_key()),
+            act_fn,
             self._buffer,
             self._budget,
             max_steps=self._algo.horizon,
             seed=rl_seed,
         )
-        pop_steps, next_injection = self._evaluate_and_evolve(
-            generation, flat_pop, heads
+        return rl_steps
+
+    def _next_injection(
+        self, generation: int, fitness: jax.Array, *, post_warmup: bool
+    ) -> int | None:
+        period = self._algo.rl_to_ea.period
+        if post_warmup and period > 0 and (generation + 1) % period == 0:
+            return int(jnp.argmin(fitness))
+        return None
+
+    def _step_generation(
+        self, generation: int, pending_injection: int | None
+    ) -> int | None:
+        in_warmup = self._budget.rl_steps < self._algo.rl.warmup_steps
+        flat_pop = self._cem.ask(self._next_key())
+        if pending_injection is not None:
+            flat_pop = flat_pop.at[pending_injection].set(
+                self._agent.actor_head_flat()
+            )
+
+        fitness, pop_steps, real_evals = self._evaluate_population(
+            flat_pop, in_warmup=in_warmup
         )
-        gen_steps = rl_steps + pop_steps
-        num_updates = int(self._algo.rl.train_ratio * gen_steps)
+        self._cem.tell(fitness, flat_pop)
+        best_idx = int(jnp.argmax(fitness))
+        if not in_warmup and best_idx != pending_injection:
+            best_head = self._agent.unravel_head(flat_pop[best_idx])
+            self._agent.soft_update_actor_from(
+                best_head, self._algo.ea_to_rl.tau
+            )
+
+        rl_steps = self._rollout_rl(in_warmup=in_warmup)
+        post_warmup = self._budget.rl_steps >= self._algo.rl.warmup_steps
+        gen_steps = pop_steps + rl_steps
+        num_updates = (
+            int(self._algo.rl.train_ratio * gen_steps) if post_warmup else 0
+        )
         critic_loss = self._agent.update(
             self._buffer, num_updates, self._next_key()
         )
-        self._log_generation(generation, num_updates > 0, critic_loss)
-        return next_injection
-
-    def _evaluate_and_evolve(
-        self, generation: int, flat_pop: jax.Array, heads: ActorHead
-    ) -> tuple[int, int | None]:
-        if self._budget.exhausted and self._estimator.uses_real_steps:
-            return 0, None
-        pop_seed = int(self._seed_rng.integers(0, 2**31 - 1))
-        result = self._estimator.evaluate(
-            heads,
-            self._next_key(),
-            seed=pop_seed,
+        self._log_generation(
+            generation,
+            num_updates > 0,
+            critic_loss,
+            real_evals=real_evals,
+            in_warmup=in_warmup,
         )
-        self._cem.tell(result.fitness, flat_pop)
-        elite_head = self._agent.unravel_head(self._cem.elite)
-        self._agent.soft_update_actor_from(elite_head, self._algo.ea_to_rl.tau)
-        period = self._algo.rl_to_ea.period
-        scores = (
-            result.fitness[:-1] if self._algo.cem.elitism else result.fitness
+        return self._next_injection(
+            generation, fitness, post_warmup=post_warmup
         )
-        next_injection = (
-            int(jnp.argmin(scores))
-            if period > 0 and generation % period == 0
-            else None
-        )
-        return result.steps, next_injection
 
     def _log_generation(
-        self, generation: int, updated: bool, critic_loss: float
+        self,
+        generation: int,
+        updated: bool,
+        critic_loss: float,
+        *,
+        real_evals: int,
+        in_warmup: bool,
     ) -> None:
         eval_ret = self._evaluator.maybe_evaluate(
             self._agent, self._budget.env_steps
@@ -146,11 +192,12 @@ class EvoRainbowTrainer:
             metrics["train/critic_loss"] = critic_loss
         if eval_ret is not None:
             metrics["perf/eval_rl"] = eval_ret
-        if eval_ret is not None or generation == 0:
+        if eval_ret is not None or generation == 0 or not in_warmup:
             eval_str = f"{eval_ret:.1f}" if eval_ret is not None else "n/a"
             print(
                 f"gen {generation:4d} | steps {self._budget.env_steps:7d} | "
                 f"pop_steps={self._budget.pop_steps:7d} | "
+                f"real_evals={real_evals}/{self._algo.pop_size} | "
                 f"eval={eval_str} | critic_loss={critic_loss:.4f}"
             )
         if self._on_log is not None:
@@ -159,17 +206,6 @@ class EvoRainbowTrainer:
     def train(self) -> float:
         """Run warmup and EvoRainbow generations until the budget ends."""
         try:
-            run_warmup(
-                self._rl_env,
-                self._agent,
-                self._buffer,
-                self._budget,
-                warmup_steps=self._algo.rl.warmup_steps,
-                horizon=self._algo.horizon,
-                seed_rng=self._seed_rng,
-                evaluator=self._evaluator,
-                on_log=self._on_log,
-            )
             generation = 0
             pending_injection: int | None = None
             while not self._budget.exhausted:
