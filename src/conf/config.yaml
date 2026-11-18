@@ -12,7 +12,7 @@ eval_env:
   id: HalfCheetah-v5
 
 eval:
-  episodes: 5
+  episodes: 10
   interval: 5000
 
 wandb:

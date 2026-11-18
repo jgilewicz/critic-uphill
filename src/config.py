@@ -30,7 +30,7 @@ class RLConfig:
     exploration_noise: float = 0.1
     actor_lr: float = 1e-3
     critic_lr: float = 1e-3
-    batch_size: int = 256
+    batch_size: int = 128
     buffer_capacity: int = 1_000_000
     warmup_steps: int = 10_000
     train_ratio: float = 1.0
@@ -57,7 +57,7 @@ class TD3AlgoConfig:
     """Configuration for standalone TD3."""
 
     horizon: int = 1000
-    embedding_dim: int = 256
+    embedding_dim: int = 300
     rl: RLConfig = field(default_factory=RLConfig)
 
     def __post_init__(self) -> None:
@@ -76,7 +76,7 @@ class CEMConfig:
     sigma_init: float = 1e-3
     damp: float = 1e-3
     damp_limit: float = 1e-5
-    elitism: bool = True
+    elitism: bool = False
 
     def __post_init__(self) -> None:
         if self.sigma_init <= 0.0:
@@ -138,7 +138,7 @@ class EvoRainbowAlgoConfig:
     """Configuration for EvoRainbow (TD3 + CEM + surrogate fitness)."""
 
     horizon: int = 1000
-    embedding_dim: int = 256
+    embedding_dim: int = 300
     pop_size: int = 5
     cem: CEMConfig = field(default_factory=CEMConfig)
     rl: RLConfig = field(default_factory=RLConfig)
@@ -172,7 +172,7 @@ class EnvConfig:
 class RunEvalConfig:
     """Periodic evaluation schedule."""
 
-    episodes: int = 5
+    episodes: int = 10
     interval: int = 5000
 
     def __post_init__(self) -> None:
