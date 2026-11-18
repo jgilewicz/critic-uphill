@@ -11,16 +11,15 @@ from environments.mujoco_env import ALLOWED_ENVS, make_mujoco_env
 
 @dataclass(frozen=True)
 class EnvDims:
-    """Observation, action, and horizon metadata for an environment."""
+    """Observation and action metadata for an environment."""
 
     obs_dim: int
     action_dim: int
     action_limit: float
-    horizon: int
 
 
 def validate_env_id(env_id: str) -> None:
-    """Raise ValueError unless env_id is one of the supported MuJoCo v5 tasks."""
+    """Raise ValueError unless env_id is a supported MuJoCo v5 task."""
     if env_id not in ALLOWED_ENVS:
         allowed = ", ".join(ALLOWED_ENVS)
         raise ValueError(f"Unsupported env {env_id!r}; choose from: {allowed}")
@@ -34,8 +33,8 @@ def make_env(env_id: str) -> gym.Env:
     return env
 
 
-def env_dims(env_id: str, *, horizon: int | None = None) -> EnvDims:
-    """Inspect observation, action, and episode horizon dimensions."""
+def env_dims(env_id: str) -> EnvDims:
+    """Inspect observation and action dimensions."""
     env = make_env(env_id)
     try:
         obs_space = env.observation_space
@@ -43,17 +42,10 @@ def env_dims(env_id: str, *, horizon: int | None = None) -> EnvDims:
         assert isinstance(obs_space, gym.spaces.Box)
         assert isinstance(act_space, gym.spaces.Box)
         assert obs_space.shape is not None and act_space.shape is not None
-        max_steps = env.spec.max_episode_steps if env.spec is not None else None
-        resolved = (
-            horizon
-            if horizon is not None
-            else (int(max_steps) if max_steps is not None else 1000)
-        )
         return EnvDims(
             obs_dim=int(obs_space.shape[0]),
             action_dim=int(act_space.shape[0]),
             action_limit=float(act_space.high[0]),
-            horizon=resolved,
         )
     finally:
         env.close()

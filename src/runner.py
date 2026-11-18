@@ -9,12 +9,15 @@ from algos import EvoRainbowTrainer, TD3Trainer
 from config import (
     CEMConfig,
     EAToRLConfig,
+    EnvConfig,
     EvalConfig,
     EvoRainbowAlgoConfig,
     RLConfig,
     RLToEAConfig,
     RunConfig,
+    RunEvalConfig,
     TD3AlgoConfig,
+    WandbConfig,
 )
 from environments import validate_env_id
 
@@ -57,8 +60,16 @@ def _build_algorithm(
             **algo,
         )
     raise ValueError(
-        f"Unsupported algorithm.name={name!r}; choose from ('td3', 'evorainbow')"
+        f"Unsupported algorithm.name={name!r}; "
+        "choose from ('td3', 'evorainbow')"
     )
+
+
+def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
+    wb = dict(raw)
+    if "tags" in wb:
+        wb["tags"] = tuple(str(t) for t in wb["tags"])
+    return WandbConfig(**wb)
 
 
 def build_run_config(cfg: DictConfig) -> RunConfig:
@@ -68,18 +79,18 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
     if unknown:
         raise ValueError(f"Unknown top-level config keys: {unknown}")
 
-    env_id = str(raw["env"]["id"])
-    eval_env_id = str(raw["eval_env"]["id"])
-    validate_env_id(env_id)
-    validate_env_id(eval_env_id)
+    env = EnvConfig(**raw["env"])
+    eval_env = EnvConfig(**raw["eval_env"])
+    validate_env_id(env.id)
+    validate_env_id(eval_env.id)
 
     return RunConfig(
-        env_id=env_id,
-        eval_env_id=eval_env_id,
+        env=env,
+        eval_env=eval_env,
+        eval=RunEvalConfig(**raw["eval"]),
+        wandb=_build_wandb_config(raw["wandb"]),
         seed=int(raw["seed"]),
         total_steps=int(raw["total_steps"]),
-        eval_interval=int(raw["eval"]["interval"]),
-        eval_episodes=int(raw["eval"]["episodes"]),
         protocol=int(raw["protocol"]),
         algorithm=_build_algorithm(raw["algorithm"]),
     )
@@ -89,11 +100,11 @@ def run_training(cfg: DictConfig) -> float:
     """Initialize config, wandb logging, and the selected trainer."""
     run_cfg = build_run_config(cfg)
     run = wandb.init(
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        name=cfg.wandb.name,
-        tags=list(cfg.wandb.tags),
-        mode="online" if cfg.wandb.enabled else "disabled",
+        project=run_cfg.wandb.project,
+        entity=run_cfg.wandb.entity,
+        name=run_cfg.wandb.name,
+        tags=list(run_cfg.wandb.tags),
+        mode="online" if run_cfg.wandb.enabled else "disabled",
         config=cast(
             "dict[str, Any]", OmegaConf.to_container(cfg, resolve=True)
         ),

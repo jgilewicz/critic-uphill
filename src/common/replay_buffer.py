@@ -26,13 +26,10 @@ BufferData = tuple[
 def _scatter(
     data: BufferData,
     indices: jnp.ndarray,
-    state: jnp.ndarray,
-    action: jnp.ndarray,
-    reward: jnp.ndarray,
-    next_state: jnp.ndarray,
-    done: jnp.ndarray,
+    batch: BufferData,
 ) -> BufferData:
     s, a, r, ns, d = data
+    state, action, reward, next_state, done = batch
     return (
         s.at[indices].set(state),
         a.at[indices].set(action),
@@ -88,15 +85,14 @@ class ReplayBuffer:
         if n == 0:
             return
         indices = (self.ptr + jnp.arange(n)) % self.capacity
-        self._data = _scatter(
-            self._data,
-            indices,
+        batch: BufferData = (
             jnp.asarray(transition.state, dtype=jnp.float32),
             jnp.asarray(transition.action, dtype=jnp.float32),
             jnp.asarray(transition.reward, dtype=jnp.float32).reshape(n, 1),
             jnp.asarray(transition.next_state, dtype=jnp.float32),
             jnp.asarray(transition.done, dtype=jnp.float32).reshape(n, 1),
         )
+        self._data = _scatter(self._data, indices, batch)
         self.ptr = (self.ptr + n) % self.capacity
         self.size = min(self.size + n, self.capacity)
 

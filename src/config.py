@@ -162,26 +162,50 @@ class EvoRainbowAlgoConfig:
 
 
 @dataclass(frozen=True)
+class EnvConfig:
+    """Environment selection."""
+
+    id: str
+
+
+@dataclass(frozen=True)
+class RunEvalConfig:
+    """Periodic evaluation schedule."""
+
+    episodes: int = 5
+    interval: int = 5000
+
+    def __post_init__(self) -> None:
+        if self.interval < 1:
+            raise ValueError(f"eval.interval={self.interval}; must be >= 1")
+        if self.episodes < 1:
+            raise ValueError(f"eval.episodes={self.episodes}; must be >= 1")
+
+
+@dataclass(frozen=True)
+class WandbConfig:
+    """Weights & Biases logging configuration."""
+
+    enabled: bool = True
+    project: str = "critic-uphill"
+    entity: str | None = None
+    name: str | None = None
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class RunConfig:
     """Top-level training configuration resolved from Hydra."""
 
-    env_id: str
-    eval_env_id: str
+    env: EnvConfig
+    eval_env: EnvConfig
+    eval: RunEvalConfig
+    wandb: WandbConfig
     seed: int
     total_steps: int
-    eval_interval: int
-    eval_episodes: int
     protocol: int
     algorithm: TD3AlgoConfig | EvoRainbowAlgoConfig
 
     def __post_init__(self) -> None:
         if self.total_steps < 1:
             raise ValueError(f"total_steps={self.total_steps}; must be >= 1")
-        if self.eval_interval < 1:
-            raise ValueError(
-                f"eval.interval={self.eval_interval}; must be >= 1"
-            )
-        if self.eval_episodes < 1:
-            raise ValueError(
-                f"eval.episodes={self.eval_episodes}; must be >= 1"
-            )

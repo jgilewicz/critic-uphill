@@ -33,6 +33,7 @@ class PerfEvaluator:
         self.episodes = episodes
         self.seed = seed
         self._last_bucket = 0
+        self._last_eval: tuple[int, float] | None = None
 
     def maybe_evaluate(self, agent: TD3, env_steps: int) -> float | None:
         """Evaluate if env_steps crossed a new eval.interval boundary."""
@@ -40,10 +41,16 @@ class PerfEvaluator:
         if bucket <= self._last_bucket:
             return None
         self._last_bucket = bucket
-        return self.evaluate(agent)
+        return self.evaluate(agent, env_steps=env_steps)
 
-    def evaluate(self, agent: TD3) -> float:
+    def evaluate(self, agent: TD3, *, env_steps: int | None = None) -> float:
         """Run deterministic episodes and return mean episode reward."""
+        if (
+            env_steps is not None
+            and self._last_eval is not None
+            and self._last_eval[0] == env_steps
+        ):
+            return self._last_eval[1]
         total_reward = 0.0
         for i in range(self.episodes):
             obs_raw, _ = self.env.reset(seed=self.seed if i == 0 else None)
@@ -57,7 +64,10 @@ class PerfEvaluator:
                 state = np.asarray(obs_raw, dtype=np.float32)
                 total_reward += float(reward)
                 done = bool(terminated or truncated)
-        return total_reward / self.episodes
+        mean_ret = total_reward / self.episodes
+        if env_steps is not None:
+            self._last_eval = (env_steps, mean_ret)
+        return mean_ret
 
     def close(self) -> None:
         """Close the evaluation environment."""

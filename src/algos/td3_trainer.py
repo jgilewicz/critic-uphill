@@ -27,15 +27,15 @@ class TD3Trainer:
         self._algo = algo_cfg
         self._on_log = on_log
 
-        dims = env_dims(run_cfg.env_id, horizon=algo_cfg.horizon)
+        dims = env_dims(run_cfg.env.id)
         self._key = jax.random.key(run_cfg.seed)
         self._seed_rng = np.random.default_rng(run_cfg.seed)
         self._budget = Budget(run_cfg.total_steps)
-        self._env = make_env(run_cfg.env_id)
+        self._env = make_env(run_cfg.env.id)
         self._evaluator = PerfEvaluator(
-            run_cfg.eval_env_id,
-            interval=run_cfg.eval_interval,
-            episodes=run_cfg.eval_episodes,
+            run_cfg.eval_env.id,
+            interval=run_cfg.eval.interval,
+            episodes=run_cfg.eval.episodes,
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
         )
         self._buffer = ReplayBuffer(
@@ -104,7 +104,9 @@ class TD3Trainer:
             while not self._budget.exhausted:
                 self._step_episode(episode)
                 episode += 1
-            final_eval = self._evaluator.evaluate(self._agent)
+            final_eval = self._evaluator.evaluate(
+                self._agent, env_steps=self._budget.env_steps
+            )
             print_summary("td3", self._budget, final_eval)
             return final_eval
         finally:

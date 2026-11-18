@@ -31,16 +31,16 @@ class EvoRainbowTrainer:
         self._algo = algo_cfg
         self._on_log = on_log
 
-        dims = env_dims(run_cfg.env_id, horizon=algo_cfg.horizon)
+        dims = env_dims(run_cfg.env.id)
         self._key = jax.random.key(run_cfg.seed)
         self._seed_rng = np.random.default_rng(run_cfg.seed)
         self._budget = Budget(run_cfg.total_steps)
-        self._rl_env = make_env(run_cfg.env_id)
-        self._pop_pool = make_vec_env(run_cfg.env_id, algo_cfg.pop_size)
+        self._rl_env = make_env(run_cfg.env.id)
+        self._pop_pool = make_vec_env(run_cfg.env.id, algo_cfg.pop_size)
         self._evaluator = PerfEvaluator(
-            run_cfg.eval_env_id,
-            interval=run_cfg.eval_interval,
-            episodes=run_cfg.eval_episodes,
+            run_cfg.eval_env.id,
+            interval=run_cfg.eval.interval,
+            episodes=run_cfg.eval.episodes,
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
         )
         self._buffer = ReplayBuffer(
@@ -122,8 +122,11 @@ class EvoRainbowTrainer:
         elite_head = self._agent.unravel_head(self._cem.elite)
         self._agent.soft_update_actor_from(elite_head, self._algo.ea_to_rl.tau)
         period = self._algo.rl_to_ea.period
+        scores = (
+            result.fitness[:-1] if self._algo.cem.elitism else result.fitness
+        )
         next_injection = (
-            int(jnp.argmin(result.fitness))
+            int(jnp.argmin(scores))
             if period > 0 and generation % period == 0
             else None
         )
@@ -174,7 +177,9 @@ class EvoRainbowTrainer:
                     generation, pending_injection
                 )
                 generation += 1
-            final_eval = self._evaluator.evaluate(self._agent)
+            final_eval = self._evaluator.evaluate(
+                self._agent, env_steps=self._budget.env_steps
+            )
             tag = f"evorainbow-{self._algo.eval.mode}"
             print_summary(tag, self._budget, final_eval)
             return final_eval

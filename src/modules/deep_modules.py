@@ -62,8 +62,8 @@ class ActorHead(eqx.Module):
         action_limit: float = 1.0,
     ) -> None:
         self.action_limit = action_limit
-        out = eqx.nn.Linear(embedding_dim, action_dim, key=key)
-        wk, bk = jax.random.split(key)
+        k_lin, wk, bk = jax.random.split(key, 3)
+        out = eqx.nn.Linear(embedding_dim, action_dim, key=k_lin)
         weight = jax.random.uniform(
             wk, (action_dim, embedding_dim), minval=-3e-3, maxval=3e-3
         )
