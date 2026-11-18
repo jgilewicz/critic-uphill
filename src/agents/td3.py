@@ -138,17 +138,21 @@ class TD3(RLAgent):
     def update(
         self, buffer: ReplayBuffer, num_updates: int, key: jax.Array
     ) -> dict[str, float]:
-        """Run num_updates TD3 gradient steps and return mean critic loss."""
+        """Run num_updates TD3 gradient steps and return mean loss stats."""
         if num_updates <= 0 or len(buffer) == 0:
             return {}
-        self.state, critic_loss = self._train_fn(
+        self.state, stats = self._train_fn(
             self.state,
             buffer.data,
             jnp.asarray(len(buffer)),
             jnp.asarray(num_updates),
             key,
         )
-        return {"train/critic_loss": float(critic_loss)}
+        return {
+            "critic/td_loss": float(stats.critic_loss),
+            "critic/q_mean": float(stats.q_mean),
+            "actor/loss": float(stats.actor_loss),
+        }
 
     def soft_update_actor_from(self, head: ActorHead, tau: float) -> None:
         """Genetic soft update: blend elite head into online & target actor."""

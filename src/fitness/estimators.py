@@ -9,18 +9,42 @@ import numpy as np
 
 from agents.base import RLAgent
 from common.replay_buffer import ReplayBuffer
-from common.rollout import Budget, rollout_population
+from common.rollout import (
+    Budget,
+    PrefixSnapshot,
+    rollout_population,
+)
 from config import EvalConfig
 from environments import EnvPool
 
 
+_EPS = 1e-8
+
+
 @dataclass(frozen=True)
 class FitnessResult:
-    """Population fitness scores, real env steps, and full eval count."""
+    """Population fitness, real env steps, and surrogate diagnostics.
+
+    real_mask marks individuals scored by a full real episode. surrogate
+    holds surrogate scores of those individuals (valid at real_mask).
+    critic_share is the mean |gamma^H Q| / |score| of surrogate-scored ones.
+    """
 
     fitness: jax.Array
     steps: int
-    real_evals: int = 0
+    real_mask: np.ndarray
+    surrogate: np.ndarray | None = None
+    critic_share: float | None = None
+    prefix: PrefixSnapshot | None = None
+
+    @classmethod
+    def skipped(cls, pop_size: int) -> FitnessResult:
+        """Zero fitness for generations that evaluate nothing."""
+        return cls(
+            fitness=jnp.zeros(pop_size, dtype=jnp.float32),
+            steps=0,
+            real_mask=np.zeros(pop_size, dtype=bool),
+        )
 
 
 class FitnessEstimator(Protocol):
@@ -43,6 +67,16 @@ class FitnessEstimator(Protocol):
         ...
 
 
+class SurrogateEstimator(FitnessEstimator, Protocol):
+    """Fitness estimator that can also rescore individuals run for real."""
+
+    def score_real(
+        self, heads: Any, key: jax.Array, real: FitnessResult
+    ) -> np.ndarray:
+        """Surrogate scores of real-evaluated individuals, no env steps."""
+        ...
+
+
 class FullEpisodeFitness:
     """Score each individual by one full real episode (up to horizon)."""
 
@@ -56,12 +90,16 @@ class FullEpisodeFitness:
         budget: Budget,
         *,
         horizon: int,
+        prefix_h: int | None = None,
+        gamma: float = 1.0,
     ) -> None:
         self._pool = pool
         self._agent = agent
         self._buffer = buffer
         self._budget = budget
         self._horizon = horizon
+        self._prefix_h = prefix_h
+        self._gamma = gamma
 
     def evaluate(
         self,
@@ -82,12 +120,14 @@ class FullEpisodeFitness:
             discount=1.0,
             seed=seed,
             active_mask=active_mask,
+            prefix_h=self._prefix_h,
+            prefix_discount=self._gamma,
         )
-        evaluated = int(np.sum(rollout.steps_taken > 0))
         return FitnessResult(
             fitness=jnp.asarray(rollout.returns, dtype=jnp.float32),
             steps=rollout.total_steps,
-            real_evals=evaluated,
+            real_mask=rollout.steps_taken > 0,
+            prefix=rollout.prefix,
         )
 
 
@@ -119,7 +159,30 @@ class CriticBufferFitness:
         del seed, active_mask
         states = self._buffer.sample_states(key, self._critic_states)
         fitness = self._agent.q1_population_mean(heads, states)
-        return FitnessResult(fitness=fitness, steps=0, real_evals=0)
+        return FitnessResult(
+            fitness=fitness,
+            steps=0,
+            real_mask=np.zeros(fitness.shape[0], dtype=bool),
+        )
+
+    def score_real(
+        self, heads: Any, key: jax.Array, real: FitnessResult
+    ) -> np.ndarray:
+        """Mean Q1 of every head on the states used for surrogate fitness."""
+        del real
+        states = self._buffer.sample_states(key, self._critic_states)
+        return np.asarray(self._agent.q1_population_mean(heads, states))
+
+
+def _hboot_scores(
+    agent: RLAgent, heads: Any, prefix: PrefixSnapshot, gamma: float
+) -> tuple[np.ndarray, np.ndarray]:
+    q_end = np.asarray(
+        agent.q1_population_states(heads, prefix.states), dtype=np.float64
+    )
+    discounts = gamma ** prefix.steps_taken.astype(np.float64)
+    bootstrap = np.where(prefix.terminated, 0.0, discounts * q_end)
+    return prefix.returns + bootstrap, bootstrap
 
 
 class HStepBootstrapFitness:
@@ -164,24 +227,45 @@ class HStepBootstrapFitness:
             seed=seed,
             active_mask=active_mask,
         )
+        no_real = np.zeros(self._pool.num_envs, dtype=bool)
         if rollout.last_states.shape[1] == 0:
             return FitnessResult(
                 fitness=jnp.zeros(self._pool.num_envs, dtype=jnp.float32),
                 steps=0,
-                real_evals=0,
+                real_mask=no_real,
             )
-        q_end = np.asarray(
-            self._agent.q1_population_states(heads, rollout.last_states),
-            dtype=np.float64,
+        prefix = PrefixSnapshot(
+            returns=rollout.returns,
+            states=rollout.last_states,
+            terminated=rollout.terminated,
+            steps_taken=rollout.steps_taken,
         )
-        discounts = self._gamma ** rollout.steps_taken.astype(np.float64)
-        bootstrap = np.where(rollout.terminated, 0.0, discounts * q_end)
-        total = rollout.returns + bootstrap
+        total, bootstrap = _hboot_scores(
+            self._agent, heads, prefix, self._gamma
+        )
+        scored = (
+            np.ones_like(no_real)
+            if active_mask is None
+            else np.asarray(active_mask, dtype=bool)
+        )
+        share = np.abs(bootstrap[scored]) / np.maximum(
+            np.abs(total[scored]), _EPS
+        )
         return FitnessResult(
             fitness=jnp.asarray(total, dtype=jnp.float32),
             steps=rollout.total_steps,
-            real_evals=0,
+            real_mask=no_real,
+            critic_share=float(np.mean(share)),
         )
+
+    def score_real(
+        self, heads: Any, key: jax.Array, real: FitnessResult
+    ) -> np.ndarray:
+        """H-step score from the first H steps of the real episodes."""
+        del key
+        if real.prefix is None:
+            raise ValueError("hboot score_real needs a full-episode prefix")
+        return _hboot_scores(self._agent, heads, real.prefix, self._gamma)[0]
 
 
 class IndividualControlFitness:
@@ -189,7 +273,7 @@ class IndividualControlFitness:
 
     def __init__(
         self,
-        surrogate: FitnessEstimator,
+        surrogate: SurrogateEstimator,
         full: FullEpisodeFitness,
         *,
         pop_size: int,
@@ -222,7 +306,8 @@ class IndividualControlFitness:
         )
         fitness = np.zeros(self._pop_size, dtype=np.float32)
         total_steps = 0
-        real_evals = 0
+        evaluated = np.zeros(self._pop_size, dtype=bool)
+        surrogate: np.ndarray | None = None
 
         if real_mask.any():
             real_res = self._full.evaluate(
@@ -230,20 +315,28 @@ class IndividualControlFitness:
             )
             fitness[real_mask] = np.asarray(real_res.fitness)[real_mask]
             total_steps += real_res.steps
-            real_evals = real_res.real_evals
+            evaluated = real_res.real_mask
+            if evaluated.any():
+                surrogate = self._surrogate.score_real(
+                    heads, surr_key, real_res
+                )
 
         surr_mask = ~real_mask
+        critic_share = None
         if surr_mask.any():
             surr_res = self._surrogate.evaluate(
                 heads, surr_key, seed=seed, active_mask=surr_mask
             )
             fitness[surr_mask] = np.asarray(surr_res.fitness)[surr_mask]
             total_steps += surr_res.steps
+            critic_share = surr_res.critic_share
 
         return FitnessResult(
             fitness=jnp.asarray(fitness, dtype=jnp.float32),
             steps=total_steps,
-            real_evals=real_evals,
+            real_mask=evaluated,
+            surrogate=surrogate,
+            critic_share=critic_share,
         )
 
 
@@ -258,11 +351,19 @@ def build_fitness_estimator(
     gamma: float,
 ) -> FitnessEstimator:
     """Construct the configured fitness estimator with per-individual gating."""
-    full = FullEpisodeFitness(pool, agent, buffer, budget, horizon=horizon)
+    full = FullEpisodeFitness(
+        pool,
+        agent,
+        buffer,
+        budget,
+        horizon=horizon,
+        prefix_h=eval_cfg.h if eval_cfg.mode == "hboot" else None,
+        gamma=gamma,
+    )
     if eval_cfg.mode == "full":
         return full
     if eval_cfg.mode == "critic":
-        surrogate: FitnessEstimator = CriticBufferFitness(
+        surrogate: SurrogateEstimator = CriticBufferFitness(
             agent, buffer, critic_states=eval_cfg.critic_states
         )
     else:
