@@ -93,6 +93,7 @@ class FullEpisodeFitness:
         horizon: int,
         prefix_h: int | None = None,
         gamma: float = 1.0,
+        critic_states: int | None = None,
     ) -> None:
         self._pool = pool
         self._agent = agent
@@ -101,6 +102,7 @@ class FullEpisodeFitness:
         self._horizon = horizon
         self._prefix_h = prefix_h
         self._gamma = gamma
+        self._critic_states = critic_states
 
     def evaluate(
         self,
@@ -111,7 +113,6 @@ class FullEpisodeFitness:
         active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
         """Roll out active individuals up to horizon and return returns."""
-        del key
         rollout = rollout_population(
             self._pool,
             lambda states: self._agent.act_population(heads, states),
@@ -124,10 +125,18 @@ class FullEpisodeFitness:
             prefix_h=self._prefix_h,
             prefix_discount=self._gamma,
         )
+        surrogate = None
+        if self._critic_states is not None:
+            # metrics only: CEM ranks the real returns, not this score
+            states = self._buffer.sample_states(key, self._critic_states)
+            surrogate = np.asarray(
+                self._agent.q1_population_mean(heads, states)
+            )
         return FitnessResult(
             fitness=jnp.asarray(rollout.returns, dtype=jnp.float32),
             steps=rollout.total_steps,
             real_mask=rollout.steps_taken > 0,
+            surrogate=surrogate,
             prefix=rollout.prefix,
         )
 
@@ -366,6 +375,9 @@ def build_fitness_estimator(
         horizon=horizon,
         prefix_h=eval_cfg.h if eval_cfg.mode == "hboot" else None,
         gamma=gamma,
+        critic_states=(
+            eval_cfg.critic_states if eval_cfg.mode == "full" else None
+        ),
     )
     if eval_cfg.mode == "full":
         return full

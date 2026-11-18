@@ -153,7 +153,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
   - `actor_rank` is `1 + count(fitness > actor)`, so ties favour the actor.
   - SAC head distances include the unused `log_std_layer` dimensions.
 - `surr/critic_share`: `mean|gamma^H Q| / mean|total score|` over the surrogate-scored individuals (H-bootstrap only).
-- `surr/rank_corr`, `surr/top1_regret`, `surr/elite_overlap`, `surr/dist_corr`: only with at least 3 real evals in the generation (no pooling), on the really evaluated subset. `top1_regret` is `truth[argmax surrogate] - max(truth)` (<= 0, 0 is a perfect pick), elite size `max(1, n_real // 2)`, `dist_corr` is Spearman of surrogate vs `-dist_to_actor`. Flat generations (constant scores) log no ranking keys.
+- `surr/rank_corr`, `surr/top1_regret`, `surr/elite_overlap`, `surr/dist_corr`: only with at least 3 real evals in the generation (no pooling), on the really evaluated subset. In `full` mode the surrogate is mean Q1 over `eval.critic_states` (same score as `critic` mode, no env steps, metrics only, CEM still ranks the real returns), so every evaluated generation logs the keys. `top1_regret` is `truth[argmax surrogate] - max(truth)` (<= 0, 0 is a perfect pick), elite size `max(1, n_real // 2)`, `dist_corr` is Spearman of surrogate vs `-dist_to_actor`. Flat generations (constant scores) log no ranking keys.
 
 **Degeneration** (every `deg.interval=50000` steps, `deg.n_states=2000`, `deg.n_perturbations=40` per sigma in `deg.sigmas=[0.05, 0.2]`)
 
