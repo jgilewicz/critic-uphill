@@ -216,7 +216,7 @@ class IndividualControlFitness:
     ) -> FitnessResult:
         """Draw independent per-individual coins and combine fitness scores."""
         del active_mask
-        coin_key, eval_key = jax.random.split(key)
+        coin_key, real_key, surr_key = jax.random.split(key, 3)
         real_mask = np.asarray(
             jax.random.uniform(coin_key, (self._pop_size,)) < self._p_real,
             dtype=bool,
@@ -227,7 +227,7 @@ class IndividualControlFitness:
 
         if real_mask.any():
             real_res = self._full.evaluate(
-                heads, eval_key, seed=seed, active_mask=real_mask
+                heads, real_key, seed=seed, active_mask=real_mask
             )
             fitness[real_mask] = np.asarray(real_res.fitness)[real_mask]
             total_steps += real_res.steps
@@ -236,7 +236,7 @@ class IndividualControlFitness:
         surr_mask = ~real_mask
         if surr_mask.any():
             surr_res = self._surrogate.evaluate(
-                heads, eval_key, seed=seed, active_mask=surr_mask
+                heads, surr_key, seed=seed, active_mask=surr_mask
             )
             fitness[surr_mask] = np.asarray(surr_res.fitness)[surr_mask]
             total_steps += surr_res.steps

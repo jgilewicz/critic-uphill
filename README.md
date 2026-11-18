@@ -58,7 +58,7 @@ Selected automatically from `env.id` and individually overridable via CLI:
 ## Budget Accounting Rule
 
 - `total_steps` (default `1_000_000`) is a hard cap on real environment steps.
-- Every real step (warmup, RL actor rollouts, `full` episodes, `hboot` prefixes, generation-control full evals) goes through one `Budget` counter.
+- Every real step (warmup, RL actor rollouts, `full` episodes, `hboot` prefixes, per-individual full evals) goes through one `Budget` counter.
 - Finished environments stop stepping immediately (no auto-reset dummy steps).
 - Any rollout reaching the remaining budget stops immediately and marks the last transition as truncated (`done=False`), so TD targets still bootstrap.
 - Result: `final env_steps <= total_steps` holds strictly, and `rl_steps + pop_steps == env_steps`.

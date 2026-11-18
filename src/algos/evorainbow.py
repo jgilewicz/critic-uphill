@@ -144,13 +144,14 @@ class EvoRainbowTrainer:
         fitness, pop_steps, real_evals = self._evaluate_population(
             flat_pop, in_warmup=in_warmup
         )
-        self._cem.tell(fitness, flat_pop)
-        best_idx = int(jnp.argmax(fitness))
-        if not in_warmup and best_idx != pending_injection:
-            best_head = self._agent.unravel_head(flat_pop[best_idx])
-            self._agent.soft_update_actor_from(
-                best_head, self._algo.ea_to_rl.tau
-            )
+        if not self._budget.exhausted:
+            self._cem.tell(fitness, flat_pop)
+            best_idx = int(jnp.argmax(fitness))
+            if not in_warmup and best_idx != pending_injection:
+                best_head = self._agent.unravel_head(flat_pop[best_idx])
+                self._agent.soft_update_actor_from(
+                    best_head, self._algo.ea_to_rl.tau
+                )
 
         rl_steps = self._rollout_rl(in_warmup=in_warmup)
         post_warmup = self._budget.rl_steps >= self._algo.rl.warmup_steps

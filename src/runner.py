@@ -82,6 +82,34 @@ _PRESET_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _validate_preset(preset: DictConfig, preset_path: Path) -> None:
+    raw = OmegaConf.to_container(preset, resolve=False)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid preset {preset_path}: expected mapping")
+    allowed: dict[str, set[str]] = {}
+    for section, field in _PRESET_KEYS:
+        allowed.setdefault(section, set()).add(field)
+    unknown_sections = sorted(set(raw) - set(allowed))
+    if unknown_sections:
+        raise ValueError(
+            f"Unknown preset section(s) {unknown_sections} in {preset_path}; "
+            f"allowed: {sorted(allowed)}"
+        )
+    for section, values in raw.items():
+        if not isinstance(values, dict):
+            raise ValueError(
+                f"Invalid preset section {section!r} in {preset_path}: "
+                "expected mapping"
+            )
+        unknown_fields = sorted(set(values) - allowed[str(section)])
+        if unknown_fields:
+            bad = [f"{section}.{k}" for k in unknown_fields]
+            raise ValueError(
+                f"Unknown preset key(s) {bad} in {preset_path}; "
+                f"allowed fields: {sorted(allowed[str(section)])}"
+            )
+
+
 def _was_overridden(key: str) -> bool:
     if not HydraConfig.initialized():
         return False
@@ -107,6 +135,7 @@ def _apply_env_preset(cfg: DictConfig) -> None:
             f"Missing per-env preset for {env_id!r}: {preset_path}"
         )
     preset = cast("DictConfig", OmegaConf.load(preset_path))
+    _validate_preset(preset, preset_path)
     for section, field in _PRESET_KEYS:
         if not _was_overridden(f"algorithm.{section}.{field}"):
             cfg.algorithm[section][field] = preset[section][field]
