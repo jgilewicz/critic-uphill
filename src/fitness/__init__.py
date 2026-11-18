@@ -11,7 +11,7 @@ from fitness.estimators import (
     FullEpisodeFitness as FullEpisodeFitness,
 )
 from fitness.estimators import (
-    GenerationControlFitness as GenerationControlFitness,
+    IndividualControlFitness as IndividualControlFitness,
 )
 from fitness.estimators import (
     HStepBootstrapFitness as HStepBootstrapFitness,

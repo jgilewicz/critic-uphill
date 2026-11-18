@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 import wandb
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
 from algos import EvoRainbowTrainer, TD3Trainer
@@ -72,8 +74,90 @@ def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
     return WandbConfig(**wb)
 
 
+_PRESET_KEYS: tuple[tuple[str, str], ...] = (
+    ("cem", "damp"),
+    ("rl_to_ea", "period"),
+    ("ea_to_rl", "tau"),
+    ("eval", "p_real"),
+)
+
+
+def _validate_preset(preset: DictConfig, preset_path: Path) -> None:
+    raw = OmegaConf.to_container(preset, resolve=False)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid preset {preset_path}: expected mapping")
+    allowed: dict[str, set[str]] = {}
+    for section, field in _PRESET_KEYS:
+        allowed.setdefault(section, set()).add(field)
+    unknown_sections = sorted(set(raw) - set(allowed))
+    if unknown_sections:
+        raise ValueError(
+            f"Unknown preset section(s) {unknown_sections} in {preset_path}; "
+            f"allowed: {sorted(allowed)}"
+        )
+    for section, values in raw.items():
+        if not isinstance(values, dict):
+            raise ValueError(
+                f"Invalid preset section {section!r} in {preset_path}: "
+                "expected mapping"
+            )
+        unknown_fields = sorted(set(values) - allowed[str(section)])
+        if unknown_fields:
+            bad = [f"{section}.{k}" for k in unknown_fields]
+            raise ValueError(
+                f"Unknown preset key(s) {bad} in {preset_path}; "
+                f"allowed fields: {sorted(allowed[str(section)])}"
+            )
+
+
+def _was_overridden(key: str) -> bool:
+    if not HydraConfig.initialized():
+        return False
+    overrides = HydraConfig.get().overrides.task
+    return any(
+        item.lstrip("+").split("=", 1)[0].strip() == key for item in overrides
+    )
+
+
+def _apply_env_preset(cfg: DictConfig) -> None:
+    if cfg.algorithm.name != "evorainbow":
+        return
+    env_id = str(cfg.env.id)
+    preset_path = (
+        Path(__file__).resolve().parent
+        / "conf"
+        / "algorithm"
+        / "env"
+        / f"{env_id}.yaml"
+    )
+    if not preset_path.is_file():
+        raise FileNotFoundError(
+            f"Missing per-env preset for {env_id!r}: {preset_path}"
+        )
+    preset = cast("DictConfig", OmegaConf.load(preset_path))
+    _validate_preset(preset, preset_path)
+    for section, field in _PRESET_KEYS:
+        if not _was_overridden(f"algorithm.{section}.{field}"):
+            cfg.algorithm[section][field] = preset[section][field]
+
+
+def _clear_preset_p_real_for_full(
+    raw_algo: dict[str, Any], cfg: DictConfig
+) -> None:
+    eval_raw = raw_algo.get("eval")
+    if not isinstance(eval_raw, dict) or eval_raw.get("mode") != "full":
+        return
+    if _was_overridden("algorithm.eval.p_real"):
+        return
+    eval_raw["p_real"] = 0.0
+    cfg.algorithm.eval.p_real = 0.0
+
+
 def build_run_config(cfg: DictConfig) -> RunConfig:
     """Validate Hydra DictConfig and convert it into a frozen RunConfig."""
+    validate_env_id(str(cfg.env.id))
+    validate_env_id(str(cfg.eval_env.id))
+    _apply_env_preset(cfg)
     raw = cast("dict[str, Any]", OmegaConf.to_container(cfg, resolve=True))
     unknown = sorted(set(raw) - _ALLOWED_TOP_KEYS)
     if unknown:
@@ -81,8 +165,7 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
 
     env = EnvConfig(**raw["env"])
     eval_env = EnvConfig(**raw["eval_env"])
-    validate_env_id(env.id)
-    validate_env_id(eval_env.id)
+    _clear_preset_p_real_for_full(raw["algorithm"], cfg)
 
     return RunConfig(
         env=env,
@@ -99,6 +182,13 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
 def run_training(cfg: DictConfig) -> float:
     """Initialize config, wandb logging, and the selected trainer."""
     run_cfg = build_run_config(cfg)
+    if isinstance(run_cfg.algorithm, EvoRainbowAlgoConfig):
+        algo = run_cfg.algorithm
+        print(
+            f"config | env={run_cfg.env.id} | mode={algo.eval.mode} | "
+            f"damp={algo.cem.damp} | ea_to_rl.tau={algo.ea_to_rl.tau} | "
+            f"p_real={algo.eval.p_real} | period={algo.rl_to_ea.period}"
+        )
     run = wandb.init(
         project=run_cfg.wandb.project,
         entity=run_cfg.wandb.entity,

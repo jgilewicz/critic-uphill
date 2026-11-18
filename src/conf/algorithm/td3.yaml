@@ -1,8 +1,14 @@
 # @package algorithm
+# Networks match official EvoRainbow MUJOCO/EvoRainbow_core/EvoRainbow_Algs.py:
+# - SharedStateEmbedding: Linear(obs,400)->LN->tanh->Linear(400,300)->LN->tanh
+# - ActorHead: Linear(300,act)->tanh * action_limit (RL init scaled by 0.1)
+# - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
+#   output layer weight and bias scaled by 0.1
+# - Separate embedding optimizer (lr 1e-3) and grad-norm clip 10 on all nets
 name: td3
 
 horizon: 1000
-embedding_dim: 256
+embedding_dim: 300
 
 rl:
   critic_hidden_dims: [400, 300]
@@ -14,7 +20,7 @@ rl:
   exploration_noise: 0.1
   actor_lr: 1e-3
   critic_lr: 1e-3
-  batch_size: 256
+  batch_size: 128
   buffer_capacity: 1_000_000
   warmup_steps: 10_000
   train_ratio: 1.0

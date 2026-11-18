@@ -17,10 +17,11 @@ from modules.deep_modules import ActorHead
 
 @dataclass(frozen=True)
 class FitnessResult:
-    """Population fitness scores and real env steps consumed."""
+    """Population fitness scores, real env steps, and full eval count."""
 
     fitness: jax.Array
     steps: int
+    real_evals: int = 0
 
 
 class FitnessEstimator(Protocol):
@@ -32,7 +33,12 @@ class FitnessEstimator(Protocol):
         ...
 
     def evaluate(
-        self, heads: ActorHead, key: jax.Array, *, seed: int
+        self,
+        heads: ActorHead,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
         """Score a stacked population of ActorHead instances."""
         ...
@@ -59,9 +65,14 @@ class FullEpisodeFitness:
         self._horizon = horizon
 
     def evaluate(
-        self, heads: ActorHead, key: jax.Array, *, seed: int
+        self,
+        heads: ActorHead,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
-        """Roll out each individual up to horizon and return episode returns."""
+        """Roll out active individuals up to horizon and return returns."""
         del key
         rollout = rollout_population(
             self._pool,
@@ -71,10 +82,13 @@ class FullEpisodeFitness:
             max_steps=self._horizon,
             discount=1.0,
             seed=seed,
+            active_mask=active_mask,
         )
+        evaluated = int(np.sum(rollout.steps_taken > 0))
         return FitnessResult(
             fitness=jnp.asarray(rollout.returns, dtype=jnp.float32),
             steps=rollout.total_steps,
+            real_evals=evaluated,
         )
 
 
@@ -95,13 +109,18 @@ class CriticBufferFitness:
         self._critic_states = critic_states
 
     def evaluate(
-        self, heads: ActorHead, key: jax.Array, *, seed: int
+        self,
+        heads: ActorHead,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
         """Sample buffer states and evaluate mean online Q1."""
-        del seed
+        del seed, active_mask
         states = self._buffer.sample_states(key, self._critic_states)
         fitness = self._agent.q1_population_mean(heads, states)
-        return FitnessResult(fitness=fitness, steps=0)
+        return FitnessResult(fitness=fitness, steps=0, real_evals=0)
 
 
 class HStepBootstrapFitness:
@@ -127,7 +146,12 @@ class HStepBootstrapFitness:
         self._gamma = gamma
 
     def evaluate(
-        self, heads: ActorHead, key: jax.Array, *, seed: int
+        self,
+        heads: ActorHead,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
         """Run up to H real steps and bootstrap non-terminal endpoints."""
         del key
@@ -139,7 +163,14 @@ class HStepBootstrapFitness:
             max_steps=self._h,
             discount=self._gamma,
             seed=seed,
+            active_mask=active_mask,
         )
+        if rollout.last_states.shape[1] == 0:
+            return FitnessResult(
+                fitness=jnp.zeros(self._pool.num_envs, dtype=jnp.float32),
+                steps=0,
+                real_evals=0,
+            )
         q_end = np.asarray(
             self._agent.q1_population_states(heads, rollout.last_states),
             dtype=np.float64,
@@ -150,21 +181,24 @@ class HStepBootstrapFitness:
         return FitnessResult(
             fitness=jnp.asarray(total, dtype=jnp.float32),
             steps=rollout.total_steps,
+            real_evals=0,
         )
 
 
-class GenerationControlFitness:
-    """With probability p_real per generation, score with full episodes."""
+class IndividualControlFitness:
+    """Per-individual gate: full episode w.p. p_real, else surrogate."""
 
     def __init__(
         self,
         surrogate: FitnessEstimator,
         full: FullEpisodeFitness,
         *,
+        pop_size: int,
         p_real: float,
     ) -> None:
         self._surrogate = surrogate
         self._full = full
+        self._pop_size = pop_size
         self._p_real = p_real
 
     @property
@@ -173,18 +207,45 @@ class GenerationControlFitness:
         return self._surrogate.uses_real_steps or self._p_real > 0.0
 
     def evaluate(
-        self, heads: ActorHead, key: jax.Array, *, seed: int
+        self,
+        heads: ActorHead,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
-        """Draw generation coin and delegate to full or surrogate estimator."""
-        coin_key, eval_key = jax.random.split(key)
-        use_full = (
-            self._p_real > 0.0
-            and float(jax.random.uniform(coin_key)) < self._p_real
+        """Draw independent per-individual coins and combine fitness scores."""
+        del active_mask
+        coin_key, real_key, surr_key = jax.random.split(key, 3)
+        real_mask = np.asarray(
+            jax.random.uniform(coin_key, (self._pop_size,)) < self._p_real,
+            dtype=bool,
         )
-        estimator: FitnessEstimator = (
-            self._full if use_full else self._surrogate
+        fitness = np.zeros(self._pop_size, dtype=np.float32)
+        total_steps = 0
+        real_evals = 0
+
+        if real_mask.any():
+            real_res = self._full.evaluate(
+                heads, real_key, seed=seed, active_mask=real_mask
+            )
+            fitness[real_mask] = np.asarray(real_res.fitness)[real_mask]
+            total_steps += real_res.steps
+            real_evals = real_res.real_evals
+
+        surr_mask = ~real_mask
+        if surr_mask.any():
+            surr_res = self._surrogate.evaluate(
+                heads, surr_key, seed=seed, active_mask=surr_mask
+            )
+            fitness[surr_mask] = np.asarray(surr_res.fitness)[surr_mask]
+            total_steps += surr_res.steps
+
+        return FitnessResult(
+            fitness=jnp.asarray(fitness, dtype=jnp.float32),
+            steps=total_steps,
+            real_evals=real_evals,
         )
-        return estimator.evaluate(heads, eval_key, seed=seed)
 
 
 def build_fitness_estimator(
@@ -197,7 +258,7 @@ def build_fitness_estimator(
     horizon: int,
     gamma: float,
 ) -> FitnessEstimator:
-    """Construct the configured fitness estimator with generation control."""
+    """Construct the configured fitness estimator with per-individual gating."""
     full = FullEpisodeFitness(pool, agent, buffer, budget, horizon=horizon)
     if eval_cfg.mode == "full":
         return full
@@ -211,4 +272,6 @@ def build_fitness_estimator(
         )
     if eval_cfg.p_real == 0.0:
         return surrogate
-    return GenerationControlFitness(surrogate, full, p_real=eval_cfg.p_real)
+    return IndividualControlFitness(
+        surrogate, full, pop_size=pool.num_envs, p_real=eval_cfg.p_real
+    )

@@ -15,7 +15,11 @@ def _cem_ask(
     scale: float,
     pop_size: int,
 ) -> jax.Array:
-    epsilon = jax.random.normal(key, (pop_size, mu.shape[0]))
+    if pop_size % 2 == 0:
+        half = jax.random.normal(key, (pop_size // 2, mu.shape[0]))
+        epsilon = jnp.concatenate([half, -half], axis=0)
+    else:
+        epsilon = jax.random.normal(key, (pop_size, mu.shape[0]))
     return mu + scale * epsilon * jnp.sqrt(cov)
 
 
@@ -57,7 +61,7 @@ class CEM:
         damp: float = 1e-3,
         damp_limit: float = 1e-5,
         tau: float = 0.95,
-        elitism: bool = True,
+        elitism: bool = False,
     ) -> None:
         num_params = int(mean.shape[0])
         self.num_params = num_params

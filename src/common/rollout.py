@@ -105,6 +105,19 @@ def rollout_single_episode(
     return ep_return, steps
 
 
+def _initial_alive_mask(
+    pop_size: int, active_mask: np.ndarray | None
+) -> np.ndarray:
+    if active_mask is None:
+        return np.ones(pop_size, dtype=bool)
+    mask = np.asarray(active_mask, dtype=bool)
+    if mask.shape != (pop_size,):
+        raise ValueError(
+            f"active_mask must have shape ({pop_size},), got {mask.shape}"
+        )
+    return mask.copy()
+
+
 def rollout_population(
     pool: EnvPool,
     pop_act_fn: Callable[[np.ndarray], np.ndarray],
@@ -114,14 +127,24 @@ def rollout_population(
     max_steps: int,
     discount: float,
     seed: int,
+    active_mask: np.ndarray | None = None,
 ) -> PopRolloutResult:
-    """Roll out a population in parallel, stopping each env when done."""
-    states = pool.reset(seed)
+    """Roll out active population slots in parallel, stopping when done."""
     pop_size = pool.num_envs
-    alive = np.ones(pop_size, dtype=bool)
+    alive = _initial_alive_mask(pop_size, active_mask)
     terminated_all = np.zeros(pop_size, dtype=bool)
     returns = np.zeros(pop_size, dtype=np.float64)
     steps_taken = np.zeros(pop_size, dtype=np.int32)
+    if not alive.any() or budget.exhausted or max_steps <= 0:
+        return PopRolloutResult(
+            returns=returns,
+            last_states=np.zeros((pop_size, 0), dtype=np.float32),
+            terminated=terminated_all,
+            steps_taken=steps_taken,
+            total_steps=0,
+        )
+
+    states = pool.reset(seed)
     total_steps = 0
     factor = 1.0
 

@@ -1,15 +1,26 @@
 # @package algorithm
+# Networks and init match official EvoRainbow (MUJOCO/EvoRainbow_Algs.py):
+# - SharedStateEmbedding: Linear(obs,400)->LN->tanh->Linear(400,300)->LN->tanh
+# - ActorHead: Linear(300,act)->tanh * action_limit; RL actor weight and bias
+#   scaled by 0.1, CEM mu_init uses unscaled default Linear init (pop[0])
+# - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
+#   output layer weight and bias scaled by 0.1
+# - Separate embedding optimizer (lr 1e-3) and grad-norm clip 10 on all nets
+# - Per-env overrides (cem.damp, rl_to_ea.period, ea_to_rl.tau, eval.p_real)
+#   live in algorithm/env/<env.id>.yaml, applied automatically from env.id
+#   and individually overridable from the CLI.
+
 name: evorainbow
 
 horizon: 1000
-embedding_dim: 256
+embedding_dim: 300
 pop_size: 5
 
 cem:
   sigma_init: 1e-3
   damp: 1e-3
   damp_limit: 1e-5
-  elitism: true
+  elitism: false
 
 rl:
   critic_hidden_dims: [400, 300]
@@ -21,7 +32,7 @@ rl:
   exploration_noise: 0.1
   actor_lr: 1e-3
   critic_lr: 1e-3
-  batch_size: 256
+  batch_size: 128
   buffer_capacity: 1_000_000
   warmup_steps: 10_000
   train_ratio: 1.0
@@ -34,8 +45,10 @@ ea_to_rl:
 
 # Population fitness estimator: full | critic | hboot.
 # Critic surrogate (critic and hboot bootstrap) uses online critic Q1.
+# In critic/hboot modes, each individual independently gets a full episode
+# with probability eval.p_real, else the surrogate.
 eval:
   mode: hboot
   h: 200
   critic_states: 50_000
-  p_real: 0.0
+  p_real: 0.5
