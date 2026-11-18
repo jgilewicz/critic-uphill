@@ -84,6 +84,16 @@ def _q1_population_states(
     return critic_point(critic, states, actions)[:, 0]
 
 
+_GRAD_CLIP_NORM = 10.0
+
+
+def _make_adam(lr: float) -> optax.GradientTransformation:
+    return optax.chain(
+        optax.clip_by_global_norm(_GRAD_CLIP_NORM),
+        optax.adam(lr),
+    )
+
+
 class TD3:
     """TD3 agent owning actor embedding/head, twin critics, and optimizers."""
 
@@ -103,8 +113,9 @@ class TD3:
         self.embedding_dim = embedding_dim
         self.rl_cfg = rl_cfg
 
-        actor_opt = optax.adam(rl_cfg.actor_lr)
-        critic_opt = optax.adam(rl_cfg.critic_lr)
+        embedding_opt = _make_adam(1e-3)
+        actor_opt = _make_adam(rl_cfg.actor_lr)
+        critic_opt = _make_adam(rl_cfg.critic_lr)
         self.state: TD3State = init_td3(
             obs_dim,
             action_dim,
@@ -112,6 +123,7 @@ class TD3:
             action_limit=action_limit,
             key=key,
             hidden_dims=rl_cfg.critic_hidden_dims,
+            embedding_optimizer=embedding_opt,
             actor_optimizer=actor_opt,
             critic_optimizer=critic_opt,
         )
@@ -124,7 +136,12 @@ class TD3:
             policy_freq=rl_cfg.policy_freq,
             batch_size=rl_cfg.batch_size,
         )
-        self._train_fn = make_td3_train(hyperparams, actor_opt, critic_opt)
+        self._train_fn = make_td3_train(
+            hyperparams,
+            embedding_optimizer=embedding_opt,
+            actor_optimizer=actor_opt,
+            critic_optimizer=critic_opt,
+        )
         _, self._unravel_head = ravel_pytree(self.state.online.actor)
 
     @property

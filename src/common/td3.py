@@ -27,6 +27,7 @@ class TD3State(NamedTuple):
 
     online: TD3Networks
     target: TD3Networks
+    embedding_opt_state: optax.OptState
     actor_opt_state: optax.OptState
     critic_opt_state: optax.OptState
 
@@ -40,7 +41,7 @@ class TD3Hyperparams(NamedTuple):
     noise_clip: float = 0.5
     action_limit: float = 1.0
     policy_freq: int = 2
-    batch_size: int = 256
+    batch_size: int = 128
 
 
 Batch = dict[str, jnp.ndarray]
@@ -75,6 +76,7 @@ def init_td3(
     action_limit: float,
     key: jax.Array,
     hidden_dims: tuple[int, int],
+    embedding_optimizer: optax.GradientTransformation,
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TD3State:
@@ -82,7 +84,11 @@ def init_td3(
     ek, ak, c1k, c2k = jax.random.split(key, 4)
     embedding = SharedStateEmbedding(state_dim, embedding_dim, key=ek)
     actor = ActorHead(
-        embedding_dim, action_dim, key=ak, action_limit=action_limit
+        embedding_dim,
+        action_dim,
+        key=ak,
+        action_limit=action_limit,
+        init_scale=0.1,
     )
     critic1 = Critic(state_dim, action_dim, key=c1k, hidden_dims=hidden_dims)
     critic2 = Critic(state_dim, action_dim, key=c2k, hidden_dims=hidden_dims)
@@ -90,9 +96,10 @@ def init_td3(
     return TD3State(
         online=online,
         target=online,
-        actor_opt_state=actor_optimizer.init(
-            eqx.filter((embedding, actor), eqx.is_array)
+        embedding_opt_state=embedding_optimizer.init(
+            eqx.filter(embedding, eqx.is_array)
         ),
+        actor_opt_state=actor_optimizer.init(eqx.filter(actor, eqx.is_array)),
         critic_opt_state=critic_optimizer.init(
             eqx.filter((critic1, critic2), eqx.is_array)
         ),
@@ -146,20 +153,15 @@ def _critic_update(
         grads, state.critic_opt_state, eqx.filter(critics, eqx.is_array)
     )
     critic1, critic2 = eqx.apply_updates(critics, updates)
-    new_target = state.target._replace(
-        critic1=genetic_soft_update(state.target.critic1, critic1, cfg.tau),
-        critic2=genetic_soft_update(state.target.critic2, critic2, cfg.tau),
-    )
     new_online = state.online._replace(critic1=critic1, critic2=critic2)
-    new_state = state._replace(
-        online=new_online, target=new_target, critic_opt_state=opt_state
-    )
+    new_state = state._replace(online=new_online, critic_opt_state=opt_state)
     return new_state, loss
 
 
 def _actor_update(
     cfg: TD3Hyperparams,
-    optimizer: optax.GradientTransformation,
+    embedding_optimizer: optax.GradientTransformation,
+    actor_optimizer: optax.GradientTransformation,
     state: TD3State,
     batch: Batch,
 ) -> TD3State:
@@ -172,27 +174,44 @@ def _actor_update(
         return -jnp.mean(q)
 
     embedding_actor = (state.online.embedding, state.online.actor)
-    grads = eqx.filter_grad(loss_fn)(embedding_actor)
-    updates, opt_state = optimizer.update(
-        grads,
-        state.actor_opt_state,
-        eqx.filter(embedding_actor, eqx.is_array),
+    emb_grads, act_grads = eqx.filter_grad(loss_fn)(embedding_actor)
+    emb_updates, emb_opt_state = embedding_optimizer.update(
+        emb_grads,
+        state.embedding_opt_state,
+        eqx.filter(state.online.embedding, eqx.is_array),
     )
-    embedding, actor = eqx.apply_updates(embedding_actor, updates)
+    act_updates, act_opt_state = actor_optimizer.update(
+        act_grads,
+        state.actor_opt_state,
+        eqx.filter(state.online.actor, eqx.is_array),
+    )
+    embedding = eqx.apply_updates(state.online.embedding, emb_updates)
+    actor = eqx.apply_updates(state.online.actor, act_updates)
     new_target = state.target._replace(
         embedding=genetic_soft_update(
             state.target.embedding, embedding, cfg.tau
         ),
         actor=genetic_soft_update(state.target.actor, actor, cfg.tau),
+        critic1=genetic_soft_update(
+            state.target.critic1, state.online.critic1, cfg.tau
+        ),
+        critic2=genetic_soft_update(
+            state.target.critic2, state.online.critic2, cfg.tau
+        ),
     )
     new_online = state.online._replace(embedding=embedding, actor=actor)
     return state._replace(
-        online=new_online, target=new_target, actor_opt_state=opt_state
+        online=new_online,
+        target=new_target,
+        embedding_opt_state=emb_opt_state,
+        actor_opt_state=act_opt_state,
     )
 
 
 def make_td3_train(
     cfg: TD3Hyperparams,
+    *,
+    embedding_optimizer: optax.GradientTransformation,
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TrainFn:
@@ -224,7 +243,11 @@ def make_td3_train(
 
             def with_actor(dyn: Any) -> Any:
                 updated = _actor_update(
-                    cfg, actor_optimizer, eqx.combine(dyn, static), batch
+                    cfg,
+                    embedding_optimizer,
+                    actor_optimizer,
+                    eqx.combine(dyn, static),
+                    batch,
                 )
                 return eqx.filter(updated, eqx.is_array)
 
