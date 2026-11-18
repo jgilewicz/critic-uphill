@@ -288,7 +288,7 @@ class WandbConfig:
     """Weights & Biases logging configuration."""
 
     enabled: bool = True
-    project: str = "critic-uphill"
+    project: str = "critic_uphill"
     entity: str | None = None
     name: str | None = None
     tags: tuple[str, ...] = ()

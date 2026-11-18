@@ -94,7 +94,6 @@ class ResetController:
                 env_steps,
                 tag,
                 {"reset/deg_offset": float(BEFORE_OFFSET)},
-                before.as_metrics(),
                 deg_before,
             )
         )
@@ -106,9 +105,7 @@ class ResetController:
             "reset/drop": before.rl_return - after.rl_return,
         }
         recovery = self._recovery(record, env_steps, after.rl_return)
-        self._log(
-            _row(env_steps, tag, event, recovery, after.as_metrics(), deg_after)
-        )
+        self._log(_row(env_steps, tag, event, recovery, deg_after))
 
     def _recovery(
         self, record: _Reset, env_steps: int, eval_rl: float
@@ -116,7 +113,10 @@ class ResetController:
         if record.recovered or eval_rl < record.eval_before:
             return {}
         record.recovered = True
-        return {"reset/recovery_steps": float(env_steps - record.step)}
+        return {
+            "reset/recovery_steps": float(env_steps - record.step),
+            "reset/recovered": 1.0,
+        }
 
     def after_iteration(
         self, env_steps: int, eval_metrics: dict[str, float] | None
@@ -154,5 +154,8 @@ class ResetController:
         for record in self._fired:
             if not record.recovered:
                 record.recovered = True
-                steps = {"reset/recovery_steps": float(env_steps - record.step)}
-                self._log_recovery(record, env_steps, steps)
+                censored = {
+                    "reset/recovery_steps": float(env_steps - record.step),
+                    "reset/recovered": 0.0,
+                }
+                self._log_recovery(record, env_steps, censored)
