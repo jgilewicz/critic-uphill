@@ -24,3 +24,8 @@ rl:
   buffer_capacity: 1_000_000
   warmup_steps: 10_000
   train_ratio: 1.0
+
+# Full network resets (standalone td3 only, enabled by algorithm=td3-reset)
+reset:
+  enabled: false
+  at_steps: [200_000, 400_000, 600_000]
