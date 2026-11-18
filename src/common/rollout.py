@@ -56,6 +56,16 @@ class Budget:
 
 
 @dataclass(frozen=True)
+class PrefixSnapshot:
+    """Population rollout state after its first h steps (or at the end)."""
+
+    returns: np.ndarray
+    states: np.ndarray
+    terminated: np.ndarray
+    steps_taken: np.ndarray
+
+
+@dataclass(frozen=True)
 class PopRolloutResult:
     """Outcome of a population rollout over an EnvPool."""
 
@@ -64,6 +74,39 @@ class PopRolloutResult:
     terminated: np.ndarray
     steps_taken: np.ndarray
     total_steps: int
+    prefix: PrefixSnapshot | None = None
+
+
+@dataclass(frozen=True)
+class EpisodeResult:
+    """Return, discounted return and first state of one evaluation episode."""
+
+    ret: float
+    discounted_ret: float
+    first_state: np.ndarray
+
+
+def evaluation_episode(
+    env: gym.Env,
+    act_fn: Callable[[np.ndarray], np.ndarray],
+    *,
+    seed: int,
+    gamma: float,
+) -> EpisodeResult:
+    """Run one full episode outside the budget and store nothing."""
+    obs_raw, _ = env.reset(seed=seed)
+    state = first_state = np.asarray(obs_raw, dtype=np.float32)
+    ret = discounted_ret = 0.0
+    factor = 1.0
+    done = False
+    while not done:
+        obs_raw, reward, terminated, truncated, _ = env.step(act_fn(state))
+        state = np.asarray(obs_raw, dtype=np.float32)
+        ret += float(reward)
+        discounted_ret += factor * float(reward)
+        factor *= gamma
+        done = bool(terminated or truncated)
+    return EpisodeResult(ret, discounted_ret, first_state)
 
 
 def rollout_single_episode(
@@ -118,6 +161,49 @@ def _initial_alive_mask(
     return mask.copy()
 
 
+class _PrefixTracker:
+    """Accumulates discounted returns over the first h steps of a rollout."""
+
+    def __init__(self, h: int, discount: float, pop_size: int) -> None:
+        self._h = h
+        self._discount = discount
+        self._returns = np.zeros(pop_size, dtype=np.float64)
+        self._factor = 1.0
+        self.snapshot: PrefixSnapshot | None = None
+
+    def observe(
+        self,
+        step: int,
+        *,
+        active: np.ndarray,
+        rewards: np.ndarray,
+        states: np.ndarray,
+        terminated: np.ndarray,
+        steps_taken: np.ndarray,
+    ) -> None:
+        if step >= self._h:
+            return
+        self._returns[active] += self._factor * rewards
+        self._factor *= self._discount
+        if step == self._h - 1:
+            self.finish(states, terminated, steps_taken)
+
+    def finish(
+        self,
+        states: np.ndarray,
+        terminated: np.ndarray,
+        steps_taken: np.ndarray,
+    ) -> PrefixSnapshot:
+        if self.snapshot is None:
+            self.snapshot = PrefixSnapshot(
+                returns=self._returns.copy(),
+                states=states.copy(),
+                terminated=terminated.copy(),
+                steps_taken=steps_taken.copy(),
+            )
+        return self.snapshot
+
+
 def rollout_population(
     pool: EnvPool,
     pop_act_fn: Callable[[np.ndarray], np.ndarray],
@@ -128,8 +214,13 @@ def rollout_population(
     discount: float,
     seed: int,
     active_mask: np.ndarray | None = None,
+    prefix_h: int | None = None,
+    prefix_discount: float = 1.0,
 ) -> PopRolloutResult:
-    """Roll out active population slots in parallel, stopping when done."""
+    """Roll out active population slots in parallel, stopping when done.
+
+    With prefix_h, also snapshot the state after the first prefix_h steps.
+    """
     pop_size = pool.num_envs
     alive = _initial_alive_mask(pop_size, active_mask)
     terminated_all = np.zeros(pop_size, dtype=bool)
@@ -147,8 +238,13 @@ def rollout_population(
     states = pool.reset(seed)
     total_steps = 0
     factor = 1.0
+    tracker = (
+        None
+        if prefix_h is None
+        else _PrefixTracker(prefix_h, prefix_discount, pop_size)
+    )
 
-    for _ in range(max_steps):
+    for step in range(max_steps):
         active = np.flatnonzero(alive)
         if len(active) == 0 or budget.remaining == 0:
             break
@@ -175,11 +271,26 @@ def rollout_population(
         terminated_all[active] |= terms
         alive[active] &= ~(terms | truncs)
         factor *= discount
+        if tracker is not None:
+            tracker.observe(
+                step,
+                active=active,
+                rewards=rewards,
+                states=states,
+                terminated=terminated_all,
+                steps_taken=steps_taken,
+            )
 
+    prefix = (
+        None
+        if tracker is None
+        else tracker.finish(states, terminated_all, steps_taken)
+    )
     return PopRolloutResult(
         returns=returns,
         last_states=states,
         terminated=terminated_all,
         steps_taken=steps_taken,
         total_steps=total_steps,
+        prefix=prefix,
     )

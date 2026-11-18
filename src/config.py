@@ -228,6 +228,40 @@ class RunEvalConfig:
 
 
 @dataclass(frozen=True)
+class DegConfig:
+    """Critic degeneration measurement schedule and size."""
+
+    interval: int = 50_000
+    n_states: int = 2000
+    n_perturbations: int = 40
+    sigmas: tuple[float, ...] = (0.05, 0.2)
+
+    def __post_init__(self) -> None:
+        _check_min("deg.interval", self.interval, 1)
+        _check_min("deg.n_states", self.n_states, 1)
+        _check_min("deg.n_perturbations", self.n_perturbations, 1)
+        if not self.sigmas:
+            raise ValueError("deg.sigmas must have at least 1 entry")
+        for sigma in self.sigmas:
+            _check_positive("deg.sigmas entry", sigma)
+
+
+@dataclass(frozen=True)
+class ProbeConfig:
+    """Truth probe: real paired episodes outside the step budget."""
+
+    enabled: bool = True
+    interval: int = 100_000
+    n_perturbations: int = 8
+    episodes: int = 3
+
+    def __post_init__(self) -> None:
+        _check_min("probe.interval", self.interval, 1)
+        _check_min("probe.n_perturbations", self.n_perturbations, 1)
+        _check_min("probe.episodes", self.episodes, 1)
+
+
+@dataclass(frozen=True)
 class WandbConfig:
     """Weights & Biases logging configuration."""
 
@@ -245,6 +279,8 @@ class RunConfig:
     env: EnvConfig
     eval_env: EnvConfig
     eval: RunEvalConfig
+    deg: DegConfig
+    probe: ProbeConfig
     wandb: WandbConfig
     seed: int
     total_steps: int
@@ -254,3 +290,9 @@ class RunConfig:
     def __post_init__(self) -> None:
         if self.total_steps < 1:
             raise ValueError(f"total_steps={self.total_steps}; must be >= 1")
+        candidates = self.deg.n_perturbations * len(self.deg.sigmas)
+        if self.probe.enabled and self.probe.n_perturbations > candidates:
+            raise ValueError(
+                f"probe.n_perturbations={self.probe.n_perturbations} exceeds "
+                f"the {candidates} perturbations measured by deg"
+            )

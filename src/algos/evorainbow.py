@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -7,10 +8,13 @@ import numpy as np
 from agents import make_agent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
-from common.training import LogFn, PerfEvaluator, print_summary
+from common.training import LogFn, print_summary
 from config import EvoRainbowAlgoConfig, RunConfig
 from environments import env_dims, make_env, make_vec_env
-from fitness import build_fitness_estimator
+from fitness import FitnessResult, build_fitness_estimator
+from metrics.diagnostics import Diagnostics
+from metrics.perf import Champion, PerfMetrics, budget_metrics
+from metrics.surrogate import SurrogateMetrics
 from modules.evo_module import CEM
 
 _EVAL_SEED_OFFSET = 10_000
@@ -36,12 +40,18 @@ class EvoRainbowTrainer:
         self._budget = Budget(run_cfg.total_steps)
         self._rl_env = make_env(run_cfg.env.id)
         self._pop_pool = make_vec_env(run_cfg.env.id, algo_cfg.pop_size)
-        self._evaluator = PerfEvaluator(
+        self._perf = PerfMetrics(
             run_cfg.eval_env.id,
             interval=run_cfg.eval.interval,
             episodes=run_cfg.eval.episodes,
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
+            gamma=algo_cfg.rl.gamma,
         )
+        self._diagnostics = Diagnostics(run_cfg, self._perf.env)
+        self._surrogate_metrics = SurrogateMetrics()
+        self._champion: Champion | None = None
+        self._individual_evals = 0
+        self._real_evals = 0
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
@@ -84,20 +94,25 @@ class EvoRainbowTrainer:
             np.float32
         )
 
-    def _evaluate_population(
-        self, flat_pop: jax.Array, *, in_warmup: bool
-    ) -> tuple[jax.Array, int, int]:
-        if in_warmup or (
-            self._budget.exhausted and self._estimator.uses_real_steps
-        ):
-            zeros = jnp.zeros(self._algo.pop_size, dtype=jnp.float32)
-            return zeros, 0, 0
+    def _should_evaluate(self, *, in_warmup: bool) -> bool:
+        exhausted = self._budget.exhausted and self._estimator.uses_real_steps
+        return not (in_warmup or exhausted)
+
+    def _evaluate_population(self, flat_pop: jax.Array) -> FitnessResult:
         heads = jax.vmap(self._agent.unravel_head)(flat_pop)
         pop_seed = int(self._seed_rng.integers(0, 2**31 - 1))
         result = self._estimator.evaluate(
             heads, self._next_key(), seed=pop_seed
         )
-        return result.fitness, result.steps, result.real_evals
+        self._individual_evals += self._algo.pop_size
+        self._real_evals += int(result.real_mask.sum())
+        return result
+
+    @property
+    def _real_frac(self) -> float:
+        if self._individual_evals == 0:
+            return 0.0
+        return self._real_evals / self._individual_evals
 
     def _rollout_rl(self, *, in_warmup: bool) -> int:
         rl_seed = int(self._seed_rng.integers(0, 2**31 - 1))
@@ -106,7 +121,7 @@ class EvoRainbowTrainer:
             if in_warmup
             else lambda s: self._agent.act(s, self._next_key())
         )
-        _, rl_steps = rollout_single_episode(
+        ep_return, rl_steps = rollout_single_episode(
             self._rl_env,
             act_fn,
             self._buffer,
@@ -114,6 +129,7 @@ class EvoRainbowTrainer:
             max_steps=self._algo.horizon,
             seed=rl_seed,
         )
+        self._perf.record_train_return(ep_return)
         return rl_steps
 
     def _next_injection(
@@ -128,18 +144,33 @@ class EvoRainbowTrainer:
         self, generation: int, pending_injection: int | None
     ) -> int | None:
         in_warmup = self._budget.rl_steps < self._algo.rl.warmup_steps
+        actor_flat = self._agent.actor_head_flat()
         flat_pop = self._cem.ask(self._next_key())
         if pending_injection is not None:
-            flat_pop = flat_pop.at[pending_injection].set(
-                self._agent.actor_head_flat()
-            )
+            flat_pop = flat_pop.at[pending_injection].set(actor_flat)
 
-        fitness, pop_steps, real_evals = self._evaluate_population(
-            flat_pop, in_warmup=in_warmup
+        evaluated = self._should_evaluate(in_warmup=in_warmup)
+        result = (
+            self._evaluate_population(flat_pop)
+            if evaluated
+            else FitnessResult.skipped(self._algo.pop_size)
         )
+        fitness = result.fitness
+        best_idx = int(jnp.argmax(fitness))
+        gen_metrics: dict[str, float] = {}
+        if evaluated:
+            self._champion = Champion(
+                self._agent.embedding,
+                self._agent.unravel_head(flat_pop[best_idx]),
+            )
+            gen_metrics = self._surrogate_metrics.measure(
+                np.asarray(flat_pop),
+                np.asarray(actor_flat),
+                result,
+                pending_injection,
+            )
         if not self._budget.exhausted:
             self._cem.tell(fitness, flat_pop)
-            best_idx = int(jnp.argmax(fitness))
             if not in_warmup and best_idx != pending_injection:
                 best_head = self._agent.unravel_head(flat_pop[best_idx])
                 self._agent.soft_update_actor_from(
@@ -148,16 +179,13 @@ class EvoRainbowTrainer:
 
         rl_steps = self._rollout_rl(in_warmup=in_warmup)
         post_warmup = self._budget.rl_steps >= self._algo.rl.warmup_steps
-        gen_steps = pop_steps + rl_steps
+        gen_steps = result.steps + rl_steps
         num_updates = (
             int(self._algo.rl.train_ratio * gen_steps) if post_warmup else 0
         )
         losses = self._agent.update(self._buffer, num_updates, self._next_key())
         self._log_generation(
-            generation,
-            losses,
-            real_evals=real_evals,
-            in_warmup=in_warmup,
+            generation, {**losses, **gen_metrics}, result, in_warmup=in_warmup
         )
         return self._next_injection(
             generation, fitness, post_warmup=post_warmup
@@ -166,29 +194,34 @@ class EvoRainbowTrainer:
     def _log_generation(
         self,
         generation: int,
-        losses: dict[str, float],
+        metrics_in: dict[str, float],
+        result: FitnessResult,
         *,
-        real_evals: int,
         in_warmup: bool,
     ) -> None:
-        eval_ret = self._evaluator.maybe_evaluate(
-            self._agent, self._budget.env_steps
+        steps = self._budget.env_steps
+        metrics = budget_metrics(self._budget, self._real_frac)
+        metrics.update(metrics_in)
+        eval_metrics = self._perf.maybe_evaluate(
+            self._agent, steps, champion=self._champion
         )
-        metrics: dict[str, float] = {
-            "env_steps": float(self._budget.env_steps),
-            "cost/pop_steps": float(self._budget.pop_steps),
-        }
-        metrics.update(losses)
-        critic_loss = losses.get("train/critic_loss", 0.0)
-        if eval_ret is not None:
-            metrics["perf/eval_rl"] = eval_ret
-        if eval_ret is not None or generation == 0 or not in_warmup:
-            eval_str = f"{eval_ret:.1f}" if eval_ret is not None else "n/a"
+        if eval_metrics is not None:
+            metrics.update(eval_metrics)
+        metrics.update(
+            self._diagnostics.maybe_measure(self._agent, self._buffer, steps)
+        )
+        if eval_metrics is not None or generation == 0 or not in_warmup:
+            eval_str = (
+                f"{eval_metrics['perf/eval_rl']:.1f}"
+                if eval_metrics is not None
+                else "n/a"
+            )
             print(
-                f"gen {generation:4d} | steps {self._budget.env_steps:7d} | "
+                f"gen {generation:4d} | steps {steps:7d} | "
                 f"pop_steps={self._budget.pop_steps:7d} | "
-                f"real_evals={real_evals}/{self._algo.pop_size} | "
-                f"eval={eval_str} | critic_loss={critic_loss:.4f}"
+                f"real_evals={int(result.real_mask.sum())}"
+                f"/{self._algo.pop_size} | eval={eval_str} | "
+                f"critic_loss={metrics.get('critic/td_loss', 0.0):.4f}"
             )
         if self._on_log is not None:
             self._on_log(metrics)
@@ -203,13 +236,13 @@ class EvoRainbowTrainer:
                     generation, pending_injection
                 )
                 generation += 1
-            final_eval = self._evaluator.evaluate(
+            final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
-            )
+            ).rl_return
             tag = f"evorainbow-{self._algo.agent}-{self._algo.eval.mode}"
             print_summary(tag, self._budget, final_eval)
             return final_eval
         finally:
             self._rl_env.close()
             self._pop_pool.close()
-            self._evaluator.close()
+            self._perf.close()

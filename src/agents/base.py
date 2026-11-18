@@ -26,6 +26,16 @@ def _act_deterministic(
 
 
 @eqx.filter_jit
+def _q1_at_actor(
+    critic: Critic,
+    embedding: SharedStateEmbedding,
+    actor: Any,
+    state: jax.Array,
+) -> jax.Array:
+    return critic(state, actor(embedding(state)))[0]
+
+
+@eqx.filter_jit
 def _act_population(
     embedding: SharedStateEmbedding,
     heads: Any,
@@ -120,12 +130,31 @@ class RLAgent(abc.ABC):
     def act(self, state: np.ndarray, key: jax.Array) -> np.ndarray:
         """Sample an exploration action."""
 
+    def act_with_head(
+        self,
+        head: Any,
+        state: np.ndarray,
+        *,
+        embedding: SharedStateEmbedding | None = None,
+    ) -> np.ndarray:
+        """Compute the deterministic action of any head over Z(s).
+
+        Uses the online embedding unless a snapshot embedding is given.
+        """
+        encoder = self.embedding if embedding is None else embedding
+        action = _act_deterministic(encoder, head, jnp.asarray(state))
+        return np.asarray(action, dtype=np.float32)
+
     def act_deterministic(self, state: np.ndarray) -> np.ndarray:
         """Compute deterministic RL actor action for evaluation."""
-        action = _act_deterministic(
-            self.embedding, self.actor_head, jnp.asarray(state)
+        return self.act_with_head(self.actor_head, state)
+
+    def q1_at_actor(self, state: np.ndarray) -> float:
+        """Online Q1(s, pi(s)) for the deterministic RL actor."""
+        q = _q1_at_actor(
+            self.critic1, self.embedding, self.actor_head, jnp.asarray(state)
         )
-        return np.asarray(action, dtype=np.float32)
+        return float(q)
 
     def act_population(self, heads: Any, states: np.ndarray) -> np.ndarray:
         """Compute deterministic actions for stacked population heads."""

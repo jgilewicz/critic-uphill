@@ -127,10 +127,10 @@ class SAC(RLAgent):
     def update(
         self, buffer: ReplayBuffer, num_updates: int, key: jax.Array
     ) -> dict[str, float]:
-        """Run num_updates SAC steps and return critic, actor, and alpha."""
+        """Run num_updates SAC steps and return mean critic/actor stats."""
         if num_updates <= 0 or len(buffer) == 0:
             return {}
-        self.state, critic_loss, actor_loss, alpha = self._train_fn(
+        self.state, stats = self._train_fn(
             self.state,
             buffer.data,
             jnp.asarray(len(buffer)),
@@ -138,9 +138,10 @@ class SAC(RLAgent):
             key,
         )
         return {
-            "train/critic_loss": float(critic_loss),
-            "train/actor_loss": float(actor_loss),
-            "train/alpha": float(alpha),
+            "critic/td_loss": float(stats.critic_loss),
+            "critic/q_mean": float(stats.q_mean),
+            "actor/loss": float(stats.actor_loss),
+            "actor/alpha": float(stats.alpha),
         }
 
     def soft_update_actor_from(

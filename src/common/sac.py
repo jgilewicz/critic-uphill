@@ -57,10 +57,19 @@ class SACOptimizers(NamedTuple):
     alpha: optax.GradientTransformation
 
 
+class SACStats(NamedTuple):
+    """Means over one fused update loop."""
+
+    critic_loss: jax.Array
+    q_mean: jax.Array
+    actor_loss: jax.Array
+    alpha: jax.Array
+
+
 Batch = dict[str, jnp.ndarray]
 SACTrainFn = Callable[
     [SACState, BufferData, jax.Array, jax.Array, jax.Array],
-    tuple[SACState, jax.Array, jax.Array, jax.Array],
+    tuple[SACState, SACStats],
 ]
 
 
@@ -132,22 +141,28 @@ def _critic_update(
     state: SACState,
     batch: Batch,
     key: jax.Array,
-) -> tuple[SACState, jax.Array]:
+) -> tuple[SACState, jax.Array, jax.Array]:
     target_q = _sac_td_target(cfg, state, batch, key)
     s, a = batch["state"], batch["action"]
 
-    def loss_fn(critics: tuple[Critic, Critic]) -> jax.Array:
+    def loss_fn(
+        critics: tuple[Critic, Critic],
+    ) -> tuple[jax.Array, jax.Array]:
         c1, c2 = critics
-        return critic_loss(c1, s, a, target_q) + critic_loss(c2, s, a, target_q)
+        loss = critic_loss(c1, s, a, target_q) + critic_loss(c2, s, a, target_q)
+        return loss, jnp.mean(critic_point(c1, s, a))
 
     critics = (state.online.critic1, state.online.critic2)
-    loss, grads = eqx.filter_value_and_grad(loss_fn)(critics)
+    (loss, q_mean), grads = eqx.filter_value_and_grad(loss_fn, has_aux=True)(
+        critics
+    )
     updates, opt_state = optimizer.update(
         grads, state.critic_opt_state, eqx.filter(critics, eqx.is_array)
     )
     critic1, critic2 = eqx.apply_updates(critics, updates)
     new_online = state.online._replace(critic1=critic1, critic2=critic2)
-    return state._replace(online=new_online, critic_opt_state=opt_state), loss
+    new_state = state._replace(online=new_online, critic_opt_state=opt_state)
+    return new_state, loss, q_mean
 
 
 def _actor_and_alpha_update(
@@ -237,17 +252,16 @@ def make_sac_train(
         size: jax.Array,
         num_updates: jax.Array,
         key: jax.Array,
-    ) -> tuple[SACState, jax.Array, jax.Array, jax.Array]:
+    ) -> tuple[SACState, SACStats]:
         dynamic, static = eqx.partition(state, eqx.is_array)
 
         def body(
-            _step: jax.Array,
-            carry: tuple[Any, jax.Array, jax.Array, jax.Array, jax.Array],
-        ) -> tuple[Any, jax.Array, jax.Array, jax.Array, jax.Array]:
-            dyn, rng, critic_sum, actor_sum, alpha_sum = carry
+            _step: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
+        ) -> tuple[Any, jax.Array, jax.Array]:
+            dyn, rng, sums = carry
             rng, sample_key, critic_key, actor_key = jax.random.split(rng, 4)
             batch = sample_batch(data, size, sample_key, cfg.batch_size)
-            cur_state, c_loss = _critic_update(
+            cur_state, c_loss, q_mean = _critic_update(
                 cfg,
                 optimizers.critic,
                 eqx.combine(dyn, static),
@@ -257,24 +271,14 @@ def make_sac_train(
             cur_state, a_loss, alpha = _actor_and_alpha_update(
                 cfg, optimizers, cur_state, batch, actor_key
             )
-            return (
-                eqx.filter(cur_state, eqx.is_array),
-                rng,
-                critic_sum + c_loss,
-                actor_sum + a_loss,
-                alpha_sum + alpha,
-            )
+            new_sums = sums + jnp.stack([c_loss, q_mean, a_loss, alpha])
+            return eqx.filter(cur_state, eqx.is_array), rng, new_sums
 
-        zeros = jnp.zeros(())
-        dynamic, _, critic_sum, actor_sum, alpha_sum = jax.lax.fori_loop(
-            0, num_updates, body, (dynamic, key, zeros, zeros, zeros)
+        dynamic, _, sums = jax.lax.fori_loop(
+            0, num_updates, body, (dynamic, key, jnp.zeros(4))
         )
-        denom = jnp.maximum(num_updates, 1)
-        return (
-            eqx.combine(dynamic, static),
-            critic_sum / denom,
-            actor_sum / denom,
-            alpha_sum / denom,
-        )
+        means = sums / jnp.maximum(num_updates, 1)
+        stats = SACStats(means[0], means[1], means[2], means[3])
+        return eqx.combine(dynamic, static), stats
 
     return train

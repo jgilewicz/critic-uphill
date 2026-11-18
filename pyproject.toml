@@ -27,6 +27,7 @@ packages = [
     "src/common",
     "src/environments",
     "src/fitness",
+    "src/metrics",
     "src/modules",
 ]
 
