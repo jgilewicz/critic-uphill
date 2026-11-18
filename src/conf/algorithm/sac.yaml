@@ -5,13 +5,13 @@
 #   (RL init scaled by 0.1, log_std clipped to [-20, 2], deterministic path
 #   tanh(mean) * action_limit, no actor target)
 # - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
-#   output layer weight and bias scaled by 0.1; Polyak target critics only
+#   output layer weight and bias scaled by 0.1, Polyak target critics only
 # - Automatic entropy tuning: learned log_alpha (init alpha=1.0), target -act_dim
 # - Separate embedding optimizer (actor_lr) and grad-norm clip 10 on all nets
-# - In EvoRainbow (agent=sac): CEM evolves the full GaussianActorHead;
-#   population rollouts and surrogate fitness use the deterministic path only;
-#   genetic soft update blends elite into online actor head only (no target);
-#   surrogate queries use online Q1.
+# - In EvoRainbow (agent=sac): CEM evolves the full GaussianActorHead.
+#   Population rollouts and surrogate fitness use the deterministic path only.
+#   Genetic soft update blends elite into online actor head only (no target).
+#   Surrogate queries use online Q1.
 name: sac
 
 horizon: 1000           # max steps per training episode

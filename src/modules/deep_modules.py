@@ -131,7 +131,7 @@ class GaussianActorHead(eqx.Module):
 
 
 class SharedStateEmbedding(eqx.Module):
-    """Shared state encoder Z(s) trained by TD3 and read by ES heads."""
+    """Shared state encoder Z(s) trained by RL agent, read by ES heads."""
 
     embedding: eqx.nn.Sequential
 

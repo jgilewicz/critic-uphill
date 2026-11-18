@@ -17,7 +17,7 @@ _EVAL_SEED_OFFSET = 10_000
 
 
 class EvoRainbowTrainer:
-    """Training loop for EvoRainbow (shared embedding, CEM, TD3, surrogate)."""
+    """EvoRainbow training loop: shared embedding, CEM, RL agent, surrogate."""
 
     def __init__(
         self,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Any
 
 import equinox as eqx
 import jax
@@ -14,12 +14,6 @@ from common.replay_buffer import ReplayBuffer
 from common.utils import critic_point
 from config import RLConfig
 from modules.deep_modules import Critic, SharedStateEmbedding
-
-
-class PolicyHead(Protocol):
-    """Protocol for policy heads evaluated deterministically on embeddings."""
-
-    def __call__(self, z: jax.Array) -> jax.Array: ...
 
 
 @eqx.filter_jit

@@ -66,6 +66,17 @@ def _build_rl_config(agent_name: str, raw: dict[str, Any]) -> RLConfig:
     return cfg_cls(**raw)
 
 
+def _pop_section(
+    algo: dict[str, Any], key: str, algo_name: str
+) -> dict[str, Any]:
+    section = algo.pop(key, None)
+    if not isinstance(section, dict):
+        raise ValueError(
+            f"Missing or invalid 'algorithm.{key}' section for {algo_name!r}"
+        )
+    return section
+
+
 def _build_section(cls: type[Any], raw: dict[str, Any], label: str) -> Any:
     _check_unknown_keys(cls, raw, label)
     return cls(**raw)
@@ -77,24 +88,34 @@ def _build_algorithm(
     algo = dict(raw)
     name = algo.pop("name", None)
     if name in RL_CONFIG_CLASSES:
-        rl = _build_rl_config(str(name), algo.pop("rl"))
+        rl = _build_rl_config(str(name), _pop_section(algo, "rl", str(name)))
         payload: dict[str, Any] = {"name": name, "rl": rl, **algo}
         _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")
         return RLAlgoConfig(**payload)
     if name == "evorainbow":
         agent = str(algo.get("agent", "td3"))
-        rl = _build_rl_config(agent, algo.pop("rl"))
+        rl = _build_rl_config(agent, _pop_section(algo, "rl", "evorainbow"))
         er_payload: dict[str, Any] = {
             "rl": rl,
-            "cem": _build_section(CEMConfig, algo.pop("cem"), "algorithm.cem"),
+            "cem": _build_section(
+                CEMConfig,
+                _pop_section(algo, "cem", "evorainbow"),
+                "algorithm.cem",
+            ),
             "rl_to_ea": _build_section(
-                RLToEAConfig, algo.pop("rl_to_ea"), "algorithm.rl_to_ea"
+                RLToEAConfig,
+                _pop_section(algo, "rl_to_ea", "evorainbow"),
+                "algorithm.rl_to_ea",
             ),
             "ea_to_rl": _build_section(
-                EAToRLConfig, algo.pop("ea_to_rl"), "algorithm.ea_to_rl"
+                EAToRLConfig,
+                _pop_section(algo, "ea_to_rl", "evorainbow"),
+                "algorithm.ea_to_rl",
             ),
             "eval": _build_section(
-                EvalConfig, algo.pop("eval"), "algorithm.eval"
+                EvalConfig,
+                _pop_section(algo, "eval", "evorainbow"),
+                "algorithm.eval",
             ),
             **algo,
         }
