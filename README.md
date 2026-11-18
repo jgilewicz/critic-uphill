@@ -4,7 +4,7 @@
 [![Equinox](https://img.shields.io/badge/Equinox-0.13+-9cf.svg)](https://github.com/patrick-kidger/equinox)
 [![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 
-JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget. Implements standalone TD3 and SAC and EvoRainbow with a TD3 or SAC RL agent (shared embedding, CEM population, and `full` / `critic` / `hboot` fitness modes) on MuJoCo v5 with Hydra configs.
+JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget. Implements standalone TD3, standalone SAC, and EvoRainbow (TD3 or SAC RL agent, shared embedding, CEM population, and `full` / `critic` / `hboot` fitness modes) on MuJoCo v5 with Hydra configs.
 
 ---
 
@@ -31,7 +31,7 @@ JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL)
                  ▼                                             ▼
      ┌───────────────────────┐                     ┌───────────────────────┐
      │  RL Agent (TD3 | SAC) │◄─ ea_to_rl (soft) ──┤   CEM ES Population   │
-     │   (ActorHead, 0.1x)   │── rl_to_ea (period)►│  (5x ActorHead, 1.0x) │
+     │ (Actor head, 0.1x)    │── rl_to_ea (period)►│  (5x ActorHead, 1.0x) │
      └───────────┬───────────┘                     └───────────┬───────────┘
                  │ (1x Env, up to H=1000)                      │ (5x EnvPool)
                  ▼                                             ▼
@@ -68,7 +68,7 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
-Shared defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `pop_size=5`, `horizon=1000`, `embedding_dim=300`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`, `rl.gamma=0.99`, `rl.tau=0.005`, `rl.batch_size=128`, `rl.warmup_steps=10_000`, `rl.train_ratio=1.0`, `rl.actor_lr=rl.critic_lr=1e-3`.
+TD3 and EvoRainbow defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `pop_size=5`, `horizon=1000`, `embedding_dim=300`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`, `rl.gamma=0.99`, `rl.tau=0.005`, `rl.batch_size=128`, `rl.warmup_steps=10_000`, `rl.train_ratio=1.0`, `rl.actor_lr=rl.critic_lr=1e-3`.
 
 SAC defaults (`src/conf/algorithm/sac.yaml`): `rl.actor_lr=rl.critic_lr=rl.alpha_lr=3e-4`, learned `alpha` (init `1.0`, target entropy `-act_dim`), `log_std` clipped to `[-20, 2]`, target critics only. Under `evorainbow algorithm.agent=sac` these apply unless overridden, and SAC-only keys need Hydra's `+` prefix (e.g. `+algorithm.rl.alpha_lr=1e-4`).
 
@@ -114,10 +114,10 @@ Smoke runs (`total_steps=3000`, `algorithm.rl.warmup_steps=1000`, `wandb.enabled
 ```bash
 just smoke td3 Hopper-v5
 just smoke sac Hopper-v5
-just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=full
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=critic
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=hboot algorithm.eval.h=50
+just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 ```
 
 ---
@@ -164,5 +164,5 @@ src/
 ├── conf/             # Hydra config.yaml, algorithm/{td3,sac,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl
-└── modules/          # Equinox SharedStateEmbedding, ActorHead, Critic, and CEM
+└── modules/          # Equinox SharedStateEmbedding, ActorHead, GaussianActorHead, Critic, and CEM
 ```
