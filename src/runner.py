@@ -12,12 +12,14 @@ from algos import EvoRainbowTrainer, RLTrainer
 from config import (
     RL_CONFIG_CLASSES,
     CEMConfig,
+    DegConfig,
     EAToRLConfig,
     EnvConfig,
     EvalConfig,
     EvoRainbowAlgoConfig,
     RLAlgoConfig,
     RLConfig,
+    ProbeConfig,
     RLToEAConfig,
     RunConfig,
     RunEvalConfig,
@@ -33,6 +35,8 @@ _ALLOWED_TOP_KEYS = frozenset(
         "env",
         "eval_env",
         "eval",
+        "deg",
+        "probe",
         "wandb",
         "algorithm",
     }
@@ -135,6 +139,14 @@ def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
     if "tags" in wb:
         wb["tags"] = tuple(str(t) for t in wb["tags"])
     return WandbConfig(**wb)
+
+
+def _build_deg_config(raw: dict[str, Any]) -> DegConfig:
+    deg = dict(raw)
+    _check_unknown_keys(DegConfig, deg, "deg")
+    if "sigmas" in deg:
+        deg["sigmas"] = tuple(float(x) for x in deg["sigmas"])
+    return DegConfig(**deg)
 
 
 _PRESET_KEYS: tuple[tuple[str, str], ...] = (
@@ -254,6 +266,8 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
         env=env,
         eval_env=eval_env,
         eval=_build_section(RunEvalConfig, raw["eval"], "eval"),
+        deg=_build_deg_config(raw["deg"]),
+        probe=_build_section(ProbeConfig, raw["probe"], "probe"),
         wandb=_build_wandb_config(raw["wandb"]),
         seed=int(raw["seed"]),
         total_steps=int(raw["total_steps"]),

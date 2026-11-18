@@ -2,7 +2,7 @@ defaults:
   - algorithm: evorainbow
   - _self_
 
-protocol: 4
+protocol: 5
 seed: 0
 total_steps: 1_000_000
 
@@ -14,6 +14,20 @@ eval_env:
 eval:
   episodes: 10
   interval: 5000
+
+# Critic degeneration measurement (no env steps)
+deg:
+  interval: 50_000
+  n_states: 2000
+  n_perturbations: 40
+  sigmas: [0.05, 0.2]
+
+# Truth probe: paired real episodes on the eval env, outside the budget
+probe:
+  enabled: true
+  interval: 100_000
+  n_perturbations: 8
+  episodes: 3
 
 wandb:
   enabled: true
