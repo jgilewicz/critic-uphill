@@ -54,6 +54,7 @@ def load(dirs: list[Path], pattern: str, protocol: int) -> list[Run]:
                 "name": data["name"],
                 "url": data.get("url"),
                 "commit": (data.get("commit") or "")[:7],
+                "config": data.get("config", {}),
                 "condition": m["condition"],
                 "env": m["env"],
                 "seed": int(m["seed"]),

@@ -49,6 +49,7 @@ def fetch_history(run: Any, cache: Path) -> dict[str, Any]:
         "url": run.url,
         "protocol": run.config.get("protocol", LEGACY_PROTOCOL),
         "commit": (run.metadata or {}).get("git", {}).get("commit"),
+        "config": dict(run.config),
         "hist": hist,
     }
     path.write_text(json.dumps(data))

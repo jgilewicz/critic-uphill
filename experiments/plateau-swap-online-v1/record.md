@@ -1,6 +1,6 @@
 # plateau-swap-online-v1: czy podmiana aktora w plateau (G-d) pomaga TD3 online
 
-- **Status:** prerejestracja 2026-11-17, przed jakimkolwiek runem.
+- **Status:** prerejestracja 2026-11-17. Bieg zakończony 2026-11-18: brak sygnału.
 - **Charakter:** eksploracyjnie, 5 seedów. Bez decyzji o metodzie: wynik wraca do uzgodnienia.
 - **Code:** branch `plateau-swap-online-v1` (od `gibo-pilot-v1`).
 - **Spec:** `experiment.toml`. Hiperparametry fazy czytane w runie z `../gibo-pilot-v1/experiment.toml` (ramię G-d), bez kopii.
@@ -74,3 +74,28 @@
 
 | krok | runy | stan |
 |---|---|---|
+| smoke GPU, job 6348789_10 (207afce) | td3-swap Walker2d s0, 120k kroków, `swap.min_step=30000`, `swap.rel_slope=1000` (tylko smoke), tag `plateau-swap-smoke` | COMPLETED 16:48. Faza przy 30k: koszt 12 441 kroków, etap 2, odrzucona (CI [-83.6, 20.6]), bez błędów. `WANDB_MODE=disabled` nie zadziałał, run zsynchronizowany online pod tagiem smoke (poza analizą) |
+| bieg, job 6351045 (207afce) | Walker2d-v5, td3 + td3-swap, s0-4, `--array=0-4,10-14`, 12 h, 1× H100, `-c 4` | COMPLETED 10/10 |
+| bieg, job 6351046 (207afce) | Hopper-v5, td3 + td3-swap, s0-4, `--array=0-4,10-14`, 12 h, 1× H100, `-c 4` | COMPLETED 10/10 |
+
+## Wyniki (2026-11-18)
+
+- **Raport:** https://claude.ai/code/artifact/37c0e809-dfff-48bb-adb7-937e1faf6b1c (`plateau_swap.html`, dane w `plateau_swap.json`, `python -m analysis.plateau_swap`).
+- **Werdykt: BRAK SYGNAŁU.** Kierunek metody zamknięty zgodnie z regułą, bez kolejnych wariantów. Nie spełnia żadnego z trzech warunków.
+  - Łącznie P(td3-swap > td3) 0.500 [0.26, 0.74] (próg 0.65).
+  - Walker2d: IQM td3-swap 3828.6 [3064, 4194] vs td3 4096.9 [3480, 5239], ×0.935, P 0.32. Spadek > 5%.
+  - Hopper: IQM 3278.8 [3141, 3414] vs 3050.4 [1674, 3348], ×1.075, P 0.68. Szerokie CI td3 przez s3 (wynik 1163).
+- **Opisowo (poza regułą):**
+  - AUC: Walker2d 2304 vs 3094, Hopper 2523 vs 2048.
+  - Dolny kwartyl: Walker2d 3503 vs 3600, Hopper 3158 vs 2650. Łącznie Q1 / IQM td3: 0.967 vs 0.871.
+- **Wyzwalacz odpala w 10/10 runów td3-swap.**
+  - 33 fazy (1-4 na run), 24 akceptacje, 6 z nich cofniętych, 0 nierozstrzygniętych, 1 krok zastępczy.
+  - Koszt fazy 13-87k kroków, odsetek budżetu w fazach 1.3-28.5% na run (mediana 16.5%).
+  - Na Hopper część akceptacji z dużym zyskiem weryfikacji wypada przy silnie ujemnym nachyleniu (dołki po załamaniu eval_rl). Hopper s3 przy 651k: akceptacja na etapie 2 mimo y line search −164, potem cofnięta.
+- **Konfiguracja:** knoby `swap` wszystkich 20 runów zgodne z prerejestracją, wszystkie na commicie 207afce.
+- **Koszt:** 35.6 GPU-h, 142.6 CPU-h (ze smoke).
+
+## Odstępstwa i zastrzeżenia (po biegu)
+
+- **Niedeterminizm GPU:** ramiona nie są parami po seedzie. Średnia eval_rl w (0, 200k], gdzie faza nie może wystartować, już się różni: Walker2d td3 479/1629/512/860/1428 vs td3-swap 349/1104/1912/378/698, Hopper 947/391/480/367/727 vs 437/674/751/899/653. Część różnic per env to szczęście seedów, nie faza. Kontrola opisowa, dodana po biegu, poza regułą.
+- **Smoke w wandb:** run `td3-swap_Walker2d-v5_s0` z tagiem `plateau-swap-smoke` (id j4xl9hel) jest online, poza analizą. Nie usunięty.

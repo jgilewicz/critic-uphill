@@ -104,3 +104,20 @@ caches = ["cache/full"]
 
 [cluster]
 ssh_host = "wcss"
+
+[[cluster.jobs]]
+id = 6351045
+label = "Walker2d-v5"
+array = "0-4,10-14"
+commit = "207afce"
+submitted = "2026-11-18"
+
+[[cluster.jobs]]
+id = 6351046
+label = "Hopper-v5"
+array = "0-4,10-14"
+commit = "207afce"
+submitted = "2026-11-18"
+
+[report]
+url = "https://claude.ai/code/artifact/37c0e809-dfff-48bb-adb7-937e1faf6b1c"

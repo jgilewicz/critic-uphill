@@ -203,6 +203,7 @@ python -m analysis.gibo ../experiments/gibo-pilot-v1/experiment.toml # G0, L, HC
 - Phase = one G-d decision of gibo-pilot-v1 (hyperparameters read from its toml): curvature on 2000 buffer states, dist_H reference from 40 sigma perturbations, random 16-dim basis, GIBO rounds, line search, verification.
 - Phase episodes count to the budget and go to the replay buffer, no TD3 updates. Accepted: online + target head swapped, 5k critic-only updates. Rollback to the pre-phase actor if the mean of the next 3 evals < the 3 before.
 - Logs `phase/*` (t, slope, cost, accepted, ci_lo/hi, stage, fallback, rolled_back, count, steps_frac).
+- `python -m analysis.plateau_swap ../experiments/plateau-swap-online-v1/experiment.toml` (after `analysis.fetch`): decision rule, trigger firing, per-run phases, eval_rl curves with phase bands, swap config vs prereg -> `plateau_swap.{json,html}`.
 
 ---
 
@@ -259,7 +260,7 @@ TARGET_ENV=Humanoid-v5 TAG=<tag> sbatch --array=0-29 slurm_run_array.sh
 │   ├── runner.py          # Training dispatch and wandb logging
 │   ├── algos/erl.py       # ERL loop, eval modes, knobs, diagnostics
 │   ├── algos/plateau_swap.py # plateau trigger + G-d actor swap phase (td3-swap)
-│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo
+│   ├── analysis/          # fetch, summary, compare, cost, pilot, stats, degeneracy, local_search, sa_pilot, curvature_es, landscape_critic, gibo, plateau_swap
 │   ├── offline/           # offline critic measures on checkpoints
 │   ├── baselines/         # SBX agents and logging callbacks
 │   ├── common/            # Buffer, TD3, rollout, surrogate, GP, utils

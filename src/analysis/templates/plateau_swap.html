@@ -1,0 +1,294 @@
+<title>Podmiana aktora w plateau</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one column, verdict -> trigger -> per-env stats -> eval_rl curves per seed with phase bands -> per-run table -> phase table -> method */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --ink-2: #4b5967;
+  --muted: #7d8996;
+  --line: #dde3ea;
+  --grid: #edf0f4;
+  --focus: #2a78d6;
+  --pos: #0f7a4f;
+  --neg: #b8432b;
+  --pos-bg: #e3f3eb;
+  --neg-bg: #f8e7e2;
+  --band: #e4e8ee;
+  --c0: #2a78d6; --c1: #eb6834; --ref: #4b5967;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+    --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+    --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+    --band: #242e38; --c0: #3987e5; --c1: #d95926; --ref: #a9b4bf;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f151b; --surface: #161e26; --ink: #e6ebf0; --ink-2: #a9b4bf;
+  --muted: #7b8794; --line: #2a3540; --grid: #1f2831; --focus: #3987e5;
+  --pos: #3fbf87; --neg: #e87a62; --pos-bg: #15302a; --neg-bg: #3a211b;
+  --band: #242e38; --c0: #3987e5; --c1: #d95926; --ref: #a9b4bf;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 30px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 19px; }
+h3 { font: 600 14px var(--f-body); }
+p { margin: 0; max-width: 72ch; }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+header { display: grid; gap: 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.facts b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); }
+.note { font-size: 13px; color: var(--ink-2); }
+section { display: grid; gap: 12px; }
+ul.find { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 86ch; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px; }
+.plots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; position: relative; }
+.big { font: 600 26px var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.sub { font-size: 12px; color: var(--muted); }
+.pill { justify-self: start; font: 600 11px var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; }
+.pill.ok { color: var(--pos); background: var(--pos-bg); }
+.pill.no { color: var(--neg); background: var(--neg-bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.sw { display: inline-block; width: 18px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.ln { display: inline-block; width: 18px; height: 2px; margin-right: 6px; vertical-align: 3px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font: 10.5px var(--f-mono); }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); vertical-align: bottom; }
+th:first-child, td:first-child, td.l, th.l { text-align: left; }
+td.hi { color: var(--pos); background: var(--pos-bg); }
+td.lo { color: var(--neg); }
+tr.grp td { font: 600 12px var(--f-body); color: var(--ink); background: var(--grid); }
+.rng { color: var(--muted); font-size: 11px; }
+.tip { position: absolute; z-index: 5; min-width: 150px; display: grid; gap: 2px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); font-size: 12px; color: var(--ink-2); pointer-events: none; }
+.tip b { color: var(--ink); }
+.tip[hidden], .dev[hidden] { display: none; }
+.method { display: grid; gap: 8px; font-size: 13px; color: var(--ink-2); max-width: 90ch; }
+.dev { border-left: 3px solid var(--neg); padding: 8px 12px; background: var(--neg-bg); border-radius: 0 6px 6px 0; font-size: 13px; color: var(--ink); max-width: 90ch; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">plateau-swap-online-v1 · online, prerejestrowane 2026-11-17 · eksploracyjnie, 5 seedów</div>
+    <h1>Czy podmiana aktora w plateau (G-d) daje TD3 wyższy wynik za ten sam 1M kroków?</h1>
+    <p class="note">td3 = obecny rl_only. td3-swap = td3 plus faza G-d z gibo-pilot-v1, odpalana przez nachylenie eval_rl z ostatnich 100k kroków. Wszystkie kroki fazy liczą się do budżetu 1M. Podmiana tylko przy dodatniej dolnej granicy CI weryfikacji, cofnięcie, gdy 3 kolejne eval_rl spadną poniżej 3 sprzed fazy.</p>
+    <div class="facts" id="facts"></div>
+    <div class="dev" id="dev" hidden></div>
+  </header>
+
+  <section>
+    <h2>Werdykt</h2>
+    <div class="grid4" id="verdict"></div>
+  </section>
+
+  <section>
+    <h2>Czy wyzwalacz odpala</h2>
+    <div class="grid4" id="trigger"></div>
+  </section>
+
+  <section>
+    <h2>Najważniejsze</h2>
+    <ul class="find" id="findings"></ul>
+  </section>
+
+  <section>
+    <h2>Wynik per środowisko</h2>
+    <p class="note">Wynik końcowy = średnia eval_rl z ostatnich 10% (≥ 900k). IQM po 5 seedach, 95% CI ze stratyfikowanego bootstrapu bez parowania. P = P(td3-swap &gt; td3) dla losowej pary seedów. Q1 = dolny kwartyl wyniku końcowego. Łącznie: P średnia po envach, Q1 z wyniku / IQM(td3) danego env.</p>
+    <div class="tablewrap" id="envTable"></div>
+  </section>
+
+  <section>
+    <h2>Krzywe eval_rl z fazami</h2>
+    <p class="note">Jeden panel = env × seed. Ten sam seed nie daje tej samej trajektorii: TD3 na GPU jest niedeterministyczny, ramiona rozjeżdżają się po 10-20k kroków, długo przed pierwszą fazą. Panele nie są więc parami. Pasy = fazy td3-swap od startu do końca (koszt w krokach).</p>
+    <div class="legend" id="legend"></div>
+    <div class="plots" id="plots"></div>
+  </section>
+
+  <section>
+    <h2>Runy</h2>
+    <p class="note">Fazy: t startu w tysiącach kroków. ✓ akceptacja, ✗ odrzucenie, ↩ cofnięta, ? bez decyzji o cofnięciu (za blisko końca). Udział = kroki faz / wszystkie kroki runu.</p>
+    <div class="tablewrap" id="runTable"></div>
+  </section>
+
+  <section>
+    <h2>Fazy</h2>
+    <p class="note">Nachylenie i średnia okna z wyzwalacza (zwrot na 100k kroków). CI = 95% t weryfikacji (etap 1 = 5 epizodów, 2 = 20). y = średnia różnica wybranej głowy w line search. † = krok zastępczy (ujemna krzywizna). Po/przed = średnie 3 eval_rl decyzji o cofnięciu.</p>
+    <div class="tablewrap" id="phaseTable"></div>
+  </section>
+
+  <section>
+    <h2>Metoda</h2>
+    <div class="method" id="method"></div>
+  </section>
+</main>
+
+<script>
+const DATA = /*DATA*/null;
+const V = DATA.verdict, T = DATA.trigger, SP = DATA.spec;
+const BASE = "td3", ARM = "td3-swap", CONDS = [BASE, ARM];
+const fmt = (v, d = 1) => Number.isFinite(v) ? v.toFixed(d) : "–";
+const pct = (v, d = 1) => Number.isFinite(v) ? `${(v * 100).toFixed(d)}%` : "–";
+const kStep = s => `${fmt(s / 1000, 0)}k`;
+const short = e => e.replace("-v5", "");
+const color = c => `var(--c${CONDS.indexOf(c)})`;
+const median = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+const seeds = [...new Set(DATA.runs.map(r => r.seed))].sort((a, b) => a - b);
+const swapRuns = DATA.runs.filter(r => r.condition === ARM);
+const allPhases = swapRuns.flatMap(r => r.phases.map(p => ({ r, p })));
+
+document.getElementById("facts").innerHTML = [
+  ["runy", DATA.runs.length], ["envy", DATA.envs.map(short).join(", ")], ["seedy", seeds.join(", ")],
+  ["budżet", `${DATA.total_steps / 1e6}M kroków`], ["commit", DATA.commits.join(", ")],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+if (DATA.config_mismatches.length) {
+  const dev = document.getElementById("dev");
+  dev.innerHTML = `<b>Konfiguracja runów różni się od prerejestracji:</b> ${DATA.config_mismatches.slice(0, 6).join("; ")}${DATA.config_mismatches.length > 6 ? ` (+${DATA.config_mismatches.length - 6})` : ""}`;
+  dev.hidden = false;
+}
+
+const card = (ok, title, rule, extra) => `<div class="card">
+  <span class="pill ${ok ? "ok" : "no"}">${ok ? "spełniony" : "niespełniony"}</span>
+  <h3>${title}</h3><div class="sub">${rule}</div><div class="sub">${extra}</div></div>`;
+const PE = DATA.per_env, PG = DATA.pooled.p_greater;
+document.getElementById("verdict").innerHTML = `<div class="card">
+  <span class="pill ${V.signal ? "ok" : "no"}">${V.signal ? "sygnał" : "brak sygnału"}</span>
+  <h3>${V.signal ? "Sygnał: następny krok 10 seedów z tą samą regułą, nic nie twierdzimy" : "Brak sygnału: kierunek metody zamknięty, bez kolejnych wariantów"}</h3>
+  <div class="sub">reguła ustalona przed biegiem, wszystkie trzy warunki muszą być spełnione</div></div>`
+  + card(V.p_ok, "P(td3-swap > td3) łącznie", `≥ ${SP.decision.p_min}, średnia po envach`, `wynik: <b>${fmt(PG.p, 3)}</b> <span class="rng">[${fmt(PG.ci[0], 2)}, ${fmt(PG.ci[1], 2)}]</span>`)
+  + card(V.iqm_ge, "IQM td3-swap ≥ td3 w obu envach", "wynik końcowy, per env", DATA.envs.map(e => `${short(e)} <b>${fmt(PE[e][ARM].iqm)}</b> vs ${fmt(PE[e][BASE].iqm)}`).join(" · "))
+  + card(V.no_drop, `Żaden env gorszy o > ${pct(SP.decision.max_env_drop, 0)}`, "IQM td3-swap / IQM td3 ≥ 0.95", DATA.envs.map(e => `${short(e)} <b>${fmt(PE[e].ratio, 3)}</b>`).join(" · "));
+
+const tcard = (title, big, sub) => `<div class="card"><h3>${title}</h3><div class="big">${big}</div><div class="sub">${sub}</div></div>`;
+document.getElementById("trigger").innerHTML =
+  tcard("Runy td3-swap bez fazy", `${T.zero}/${T.runs}`, T.mostly_zero ? "<b>w większości runów wyzwalacz nie odpalił ani razu</b>" : "wyzwalacz odpala w większości runów")
+  + tcard("Fazy", T.phases, `na run: ${T.per_run.join(", ")}`)
+  + tcard("Akceptacje", `${T.accepted}/${T.phases}`, `cofnięte ${T.rolled_back}, bez decyzji ${T.undecided}, kroki zastępcze ${T.fallback}`)
+  + tcard("Kroki w fazach", pct(median(T.steps_frac)), `mediana udziału w runie, zakres ${pct(Math.min(...T.steps_frac))} – ${pct(Math.max(...T.steps_frac))}. mediana kosztu fazy ${kStep(median(T.cost))}`);
+
+function findings() {
+  const out = [];
+  if (T.mostly_zero) out.push(`<b>Wyzwalacz w większości runów nie odpalił</b> (${T.zero}/${T.runs} runów td3-swap bez fazy). Porównanie ramion mierzy wtedy głównie szum seedów.`);
+  for (const e of DATA.envs) {
+    const s = PE[e];
+    out.push(`${short(e)}: IQM td3-swap ${fmt(s[ARM].iqm)} vs td3 ${fmt(s[BASE].iqm)} (×${fmt(s.ratio, 3)}), P ${fmt(s.p_greater.p, 2)}, AUC ${fmt(s[ARM].auc_iqm)} vs ${fmt(s[BASE].auc_iqm)}, Q1 ${fmt(s[ARM].q1)} vs ${fmt(s[BASE].q1)}.`);
+  }
+  out.push(`Łącznie: P(td3-swap > td3) ${fmt(PG.p, 3)} [${fmt(PG.ci[0], 2)}, ${fmt(PG.ci[1], 2)}], dolny kwartyl wyniku / IQM td3: td3-swap ${fmt(DATA.pooled.q1[ARM], 3)}, td3 ${fmt(DATA.pooled.q1[BASE], 3)}.`);
+  const pre = (e, c) => { const v = DATA.runs.filter(r => r.env === e && r.condition === c).map(r => r.pre); return v.reduce((a, b) => a + b, 0) / v.length; };
+  out.push(`Przed jakąkolwiek fazą (eval_rl w (0, ${kStep(SP.trigger.min_step)}], opisowo, poza regułą) ramiona już się różnią: ${DATA.envs.map(e => `${short(e)} td3-swap ${fmt(pre(e, ARM), 0)} vs td3 ${fmt(pre(e, BASE), 0)}`).join(", ")}. Część różnic per env to szczęście seedów, nie faza.`);
+  const kept = T.accepted - T.rolled_back - T.undecided;
+  out.push(`Fazy: ${T.phases}, akceptacje ${T.accepted}, z tego cofnięte ${T.rolled_back}, utrzymane ${kept}, bez decyzji ${T.undecided}. Mediana udziału kroków w fazach ${pct(median(T.steps_frac))}.`);
+  return out;
+}
+document.getElementById("findings").innerHTML = findings().map(f => `<li>${f}</li>`).join("");
+
+const civ = (s, c) => `${fmt(s[c].iqm)} <span class="rng">[${fmt(s[c].ci[0])}, ${fmt(s[c].ci[1])}]</span>`;
+document.getElementById("envTable").innerHTML = `<table>
+  <tr><th>env</th><th>IQM td3</th><th>IQM td3-swap</th><th>swap / td3</th><th>P(swap &gt; td3)</th><th>AUC td3</th><th>AUC swap</th><th>Q1 td3</th><th>Q1 swap</th></tr>
+  ${DATA.envs.map(e => { const s = PE[e]; return `<tr><td class="l">${short(e)}</td><td class="n">${civ(s, BASE)}</td><td class="n">${civ(s, ARM)}</td>
+    <td class="n ${s.ratio >= 1 ? "hi" : s.ratio < 1 - SP.decision.max_env_drop ? "lo" : ""}">${fmt(s.ratio, 3)}</td><td class="n">${fmt(s.p_greater.p, 2)}</td>
+    <td class="n">${fmt(s[BASE].auc_iqm)}</td><td class="n">${fmt(s[ARM].auc_iqm)}</td><td class="n">${fmt(s[BASE].q1)}</td><td class="n">${fmt(s[ARM].q1)}</td></tr>`; }).join("")}
+  <tr class="grp"><td class="l">łącznie</td><td colspan="3"></td><td class="n">${fmt(PG.p, 3)}</td><td colspan="2"></td><td class="n">${fmt(DATA.pooled.q1[BASE], 3)}</td><td class="n">${fmt(DATA.pooled.q1[ARM], 3)}</td></tr></table>`;
+
+function scale(lo, hi, a, b) { return x => a + (x - lo) / (hi - lo || 1) * (b - a); }
+function ticks(lo, hi, n = 4) {
+  const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0 || 1));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= step0) || mag;
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(+t.toFixed(10));
+  return out;
+}
+const bandFill = p => !p.accepted ? "var(--band)" : p.rolled_back ? "var(--neg-bg)" : "var(--pos-bg)";
+const phaseMark = p => !p.accepted ? "✗" : p.rolled_back === true ? "✓↩" : p.rolled_back === null ? "✓?" : "✓";
+
+function panel(env, seed) {
+  const W = 360, H = 210, L = 44, R = 10, T0 = 10, B = 26;
+  const rs = CONDS.map(c => DATA.runs.find(r => r.env === env && r.seed === seed && r.condition === c)).filter(Boolean);
+  const ys = rs.flatMap(r => r.curve.y);
+  const ylo = Math.min(0, ...ys), yhi = Math.max(...ys) * 1.04;
+  const xs = scale(0, DATA.total_steps, L, W - R), yv = scale(ylo, yhi, H - B, T0);
+  const parts = [];
+  const sw = rs.find(r => r.condition === ARM);
+  for (const p of sw ? sw.phases : []) parts.push(`<rect x="${xs(p.t)}" y="${T0}" width="${Math.max(1.5, xs(p.end) - xs(p.t))}" height="${H - B - T0}" fill="${bandFill(p)}"/>`);
+  for (const t of ticks(ylo, yhi)) parts.push(`<line x1="${L}" x2="${W - R}" y1="${yv(t)}" y2="${yv(t)}" stroke="var(--grid)"/><text x="${L - 6}" y="${yv(t) + 3.5}" text-anchor="end">${fmt(t, 0)}</text>`);
+  for (const t of [0, 250000, 500000, 750000, 1000000]) parts.push(`<text x="${xs(t)}" y="${H - B + 14}" text-anchor="middle">${t ? `${t / 1e6}M` : "0"}</text>`);
+  parts.push(`<line x1="${xs(DATA.final_start)}" x2="${xs(DATA.final_start)}" y1="${T0}" y2="${H - B}" stroke="var(--ref)" stroke-dasharray="2 3"/>`);
+  for (const r of rs) {
+    const d = r.curve.x.map((x, i) => `${i ? "L" : "M"}${xs(x).toFixed(1)} ${yv(r.curve.y[i]).toFixed(1)}`).join("");
+    parts.push(`<path d="${d}" fill="none" stroke="${color(r.condition)}" stroke-width="2" stroke-linejoin="round"/>`);
+  }
+  parts.push(`<line class="xh" x1="0" x2="0" y1="${T0}" y2="${H - B}" stroke="var(--ref)" visibility="hidden"/><rect class="hit" x="${L}" y="${T0}" width="${W - R - L}" height="${H - B - T0}" fill="transparent"/>`);
+  const el = document.createElement("div");
+  el.className = "card";
+  const fin = rs.map(r => `${r.condition} ${fmt(r.final, 0)}`).join(" · ");
+  el.innerHTML = `<h3>${short(env)} · seed ${seed}</h3><div class="sub">wynik końcowy: ${fin}${sw ? ` · fazy ${sw.phases.map(p => `${kStep(p.t)} ${phaseMark(p)}`).join(", ") || "brak"}` : ""}</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="eval_rl ${short(env)} seed ${seed}">${parts.join("")}</svg>`;
+  const tip = document.createElement("div");
+  tip.className = "tip"; tip.hidden = true; el.appendChild(tip);
+  const svg = el.querySelector("svg"), xh = el.querySelector(".xh"), hit = el.querySelector(".hit");
+  hit.addEventListener("mousemove", ev => {
+    const box = svg.getBoundingClientRect(), sx = (ev.clientX - box.left) / box.width * W;
+    const step = (sx - L) / (W - R - L) * DATA.total_steps;
+    const rows = rs.map(r => { let i = 0, best = Infinity; r.curve.x.forEach((x, j) => { const d = Math.abs(x - step); if (d < best) { best = d; i = j; } }); return { r, i }; });
+    const ph = sw && sw.phases.find(p => step >= p.t && step <= p.end);
+    tip.innerHTML = `<b>${kStep(step)} kroków</b>` + rows.map(({ r, i }) => `<span><span class="ln" style="background:${color(r.condition)}"></span>${r.condition}: ${fmt(r.curve.y[i], 0)}</span>`).join("")
+      + (ph ? `<span>faza od ${kStep(ph.t)}, koszt ${kStep(ph.cost)}, ${phaseMark(ph)}</span>` : "");
+    tip.hidden = false;
+    xh.setAttribute("x1", sx); xh.setAttribute("x2", sx); xh.setAttribute("visibility", "visible");
+    const cr = el.getBoundingClientRect(), px = ev.clientX - cr.left;
+    tip.style.left = `${Math.min(px + 12, cr.width - 170)}px`;
+    tip.style.top = `${ev.clientY - cr.top + 14}px`;
+  });
+  hit.addEventListener("mouseleave", () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); });
+  return el;
+}
+document.getElementById("legend").innerHTML = CONDS.map(c => `<span><span class="ln" style="background:${color(c)}"></span>${c}</span>`).join("")
+  + `<span><span class="sw" style="background:var(--pos-bg)"></span>faza: podmiana utrzymana</span><span><span class="sw" style="background:var(--neg-bg)"></span>podmiana cofnięta</span><span><span class="sw" style="background:var(--band)"></span>odrzucona</span><span>przerywana linia = start okna wyniku końcowego</span>`;
+const plots = document.getElementById("plots");
+for (const e of DATA.envs) for (const s of seeds) plots.appendChild(panel(e, s));
+
+const link = r => r.url ? `<a href="${r.url}">${r.name}</a>` : r.name;
+document.getElementById("runTable").innerHTML = `<table>
+  <tr><th>run</th><th>wynik końcowy</th><th>AUC</th><th>kroki</th><th>fazy</th><th>akc.</th><th>cofn.</th><th>udział</th><th class="l">fazy (t)</th></tr>
+  ${DATA.envs.map(e => `<tr class="grp"><td colspan="9" class="l">${short(e)}</td></tr>` + seeds.flatMap(s => CONDS.map(c => DATA.runs.find(r => r.env === e && r.seed === s && r.condition === c)).filter(Boolean)).map(r => `<tr>
+    <td class="l"><span class="ln" style="background:${color(r.condition)}"></span>${link(r)}</td><td class="n">${fmt(r.final)}</td><td class="n">${fmt(r.auc)}</td><td class="n">${kStep(r.end)}</td>
+    <td class="n">${r.condition === ARM ? r.n_phases : "–"}</td><td class="n">${r.condition === ARM ? r.accepted : "–"}</td><td class="n">${r.condition === ARM ? r.rolled_back : "–"}</td>
+    <td class="n">${r.condition === ARM ? pct(r.steps_frac) : "–"}</td><td class="l">${r.phases.map(p => `${fmt(p.t / 1000, 0)} ${phaseMark(p)}`).join(" · ")}</td></tr>`).join("")).join("")}</table>`;
+
+document.getElementById("phaseTable").innerHTML = allPhases.length ? `<table>
+  <tr><th>run</th><th>t</th><th>nachylenie</th><th>średnia okna</th><th>koszt</th><th>decyzja</th><th>CI</th><th>etap</th><th>krotność</th><th>y</th><th>dist_H ref</th><th>po / przed</th></tr>
+  ${allPhases.map(({ r, p }) => `<tr><td class="l">${short(r.env)} s${r.seed} #${fmt(p.count, 0)}</td><td class="n">${kStep(p.t)}</td><td class="n">${fmt(p.slope)}</td><td class="n">${fmt(p.window_mean)}</td>
+    <td class="n">${kStep(p.cost)}</td><td class="l">${phaseMark(p)}</td><td class="n ${p.accepted ? "hi" : ""}">[${fmt(p.ci_lo)}, ${fmt(p.ci_hi)}]</td><td class="n">${fmt(p.stage, 0)}</td>
+    <td class="n">${fmt(p.multiple, 2)}×${p.fallback ? "†" : ""}</td><td class="n">${fmt(p.candidate_y)}</td><td class="n">${fmt(p.ref_dist_h, 4)}</td>
+    <td class="n ${p.rolled_back ? "lo" : ""}">${p.after_mean == null ? "–" : `${fmt(p.after_mean)} / ${fmt(p.before_mean)}`}</td></tr>`).join("")}</table>` : `<p class="note" style="padding:12px">Żadna faza nie odpaliła.</p>`;
+
+const TR = SP.trigger, PH = SP.phase;
+document.getElementById("method").innerHTML = [
+  `Wyzwalacz po każdej eval_rl (co 5k kroków), tylko przeszłość: t ≥ ${kStep(TR.min_step)}, nachylenie MNK eval_rl z (t − ${kStep(TR.window)}, t] ≤ ${pct(TR.rel_slope)} |średniej z okna| na 100k kroków, karencja ${kStep(TR.cooldown)} od końca poprzedniej fazy, faza nie startuje, gdy t + ${kStep(TR.max_phase_steps)} > 1M.`,
+  `Faza = jedna decyzja G-d z gibo-pilot-v1 bez zmian hiperparametrów: losowa ortonormalna baza 16 wymiarów głowy aktora, GIBO 8 rund × 4 zapytania z epizodami parowanymi, line search 0.25/0.5/1× odniesienia dist_H, krok zastępczy przy ujemnej krzywiźnie, weryfikacja 5 → 20 epizodów, akceptacja przy dolnej granicy 95% CI > 0.`,
+  `H_a i dist_H na ${PH.states} stanach z najnowszych ${kStep(PH.state_window)} przejść bufora, odniesienie dist_H z ${PH.perturbations} zaburzeń σ = ${fmt(PH.sigma["Walker2d-v5"], 4)} (Hopper bierze σ Walker2d). Wszystkie epizody fazy liczą się do budżetu i trafiają do bufora, bez aktualizacji TD3.`,
+  `Po akceptacji: głowa aktora online i docelowego ← wybrana, ${SP.swap.critic_updates} aktualizacji samego krytyka, potem normalny TD3. Cofnięcie: średnia ${SP.swap.rollback_evals} eval_rl po podmianie &lt; średnia ${SP.swap.rollback_evals} przed fazą → przywrócenie aktora i jego Adama, krytyk zostaje.`,
+  `Wynik końcowy i AUC jak w paper-v2. Statystyki bez parowania, bootstrap 10 000 prób. Z 5 seedami na env reguła wykrywa tylko duże efekty: brak sygnału nie znaczy, że ramiona są równe.`,
+].map(s => `<div>${s}</div>`).join("");
+</script>
