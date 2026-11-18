@@ -1,25 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 import gymnasium as gym
 
-from environments.base import EnvSpec, register_backend, register_env
-
-_TASKS = (
+ALLOWED_ENVS: tuple[str, ...] = (
     "HalfCheetah-v5",
     "Hopper-v5",
     "Walker2d-v5",
     "Ant-v5",
     "Swimmer-v5",
-    "Humanoid-v5",
 )
 
 
-def _make(task_id: str, /, **kwargs: Any) -> gym.Env:
-    return gym.make(task_id, **kwargs)
-
-
-register_backend("mujoco", _make)
-for _task in _TASKS:
-    register_env(EnvSpec(name=_task, backend="mujoco", task_id=_task))
+def make_mujoco_env(task_id: str) -> gym.Env:
+    """Instantiate a MuJoCo v5 gymnasium environment."""
+    return gym.make(task_id)

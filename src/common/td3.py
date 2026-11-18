@@ -14,6 +14,8 @@ from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
 
 
 class TD3Networks(NamedTuple):
+    """Online or target network tuple for TD3."""
+
     embedding: SharedStateEmbedding
     actor: ActorHead
     critic1: Critic
@@ -21,13 +23,17 @@ class TD3Networks(NamedTuple):
 
 
 class TD3State(NamedTuple):
+    """Full trainable and target state of TD3."""
+
     online: TD3Networks
     target: TD3Networks
     actor_opt_state: optax.OptState
     critic_opt_state: optax.OptState
 
 
-class TD3Config(NamedTuple):
+class TD3Hyperparams(NamedTuple):
+    """Static TD3 hyperparameters passed into jitted updates."""
+
     gamma: float = 0.99
     tau: float = 0.005
     policy_noise: float = 0.2
@@ -38,19 +44,17 @@ class TD3Config(NamedTuple):
 
 
 Batch = dict[str, jnp.ndarray]
-# (state, buffer data, buffer size, num_updates, key)
-#   -> (state, mean critic loss, mean absolute TD error)
 TrainFn = Callable[
     [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
-    tuple[TD3State, jax.Array, jax.Array],
+    tuple[TD3State, jax.Array],
 ]
 
 
 def critic_point(
-    critic: Critic, states: jax.Array, actions: jax.Array, key: jax.Array
+    critic: Critic, states: jax.Array, actions: jax.Array
 ) -> jax.Array:
-    keys = jax.random.split(key, states.shape[0])
-    return jax.vmap(lambda s, a, k: critic(s, a, key=k))(states, actions, keys)
+    """Evaluate Q(s, a) over a batch of states and actions."""
+    return jax.vmap(critic)(states, actions)
 
 
 def critic_loss(
@@ -58,9 +62,9 @@ def critic_loss(
     states: jax.Array,
     actions: jax.Array,
     target: jax.Array,
-    key: jax.Array,
 ) -> jax.Array:
-    return jnp.mean((critic_point(critic, states, actions, key) - target) ** 2)
+    """Compute MSE Bellman loss for one critic."""
+    return jnp.mean((critic_point(critic, states, actions) - target) ** 2)
 
 
 def init_td3(
@@ -68,19 +72,20 @@ def init_td3(
     action_dim: int,
     embedding_dim: int,
     *,
+    action_limit: float,
     key: jax.Array,
     hidden_dims: tuple[int, int],
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TD3State:
+    """Initialize online/target TD3 networks and optimizer states."""
     ek, ak, c1k, c2k = jax.random.split(key, 4)
-    embedding = SharedStateEmbedding(
-        state_dim, embedding_dim=embedding_dim, key=ek
+    embedding = SharedStateEmbedding(state_dim, embedding_dim, key=ek)
+    actor = ActorHead(
+        embedding_dim, action_dim, key=ak, action_limit=action_limit
     )
-    actor = ActorHead(embedding_dim, action_dim, key=ak)
     critic1 = Critic(state_dim, action_dim, key=c1k, hidden_dims=hidden_dims)
     critic2 = Critic(state_dim, action_dim, key=c2k, hidden_dims=hidden_dims)
-
     online = TD3Networks(embedding, actor, critic1, critic2)
     return TD3State(
         online=online,
@@ -95,14 +100,13 @@ def init_td3(
 
 
 def _td_target(
-    cfg: TD3Config,
+    cfg: TD3Hyperparams,
     state: TD3State,
     batch: Batch,
     key: jax.Array,
 ) -> jax.Array:
-    noise_key, q1_key, q2_key = jax.random.split(key, 3)
     noise = jnp.clip(
-        jax.random.normal(noise_key, batch["action"].shape) * cfg.policy_noise,
+        jax.random.normal(key, batch["action"].shape) * cfg.policy_noise,
         -cfg.noise_clip,
         cfg.noise_clip,
     )
@@ -114,8 +118,8 @@ def _td_target(
         cfg.action_limit,
     )
     q_next = jnp.minimum(
-        critic_point(target.critic1, batch["next_state"], next_action, q1_key),
-        critic_point(target.critic2, batch["next_state"], next_action, q2_key),
+        critic_point(target.critic1, batch["next_state"], next_action),
+        critic_point(target.critic2, batch["next_state"], next_action),
     )
     return jax.lax.stop_gradient(
         batch["reward"] + cfg.gamma * (1.0 - batch["done"]) * q_next
@@ -123,25 +127,18 @@ def _td_target(
 
 
 def _critic_update(
-    cfg: TD3Config,
+    cfg: TD3Hyperparams,
     optimizer: optax.GradientTransformation,
     state: TD3State,
     batch: Batch,
     key: jax.Array,
-) -> tuple[TD3State, jax.Array, jax.Array]:
-    target_key, k1, k2, err_key = jax.random.split(key, 4)
-    target_q = _td_target(cfg, state, batch, target_key)
+) -> tuple[TD3State, jax.Array]:
+    target_q = _td_target(cfg, state, batch, key)
     s, a = batch["state"], batch["action"]
 
-    # Compute absolute Bellman TD error: delta = |r + gamma*Q_target - Q_online|
-    q1 = critic_point(state.online.critic1, s, a, err_key)
-    td_error = jnp.mean(jnp.abs(target_q - q1))
-
     def loss_fn(critics: tuple[Critic, Critic]) -> jax.Array:
-        critic1, critic2 = critics
-        return critic_loss(critic1, s, a, target_q, k1) + critic_loss(
-            critic2, s, a, target_q, k2
-        )
+        c1, c2 = critics
+        return critic_loss(c1, s, a, target_q) + critic_loss(c2, s, a, target_q)
 
     critics = (state.online.critic1, state.online.critic2)
     loss, grads = eqx.filter_value_and_grad(loss_fn)(critics)
@@ -157,22 +154,21 @@ def _critic_update(
     new_state = state._replace(
         online=new_online, target=new_target, critic_opt_state=opt_state
     )
-    return new_state, loss, td_error
+    return new_state, loss
 
 
 def _actor_update(
-    cfg: TD3Config,
+    cfg: TD3Hyperparams,
     optimizer: optax.GradientTransformation,
     state: TD3State,
     batch: Batch,
-    key: jax.Array,
 ) -> TD3State:
     def loss_fn(
         embedding_actor: tuple[SharedStateEmbedding, ActorHead],
     ) -> jax.Array:
         embedding, actor = embedding_actor
         action = jax.vmap(actor)(jax.vmap(embedding)(batch["state"]))
-        q = critic_point(state.online.critic1, batch["state"], action, key)
+        q = critic_point(state.online.critic1, batch["state"], action)
         return -jnp.mean(q)
 
     embedding_actor = (state.online.embedding, state.online.actor)
@@ -196,10 +192,12 @@ def _actor_update(
 
 
 def make_td3_train(
-    cfg: TD3Config,
+    cfg: TD3Hyperparams,
     actor_optimizer: optax.GradientTransformation,
     critic_optimizer: optax.GradientTransformation,
 ) -> TrainFn:
+    """Compile a fused multi-step TD3 update loop."""
+
     @eqx.filter_jit
     def train(
         state: TD3State,
@@ -207,16 +205,16 @@ def make_td3_train(
         size: jax.Array,
         num_updates: jax.Array,
         key: jax.Array,
-    ) -> tuple[TD3State, jax.Array, jax.Array]:
+    ) -> tuple[TD3State, jax.Array]:
         dynamic, static = eqx.partition(state, eqx.is_array)
 
         def body(
-            step: jax.Array, carry: tuple[Any, jax.Array, jax.Array, jax.Array]
-        ) -> tuple[Any, jax.Array, jax.Array, jax.Array]:
-            dynamic, key, critic_sum, td_err_sum = carry
-            key, sample_key, critic_key, actor_key = jax.random.split(key, 4)
+            step: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
+        ) -> tuple[Any, jax.Array, jax.Array]:
+            dynamic, key, critic_sum = carry
+            key, sample_key, critic_key = jax.random.split(key, 3)
             batch = sample_batch(data, size, sample_key, cfg.batch_size)
-            state, loss, td_err = _critic_update(
+            cur_state, loss = _critic_update(
                 cfg,
                 critic_optimizer,
                 eqx.combine(dynamic, static),
@@ -225,142 +223,23 @@ def make_td3_train(
             )
 
             def with_actor(dyn: Any) -> Any:
-                new_state = _actor_update(
-                    cfg,
-                    actor_optimizer,
-                    eqx.combine(dyn, static),
-                    batch,
-                    actor_key,
+                updated = _actor_update(
+                    cfg, actor_optimizer, eqx.combine(dyn, static), batch
                 )
-                return eqx.filter(new_state, eqx.is_array)
+                return eqx.filter(updated, eqx.is_array)
 
-            def skip(dyn: Any) -> Any:
-                return dyn
-
-            dynamic = jax.lax.cond(
+            next_dyn = jax.lax.cond(
                 step % cfg.policy_freq == 0,
                 with_actor,
-                skip,
-                eqx.filter(state, eqx.is_array),
+                lambda dyn: dyn,
+                eqx.filter(cur_state, eqx.is_array),
             )
-            return dynamic, key, critic_sum + loss, td_err_sum + td_err
+            return next_dyn, key, critic_sum + loss
 
-        dynamic, _, critic_sum, td_err_sum = jax.lax.fori_loop(
-            0, num_updates, body, (dynamic, key, jnp.zeros(()), jnp.zeros(()))
+        dynamic, _, critic_sum = jax.lax.fori_loop(
+            0, num_updates, body, (dynamic, key, jnp.zeros(()))
         )
-        norm_updates = jnp.maximum(num_updates, 1)
-        return (
-            eqx.combine(dynamic, static),
-            critic_sum / norm_updates,
-            td_err_sum / norm_updates,
-        )
-
-    return train
-
-
-# (state, buffer data, buffer size, num_updates, key) -> (state, mean loss)
-FQETrainFn = Callable[
-    [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
-    tuple[TD3State, jax.Array],
-]
-# (state, buffer data, extra data, num_updates, key) -> (state, mean loss)
-MixedFQETrainFn = Callable[
-    [TD3State, BufferData, BufferData, jax.Array, jax.Array],
-    tuple[TD3State, jax.Array],
-]
-
-
-def _fqe_loop(
-    cfg: TD3Config,
-    critic_optimizer: optax.GradientTransformation,
-    state: TD3State,
-    sample: Callable[[jax.Array], Batch],
-    *,
-    num_updates: jax.Array,
-    key: jax.Array,
-) -> tuple[TD3State, jax.Array]:
-    # fitted Q evaluation: the TD3 critic update with target.embedding and
-    # target.actor held at the evaluated policy, and no actor update
-    dynamic, static = eqx.partition(state, eqx.is_array)
-
-    def body(
-        _: jax.Array, carry: tuple[Any, jax.Array, jax.Array]
-    ) -> tuple[Any, jax.Array, jax.Array]:
-        dynamic, key, loss_sum = carry
-        key, sample_key, critic_key = jax.random.split(key, 3)
-        state, loss, _ = _critic_update(
-            cfg,
-            critic_optimizer,
-            eqx.combine(dynamic, static),
-            sample(sample_key),
-            critic_key,
-        )
-        return eqx.filter(state, eqx.is_array), key, loss_sum + loss
-
-    dynamic, _, loss_sum = jax.lax.fori_loop(
-        0, num_updates, body, (dynamic, key, jnp.zeros(()))
-    )
-    loss = loss_sum / jnp.maximum(num_updates, 1)
-    return eqx.combine(dynamic, static), loss
-
-
-def make_fqe_train(
-    cfg: TD3Config, critic_optimizer: optax.GradientTransformation
-) -> FQETrainFn:
-    @eqx.filter_jit
-    def train(
-        state: TD3State,
-        data: BufferData,
-        size: jax.Array,
-        num_updates: jax.Array,
-        key: jax.Array,
-    ) -> tuple[TD3State, jax.Array]:
-        def sample(k: jax.Array) -> Batch:
-            return sample_batch(data, size, k, cfg.batch_size)
-
-        return _fqe_loop(
-            cfg,
-            critic_optimizer,
-            state,
-            sample,
-            num_updates=num_updates,
-            key=key,
-        )
-
-    return train
-
-
-def make_mixed_fqe_train(
-    cfg: TD3Config, critic_optimizer: optax.GradientTransformation
-) -> MixedFQETrainFn:
-    # FQE with half of every batch from each dataset, both used in full
-    half = cfg.batch_size // 2
-
-    @eqx.filter_jit
-    def train(
-        state: TD3State,
-        data: BufferData,
-        extra: BufferData,
-        num_updates: jax.Array,
-        key: jax.Array,
-    ) -> tuple[TD3State, jax.Array]:
-        sizes = (data[0].shape[0], extra[0].shape[0])
-
-        def sample(k: jax.Array) -> Batch:
-            kd, ke = jax.random.split(k)
-            parts = (
-                sample_batch(data, jnp.asarray(sizes[0]), kd, half),
-                sample_batch(extra, jnp.asarray(sizes[1]), ke, half),
-            )
-            return jax.tree.map(lambda a, b: jnp.concatenate([a, b]), *parts)
-
-        return _fqe_loop(
-            cfg,
-            critic_optimizer,
-            state,
-            sample,
-            num_updates=num_updates,
-            key=key,
-        )
+        mean_loss = critic_sum / jnp.maximum(num_updates, 1)
+        return eqx.combine(dynamic, static), mean_loss
 
     return train

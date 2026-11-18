@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-suite="${1:?usage: submit_suite.sh <core|controls|ablation-horizon|config-check|plateau-swap|all> <env>...}"
+suite="${1:?usage: submit_suite.sh <main> <env>...}"
 shift
 (($# > 0)) || {
   echo "usage: submit_suite.sh ${suite} <env>..." >&2
@@ -9,19 +9,14 @@ shift
 }
 
 case "${suite}" in
-core) array=0-29 ;;
-controls) array=0-19 ;;
-ablation-horizon) array=0-29 ;;
-config-check) array=0-9 ;;
-plateau-swap) array=0-4,10-14 ;;
-all) array=0-79 ;;
+main) array=0-39 ;;
 *)
-  echo "unknown suite '${suite}'" >&2
+  echo "unknown suite '${suite}'; choose 'main'" >&2
   exit 1
   ;;
 esac
 
-tag="${TAG:-paper-${suite}-v1}"
+tag="${TAG:-critic-uphill-${suite}-v1}"
 for env in "$@"; do
   echo "--> ${env}: SUITE=${suite} array=${array} TAG=${tag}"
   SUITE="${suite}" TARGET_ENV="${env}" TAG="${tag}" \

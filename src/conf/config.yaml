@@ -1,14 +1,10 @@
 defaults:
-  - algorithm: erl
+  - algorithm: evorainbow
   - _self_
 
-# metric protocol, logged with the run: 3 = refactor-b knobs + div/* metrics
-protocol: 3
+protocol: 4
 seed: 0
-
 total_steps: 1_000_000
-n_envs: 1
-device: auto
 
 env:
   id: HalfCheetah-v5
@@ -21,19 +17,10 @@ eval:
 
 wandb:
   enabled: true
-  project: h_boostrap_
+  project: critic-uphill
   entity: w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology
   name: null
   tags: []
-
-# ERL only: save TD3 nets + replay buffer at these fractions of total_steps
-# to <dir>/<env>_s<seed>/step_<N>/ (critic-degeneracy-v1)
-checkpoint:
-  dir: null
-  at: []
-
-# path to write {"eval_reward": float} after training (hyperparameter sweeps)
-result_file: null
 
 hydra:
   run:

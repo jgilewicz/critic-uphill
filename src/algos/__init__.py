@@ -1,3 +1,2 @@
-from algos.erl import ERLConfig as ERLConfig
-from algos.erl import evaluate_policy as evaluate_policy
-from algos.erl import train as train
+from algos.evorainbow import EvoRainbowTrainer as EvoRainbowTrainer
+from algos.td3_trainer import TD3Trainer as TD3Trainer
