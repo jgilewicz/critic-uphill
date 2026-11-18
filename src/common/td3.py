@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import optax
 
 from common.replay_buffer import BufferData, sample_batch
-from common.utils import genetic_soft_update
+from common.utils import critic_loss, critic_point, genetic_soft_update
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
 
 
@@ -49,23 +49,6 @@ TrainFn = Callable[
     [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
     tuple[TD3State, jax.Array],
 ]
-
-
-def critic_point(
-    critic: Critic, states: jax.Array, actions: jax.Array
-) -> jax.Array:
-    """Evaluate Q(s, a) over a batch of states and actions."""
-    return jax.vmap(critic)(states, actions)
-
-
-def critic_loss(
-    critic: Critic,
-    states: jax.Array,
-    actions: jax.Array,
-    target: jax.Array,
-) -> jax.Array:
-    """Compute MSE Bellman loss for one critic."""
-    return jnp.mean((critic_point(critic, states, actions) - target) ** 2)
 
 
 def init_td3(

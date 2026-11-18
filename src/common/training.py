@@ -5,7 +5,7 @@ from collections.abc import Callable
 import gymnasium as gym
 import numpy as np
 
-from agents.td3 import TD3
+from agents.base import RLAgent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
 from environments import make_env
@@ -35,7 +35,7 @@ class PerfEvaluator:
         self._last_bucket = 0
         self._last_eval: tuple[int, float] | None = None
 
-    def maybe_evaluate(self, agent: TD3, env_steps: int) -> float | None:
+    def maybe_evaluate(self, agent: RLAgent, env_steps: int) -> float | None:
         """Evaluate if env_steps crossed a new eval.interval boundary."""
         bucket = env_steps // self.interval
         if bucket <= self._last_bucket:
@@ -43,7 +43,9 @@ class PerfEvaluator:
         self._last_bucket = bucket
         return self.evaluate(agent, env_steps=env_steps)
 
-    def evaluate(self, agent: TD3, *, env_steps: int | None = None) -> float:
+    def evaluate(
+        self, agent: RLAgent, *, env_steps: int | None = None
+    ) -> float:
         """Run deterministic episodes and return mean episode reward."""
         if (
             env_steps is not None
@@ -76,7 +78,7 @@ class PerfEvaluator:
 
 def run_warmup(
     env: gym.Env,
-    agent: TD3,
+    agent: RLAgent,
     buffer: ReplayBuffer,
     budget: Budget,
     *,

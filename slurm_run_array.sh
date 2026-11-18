@@ -2,14 +2,18 @@
 # critic-uphill benchmark array on WCSS Lem (MuJoCo v5).
 # Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5
 #
-# Suite: main (task ID = condition_index * 10 + seed, array 0-39)
+# Suite: main (task ID = condition_index * 10 + seed, array 0-79)
 #   0-9   td3
-#   10-19 evorainbow-full
-#   20-29 evorainbow-critic
-#   30-39 evorainbow-hboot
+#   10-19 sac
+#   20-29 evorainbow-td3-full
+#   30-39 evorainbow-td3-critic
+#   40-49 evorainbow-td3-hboot
+#   50-59 evorainbow-sac-full
+#   60-69 evorainbow-sac-critic
+#   70-79 evorainbow-sac-hboot
 #
 # Example usage:
-#   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-39 slurm_run_array.sh
+#   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
 #SBATCH -N 1
@@ -32,9 +36,13 @@ SUITE="${SUITE:-main}"
 
 MAIN=(
   "td3|algorithm=td3"
-  "evorainbow-full|algorithm=evorainbow algorithm.eval.mode=full"
-  "evorainbow-critic|algorithm=evorainbow algorithm.eval.mode=critic"
-  "evorainbow-hboot|algorithm=evorainbow algorithm.eval.mode=hboot"
+  "sac|algorithm=sac"
+  "evorainbow-td3-full|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=full"
+  "evorainbow-td3-critic|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic"
+  "evorainbow-td3-hboot|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=hboot"
+  "evorainbow-sac-full|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=full"
+  "evorainbow-sac-critic|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=critic"
+  "evorainbow-sac-hboot|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=hboot"
 )
 
 case "${SUITE}" in

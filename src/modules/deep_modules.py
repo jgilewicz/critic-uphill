@@ -80,8 +80,58 @@ class ActorHead(eqx.Module):
         return jnp.tanh(self.out_layer(z)) * self.action_limit
 
 
+_LOG_STD_MIN = -20.0
+_LOG_STD_MAX = 2.0
+
+
+class GaussianActorHead(eqx.Module):
+    """Tanh-squashed Gaussian policy head over the shared state embedding."""
+
+    mean_layer: eqx.nn.Linear
+    log_std_layer: eqx.nn.Linear
+    action_limit: float = eqx.field(static=True)
+
+    def __init__(
+        self,
+        embedding_dim: int,
+        action_dim: int,
+        *,
+        key: jax.Array,
+        action_limit: float = 1.0,
+        init_scale: float = 1.0,
+    ) -> None:
+        k_mean, k_std = jax.random.split(key)
+        self.action_limit = action_limit
+        self.mean_layer = _scaled_linear(
+            embedding_dim, action_dim, key=k_mean, init_scale=init_scale
+        )
+        self.log_std_layer = _scaled_linear(
+            embedding_dim, action_dim, key=k_std, init_scale=init_scale
+        )
+
+    def __call__(self, z: jax.Array) -> jax.Array:
+        return jnp.tanh(self.mean_layer(z)) * self.action_limit
+
+    def sample_and_log_prob(
+        self, z: jax.Array, key: jax.Array
+    ) -> tuple[jax.Array, jax.Array]:
+        """Sample a squashed action and its Jacobian-corrected log_prob."""
+        mean = self.mean_layer(z)
+        log_std = jnp.clip(self.log_std_layer(z), _LOG_STD_MIN, _LOG_STD_MAX)
+        std = jnp.exp(log_std)
+        eps = jax.random.normal(key, mean.shape)
+        u = mean + std * eps
+        action = jnp.tanh(u) * self.action_limit
+        log_prob_u = -0.5 * (eps**2 + 2.0 * log_std + jnp.log(2.0 * jnp.pi))
+        log_det = 2.0 * (
+            jnp.log(2.0) - u - jax.nn.softplus(-2.0 * u)
+        ) + jnp.log(self.action_limit)
+        log_prob = jnp.sum(log_prob_u - log_det, axis=-1)
+        return action, log_prob
+
+
 class SharedStateEmbedding(eqx.Module):
-    """Shared state encoder Z(s) trained by TD3 and read by ES heads."""
+    """Shared state encoder Z(s) trained by RL agent, read by ES heads."""
 
     embedding: eqx.nn.Sequential
 

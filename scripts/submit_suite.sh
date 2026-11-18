@@ -9,7 +9,7 @@ shift
 }
 
 case "${suite}" in
-main) array=0-39 ;;
+main) array=0-79 ;;
 *)
   echo "unknown suite '${suite}'; choose 'main'" >&2
   exit 1

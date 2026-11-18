@@ -25,10 +25,11 @@ types:
 # everything: lint-check, types
 check: lint-check types
 
-# train one algorithm (td3 | evorainbow); extra tokens are Hydra overrides
+# train one algorithm (td3 | sac | evorainbow); extra tokens are Hydra overrides
 #   just train td3 Hopper-v5
+#   just train sac HalfCheetah-v5
 #   just train evorainbow Swimmer-v5 algorithm.eval.mode=critic
-#   just train evorainbow Hopper-v5 seed=3
+#   just train evorainbow Hopper-v5 algorithm.agent=sac seed=3
 train algo="evorainbow" env="HalfCheetah-v5" *overrides:
     uv run python -m train \
       algorithm={{algo}} env.id={{env}} eval_env.id={{env}} \

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from agents.td3 import TD3
+from agents.base import RLAgent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_population
 from config import EvalConfig
 from environments import EnvPool
-from modules.deep_modules import ActorHead
 
 
 @dataclass(frozen=True)
@@ -34,13 +33,13 @@ class FitnessEstimator(Protocol):
 
     def evaluate(
         self,
-        heads: ActorHead,
+        heads: Any,
         key: jax.Array,
         *,
         seed: int,
         active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
-        """Score a stacked population of ActorHead instances."""
+        """Score a stacked population of actor head instances."""
         ...
 
 
@@ -52,7 +51,7 @@ class FullEpisodeFitness:
     def __init__(
         self,
         pool: EnvPool,
-        agent: TD3,
+        agent: RLAgent,
         buffer: ReplayBuffer,
         budget: Budget,
         *,
@@ -66,7 +65,7 @@ class FullEpisodeFitness:
 
     def evaluate(
         self,
-        heads: ActorHead,
+        heads: Any,
         key: jax.Array,
         *,
         seed: int,
@@ -99,7 +98,7 @@ class CriticBufferFitness:
 
     def __init__(
         self,
-        agent: TD3,
+        agent: RLAgent,
         buffer: ReplayBuffer,
         *,
         critic_states: int,
@@ -110,7 +109,7 @@ class CriticBufferFitness:
 
     def evaluate(
         self,
-        heads: ActorHead,
+        heads: Any,
         key: jax.Array,
         *,
         seed: int,
@@ -131,7 +130,7 @@ class HStepBootstrapFitness:
     def __init__(
         self,
         pool: EnvPool,
-        agent: TD3,
+        agent: RLAgent,
         buffer: ReplayBuffer,
         budget: Budget,
         *,
@@ -147,7 +146,7 @@ class HStepBootstrapFitness:
 
     def evaluate(
         self,
-        heads: ActorHead,
+        heads: Any,
         key: jax.Array,
         *,
         seed: int,
@@ -208,7 +207,7 @@ class IndividualControlFitness:
 
     def evaluate(
         self,
-        heads: ActorHead,
+        heads: Any,
         key: jax.Array,
         *,
         seed: int,
@@ -251,7 +250,7 @@ class IndividualControlFitness:
 def build_fitness_estimator(
     eval_cfg: EvalConfig,
     pool: EnvPool,
-    agent: TD3,
+    agent: RLAgent,
     buffer: ReplayBuffer,
     budget: Budget,
     *,
