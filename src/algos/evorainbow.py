@@ -3,16 +3,14 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.flatten_util import ravel_pytree
 
-from agents.td3 import TD3
+from agents import make_agent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
 from common.training import LogFn, PerfEvaluator, print_summary
 from config import EvoRainbowAlgoConfig, RunConfig
 from environments import env_dims, make_env, make_vec_env
 from fitness import build_fitness_estimator
-from modules.deep_modules import ActorHead
 from modules.evo_module import CEM
 
 _EVAL_SEED_OFFSET = 10_000
@@ -47,7 +45,8 @@ class EvoRainbowTrainer:
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
-        self._agent = TD3(
+        self._agent = make_agent(
+            algo_cfg.agent,
             dims.obs_dim,
             dims.action_dim,
             dims.action_limit,
@@ -55,14 +54,8 @@ class EvoRainbowTrainer:
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
         )
-        init_head = ActorHead(
-            algo_cfg.embedding_dim,
-            dims.action_dim,
-            key=self._next_key(),
-            action_limit=dims.action_limit,
-        )
         self._cem = CEM(
-            ravel_pytree(init_head)[0],
+            self._agent.init_cem_head(self._next_key()),
             self._next_key(),
             pop_size=algo_cfg.pop_size,
             sigma_init=algo_cfg.cem.sigma_init,
@@ -159,13 +152,10 @@ class EvoRainbowTrainer:
         num_updates = (
             int(self._algo.rl.train_ratio * gen_steps) if post_warmup else 0
         )
-        critic_loss = self._agent.update(
-            self._buffer, num_updates, self._next_key()
-        )
+        losses = self._agent.update(self._buffer, num_updates, self._next_key())
         self._log_generation(
             generation,
-            num_updates > 0,
-            critic_loss,
+            losses,
             real_evals=real_evals,
             in_warmup=in_warmup,
         )
@@ -176,8 +166,7 @@ class EvoRainbowTrainer:
     def _log_generation(
         self,
         generation: int,
-        updated: bool,
-        critic_loss: float,
+        losses: dict[str, float],
         *,
         real_evals: int,
         in_warmup: bool,
@@ -189,8 +178,8 @@ class EvoRainbowTrainer:
             "env_steps": float(self._budget.env_steps),
             "cost/pop_steps": float(self._budget.pop_steps),
         }
-        if updated:
-            metrics["train/critic_loss"] = critic_loss
+        metrics.update(losses)
+        critic_loss = losses.get("train/critic_loss", 0.0)
         if eval_ret is not None:
             metrics["perf/eval_rl"] = eval_ret
         if eval_ret is not None or generation == 0 or not in_warmup:
@@ -217,7 +206,7 @@ class EvoRainbowTrainer:
             final_eval = self._evaluator.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             )
-            tag = f"evorainbow-{self._algo.eval.mode}"
+            tag = f"evorainbow-{self._algo.agent}-{self._algo.eval.mode}"
             print_summary(tag, self._budget, final_eval)
             return final_eval
         finally:

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
 EvalMode = Literal["full", "critic", "hboot"]
+AgentName = Literal["td3", "sac"]
 
 
 def _check_choice(name: str, value: str, kind: Any) -> None:
@@ -17,19 +18,18 @@ def _check_min(name: str, value: float, minimum: float) -> None:
         raise ValueError(f"{name}={value}; must be >= {minimum}")
 
 
+def _check_positive(name: str, value: float) -> None:
+    if value <= 0.0:
+        raise ValueError(f"{name}={value}; must be > 0")
+
+
 @dataclass(frozen=True)
 class RLConfig:
-    """TD3 hyperparameters shared between standalone TD3 and EvoRainbow."""
+    """Shared RL hyperparameters common to all off-policy agents."""
 
     critic_hidden_dims: tuple[int, int] = (400, 300)
     gamma: float = 0.99
     tau: float = 0.005
-    policy_noise: float = 0.2
-    noise_clip: float = 0.5
-    policy_freq: int = 2
-    exploration_noise: float = 0.1
-    actor_lr: float = 1e-3
-    critic_lr: float = 1e-3
     batch_size: int = 128
     buffer_capacity: int = 1_000_000
     warmup_steps: int = 10_000
@@ -45,7 +45,6 @@ class RLConfig:
             raise ValueError(f"rl.gamma={self.gamma}; must be in [0, 1]")
         if not 0.0 < self.tau <= 1.0:
             raise ValueError(f"rl.tau={self.tau}; must be in (0, 1]")
-        _check_min("rl.policy_freq", self.policy_freq, 1)
         _check_min("rl.batch_size", self.batch_size, 1)
         _check_min("rl.buffer_capacity", self.buffer_capacity, 1)
         _check_min("rl.warmup_steps", self.warmup_steps, 0)
@@ -53,14 +52,58 @@ class RLConfig:
 
 
 @dataclass(frozen=True)
-class TD3AlgoConfig:
-    """Configuration for standalone TD3."""
+class TD3RLConfig(RLConfig):
+    """TD3 hyperparameters shared between standalone TD3 and EvoRainbow."""
 
-    horizon: int = 1000
-    embedding_dim: int = 300
-    rl: RLConfig = field(default_factory=RLConfig)
+    policy_noise: float = 0.2
+    noise_clip: float = 0.5
+    policy_freq: int = 2
+    exploration_noise: float = 0.1
+    actor_lr: float = 1e-3
+    critic_lr: float = 1e-3
 
     def __post_init__(self) -> None:
+        super().__post_init__()
+        _check_min("rl.policy_noise", self.policy_noise, 0.0)
+        _check_min("rl.noise_clip", self.noise_clip, 0.0)
+        _check_min("rl.policy_freq", self.policy_freq, 1)
+        _check_min("rl.exploration_noise", self.exploration_noise, 0.0)
+        _check_positive("rl.actor_lr", self.actor_lr)
+        _check_positive("rl.critic_lr", self.critic_lr)
+
+
+@dataclass(frozen=True)
+class SACRLConfig(RLConfig):
+    """SAC hyperparameters shared between standalone SAC and EvoRainbow."""
+
+    actor_lr: float = 3e-4
+    critic_lr: float = 3e-4
+    alpha_lr: float = 3e-4
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        _check_positive("rl.actor_lr", self.actor_lr)
+        _check_positive("rl.critic_lr", self.critic_lr)
+        _check_positive("rl.alpha_lr", self.alpha_lr)
+
+
+RL_CONFIG_CLASSES: dict[str, type[RLConfig]] = {
+    "td3": TD3RLConfig,
+    "sac": SACRLConfig,
+}
+
+
+@dataclass(frozen=True)
+class RLAlgoConfig:
+    """Configuration for standalone off-policy RL agents (td3 | sac)."""
+
+    name: AgentName
+    horizon: int = 1000
+    embedding_dim: int = 300
+    rl: RLConfig = field(default_factory=TD3RLConfig)
+
+    def __post_init__(self) -> None:
+        _check_choice("algorithm.name", self.name, AgentName)
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -135,18 +178,20 @@ class EvalConfig:
 
 @dataclass(frozen=True)
 class EvoRainbowAlgoConfig:
-    """Configuration for EvoRainbow (TD3 + CEM + surrogate fitness)."""
+    """Configuration for EvoRainbow (RL agent + CEM + surrogate fitness)."""
 
+    agent: AgentName = "td3"
     horizon: int = 1000
     embedding_dim: int = 300
     pop_size: int = 5
     cem: CEMConfig = field(default_factory=CEMConfig)
-    rl: RLConfig = field(default_factory=RLConfig)
+    rl: RLConfig = field(default_factory=TD3RLConfig)
     rl_to_ea: RLToEAConfig = field(default_factory=RLToEAConfig)
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
 
     def __post_init__(self) -> None:
+        _check_choice("algorithm.agent", self.agent, AgentName)
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -204,7 +249,7 @@ class RunConfig:
     seed: int
     total_steps: int
     protocol: int
-    algorithm: TD3AlgoConfig | EvoRainbowAlgoConfig
+    algorithm: RLAlgoConfig | EvoRainbowAlgoConfig
 
     def __post_init__(self) -> None:
         if self.total_steps < 1:

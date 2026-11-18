@@ -1,0 +1,30 @@
+# @package algorithm
+# Standalone SAC and EvoRainbow-SAC RL backend (parity with PR #3 networks):
+# - SharedStateEmbedding: Linear(obs,400)->LN->tanh->Linear(400,300)->LN->tanh
+# - GaussianActorHead: Linear(300,act) mean + Linear(300,act) log_std
+#   (RL init scaled by 0.1, log_std clipped to [-20, 2], deterministic path
+#   tanh(mean) * action_limit, no actor target)
+# - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
+#   output layer weight and bias scaled by 0.1; Polyak target critics only
+# - Automatic entropy tuning: learned log_alpha (init alpha=1.0), target -act_dim
+# - Separate embedding optimizer (actor_lr) and grad-norm clip 10 on all nets
+# - In EvoRainbow (agent=sac): CEM evolves the full GaussianActorHead;
+#   population rollouts and surrogate fitness use the deterministic path only;
+#   genetic soft update blends elite into online actor head only (no target);
+#   surrogate queries use online Q1.
+name: sac
+
+horizon: 1000           # max steps per training episode
+embedding_dim: 300      # shared state embedding width (parity with TD3)
+
+rl:
+  critic_hidden_dims: [400, 300]  # twin critic MLP widths (LN + leaky_relu)
+  gamma: 0.99           # discount factor
+  tau: 0.005            # Polyak rate for target critics
+  actor_lr: 3e-4        # Adam lr for Gaussian actor head & shared embedding
+  critic_lr: 3e-4       # Adam lr for twin online critics
+  alpha_lr: 3e-4        # Adam lr for learned log_alpha temperature
+  batch_size: 128       # replay minibatch size per gradient update
+  buffer_capacity: 1_000_000  # ring replay buffer capacity
+  warmup_steps: 10_000  # uniform-random transitions before gradient updates
+  train_ratio: 1.0      # gradient updates per collected environment step

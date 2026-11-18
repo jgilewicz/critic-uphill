@@ -1,24 +1,26 @@
 from __future__ import annotations
 
+from dataclasses import fields
 from pathlib import Path
 from typing import Any, cast
 
 import wandb
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 
-from algos import EvoRainbowTrainer, TD3Trainer
+from algos import EvoRainbowTrainer, RLTrainer
 from config import (
+    RL_CONFIG_CLASSES,
     CEMConfig,
     EAToRLConfig,
     EnvConfig,
     EvalConfig,
     EvoRainbowAlgoConfig,
+    RLAlgoConfig,
     RLConfig,
     RLToEAConfig,
     RunConfig,
     RunEvalConfig,
-    TD3AlgoConfig,
     WandbConfig,
 )
 from environments import validate_env_id
@@ -36,39 +38,79 @@ _ALLOWED_TOP_KEYS = frozenset(
     }
 )
 
+_CONF_ALGO_DIR = Path(__file__).resolve().parent / "conf" / "algorithm"
 
-def _build_rl_config(raw: dict[str, Any]) -> RLConfig:
+
+def _check_unknown_keys(
+    cls: type[Any], raw: dict[str, Any], label: str
+) -> None:
+    allowed = {f.name for f in fields(cls)}
+    unknown = sorted(set(raw) - allowed)
+    if unknown:
+        raise ValueError(
+            f"Unknown key(s) in {label}: {unknown}; allowed: {sorted(allowed)}"
+        )
+
+
+def _build_rl_config(agent_name: str, raw: dict[str, Any]) -> RLConfig:
+    cfg_cls = RL_CONFIG_CLASSES.get(agent_name)
+    if cfg_cls is None:
+        choices = tuple(RL_CONFIG_CLASSES)
+        raise ValueError(
+            f"Unsupported algorithm.agent={agent_name!r}; choose from {choices}"
+        )
     raw = dict(raw)
+    _check_unknown_keys(cfg_cls, raw, f"{agent_name}.rl")
     dims = raw.pop("critic_hidden_dims")
     raw["critic_hidden_dims"] = tuple(int(d) for d in dims)
-    return RLConfig(**raw)
+    return cfg_cls(**raw)
+
+
+def _build_section(cls: type[Any], raw: dict[str, Any], label: str) -> Any:
+    _check_unknown_keys(cls, raw, label)
+    return cls(**raw)
 
 
 def _build_algorithm(
     raw: dict[str, Any],
-) -> TD3AlgoConfig | EvoRainbowAlgoConfig:
+) -> RLAlgoConfig | EvoRainbowAlgoConfig:
     algo = dict(raw)
     name = algo.pop("name", None)
-    rl = _build_rl_config(algo.pop("rl"))
-    if name == "td3":
-        return TD3AlgoConfig(rl=rl, **algo)
+    if name in RL_CONFIG_CLASSES:
+        rl = _build_rl_config(str(name), algo.pop("rl"))
+        payload: dict[str, Any] = {"name": name, "rl": rl, **algo}
+        _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")
+        return RLAlgoConfig(**payload)
     if name == "evorainbow":
-        return EvoRainbowAlgoConfig(
-            rl=rl,
-            cem=CEMConfig(**algo.pop("cem")),
-            rl_to_ea=RLToEAConfig(**algo.pop("rl_to_ea")),
-            ea_to_rl=EAToRLConfig(**algo.pop("ea_to_rl")),
-            eval=EvalConfig(**algo.pop("eval")),
+        agent = str(algo.get("agent", "td3"))
+        rl = _build_rl_config(agent, algo.pop("rl"))
+        er_payload: dict[str, Any] = {
+            "rl": rl,
+            "cem": _build_section(CEMConfig, algo.pop("cem"), "algorithm.cem"),
+            "rl_to_ea": _build_section(
+                RLToEAConfig, algo.pop("rl_to_ea"), "algorithm.rl_to_ea"
+            ),
+            "ea_to_rl": _build_section(
+                EAToRLConfig, algo.pop("ea_to_rl"), "algorithm.ea_to_rl"
+            ),
+            "eval": _build_section(
+                EvalConfig, algo.pop("eval"), "algorithm.eval"
+            ),
             **algo,
+        }
+        _check_unknown_keys(
+            EvoRainbowAlgoConfig, er_payload, "algorithm (evorainbow)"
         )
+        return EvoRainbowAlgoConfig(**er_payload)
+    choices = (*RL_CONFIG_CLASSES, "evorainbow")
     raise ValueError(
-        f"Unsupported algorithm.name={name!r}; "
-        "choose from ('td3', 'evorainbow')"
+        f"Unsupported algorithm.name={name!r}; choose from {choices}"
     )
 
 
 def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
     wb = dict(raw)
+    _check_unknown_keys(WandbConfig, wb, "wandb")
     if "tags" in wb:
         wb["tags"] = tuple(str(t) for t in wb["tags"])
     return WandbConfig(**wb)
@@ -119,17 +161,36 @@ def _was_overridden(key: str) -> bool:
     )
 
 
+def _apply_agent_rl_defaults(cfg: DictConfig) -> None:
+    if cfg.algorithm.name != "evorainbow":
+        return
+    agent = str(cfg.algorithm.get("agent", ""))
+    if agent not in RL_CONFIG_CLASSES:
+        choices = tuple(RL_CONFIG_CLASSES)
+        raise ValueError(
+            f"Unsupported algorithm.agent={agent!r}; choose from {choices}"
+        )
+    if agent == "td3":
+        return
+    agent_yaml = _CONF_ALGO_DIR / f"{agent}.yaml"
+    agent_cfg = cast("DictConfig", OmegaConf.load(agent_yaml))
+    agent_rl = agent_cfg.rl
+    with open_dict(cfg.algorithm.rl):
+        for key in list(cfg.algorithm.rl.keys()):
+            if key not in agent_rl and not _was_overridden(
+                f"algorithm.rl.{key}"
+            ):
+                del cfg.algorithm.rl[key]
+        for key, value in agent_rl.items():
+            if not _was_overridden(f"algorithm.rl.{key}"):
+                cfg.algorithm.rl[key] = value
+
+
 def _apply_env_preset(cfg: DictConfig) -> None:
     if cfg.algorithm.name != "evorainbow":
         return
     env_id = str(cfg.env.id)
-    preset_path = (
-        Path(__file__).resolve().parent
-        / "conf"
-        / "algorithm"
-        / "env"
-        / f"{env_id}.yaml"
-    )
+    preset_path = _CONF_ALGO_DIR / "env" / f"{env_id}.yaml"
     if not preset_path.is_file():
         raise FileNotFoundError(
             f"Missing per-env preset for {env_id!r}: {preset_path}"
@@ -157,20 +218,21 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
     """Validate Hydra DictConfig and convert it into a frozen RunConfig."""
     validate_env_id(str(cfg.env.id))
     validate_env_id(str(cfg.eval_env.id))
+    _apply_agent_rl_defaults(cfg)
     _apply_env_preset(cfg)
     raw = cast("dict[str, Any]", OmegaConf.to_container(cfg, resolve=True))
     unknown = sorted(set(raw) - _ALLOWED_TOP_KEYS)
     if unknown:
         raise ValueError(f"Unknown top-level config keys: {unknown}")
 
-    env = EnvConfig(**raw["env"])
-    eval_env = EnvConfig(**raw["eval_env"])
+    env = _build_section(EnvConfig, raw["env"], "env")
+    eval_env = _build_section(EnvConfig, raw["eval_env"], "eval_env")
     _clear_preset_p_real_for_full(raw["algorithm"], cfg)
 
     return RunConfig(
         env=env,
         eval_env=eval_env,
-        eval=RunEvalConfig(**raw["eval"]),
+        eval=_build_section(RunEvalConfig, raw["eval"], "eval"),
         wandb=_build_wandb_config(raw["wandb"]),
         seed=int(raw["seed"]),
         total_steps=int(raw["total_steps"]),
@@ -185,9 +247,10 @@ def run_training(cfg: DictConfig) -> float:
     if isinstance(run_cfg.algorithm, EvoRainbowAlgoConfig):
         algo = run_cfg.algorithm
         print(
-            f"config | env={run_cfg.env.id} | mode={algo.eval.mode} | "
-            f"damp={algo.cem.damp} | ea_to_rl.tau={algo.ea_to_rl.tau} | "
-            f"p_real={algo.eval.p_real} | period={algo.rl_to_ea.period}"
+            f"config | env={run_cfg.env.id} | agent={algo.agent} | "
+            f"mode={algo.eval.mode} | damp={algo.cem.damp} | "
+            f"ea_to_rl.tau={algo.ea_to_rl.tau} | p_real={algo.eval.p_real} | "
+            f"period={algo.rl_to_ea.period}"
         )
     run = wandb.init(
         project=run_cfg.wandb.project,
@@ -202,8 +265,8 @@ def run_training(cfg: DictConfig) -> float:
     wandb.define_metric("env_steps")
     wandb.define_metric("*", step_metric="env_steps")
     try:
-        if isinstance(run_cfg.algorithm, TD3AlgoConfig):
-            trainer: TD3Trainer | EvoRainbowTrainer = TD3Trainer(
+        if isinstance(run_cfg.algorithm, RLAlgoConfig):
+            trainer: RLTrainer | EvoRainbowTrainer = RLTrainer(
                 run_cfg, run_cfg.algorithm, on_log=wandb.log
             )
         else:

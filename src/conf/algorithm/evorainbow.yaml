@@ -6,11 +6,16 @@
 # - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
 #   output layer weight and bias scaled by 0.1
 # - Separate embedding optimizer (lr 1e-3) and grad-norm clip 10 on all nets
+# - In agent=sac mode, rl defaults come from algorithm/sac.yaml (unless
+#   overridden on CLI); CEM evolves GaussianActorHead via its deterministic
+#   path, genetic soft update targets the online actor only, and surrogates
+#   query online Q1.
 # - Per-env overrides (cem.damp, rl_to_ea.period, ea_to_rl.tau, eval.p_real)
 #   live in algorithm/env/<env.id>.yaml, applied automatically from env.id
 #   and individually overridable from the CLI.
 
 name: evorainbow
+agent: td3  # RL agent backend: td3 | sac
 
 horizon: 1000
 embedding_dim: 300

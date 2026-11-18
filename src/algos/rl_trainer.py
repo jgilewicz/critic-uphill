@@ -3,23 +3,23 @@ from __future__ import annotations
 import jax
 import numpy as np
 
-from agents.td3 import TD3
+from agents import make_agent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
 from common.training import LogFn, PerfEvaluator, print_summary, run_warmup
-from config import RunConfig, TD3AlgoConfig
+from config import RLAlgoConfig, RunConfig
 from environments import env_dims, make_env
 
 _EVAL_SEED_OFFSET = 10_000
 
 
-class TD3Trainer:
-    """Training loop for standalone TD3 matching EvoRainbow's RL side."""
+class RLTrainer:
+    """Episode-by-episode training loop for any standalone RLAgent."""
 
     def __init__(
         self,
         run_cfg: RunConfig,
-        algo_cfg: TD3AlgoConfig,
+        algo_cfg: RLAlgoConfig,
         *,
         on_log: LogFn | None = None,
     ) -> None:
@@ -41,7 +41,8 @@ class TD3Trainer:
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
-        self._agent = TD3(
+        self._agent = make_agent(
+            algo_cfg.name,
             dims.obs_dim,
             dims.action_dim,
             dims.action_limit,
@@ -65,9 +66,7 @@ class TD3Trainer:
             seed=ep_seed,
         )
         num_updates = int(self._algo.rl.train_ratio * ep_steps)
-        critic_loss = self._agent.update(
-            self._buffer, num_updates, self._next_key()
-        )
+        losses = self._agent.update(self._buffer, num_updates, self._next_key())
         eval_ret = self._evaluator.maybe_evaluate(
             self._agent, self._budget.env_steps
         )
@@ -75,8 +74,8 @@ class TD3Trainer:
             "env_steps": float(self._budget.env_steps),
             "cost/pop_steps": float(self._budget.pop_steps),
         }
-        if num_updates > 0:
-            metrics["train/critic_loss"] = critic_loss
+        metrics.update(losses)
+        critic_loss = losses.get("train/critic_loss", 0.0)
         if eval_ret is not None:
             metrics["perf/eval_rl"] = eval_ret
             print(
@@ -87,7 +86,7 @@ class TD3Trainer:
             self._on_log(metrics)
 
     def train(self) -> float:
-        """Run warmup and episode-by-episode TD3 until the budget ends."""
+        """Run warmup and episode-by-episode RL until the budget ends."""
         try:
             run_warmup(
                 self._env,
@@ -107,7 +106,7 @@ class TD3Trainer:
             final_eval = self._evaluator.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             )
-            print_summary("td3", self._budget, final_eval)
+            print_summary(self._algo.name, self._budget, final_eval)
             return final_eval
         finally:
             self._env.close()
