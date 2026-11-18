@@ -208,8 +208,10 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 
 - `reset/index`: 0, 1, 2 (order of the reset), set on every `reset/*` row.
 - `reset/event`: actual reset step (first boundary at or past `at_step`). The event row also holds `reset/eval_before`, `reset/eval_after`, `reset/drop` (`eval_before - eval_after`) and, if `eval_after >= eval_before`, `reset/recovery_steps = 0`.
-- `reset/deg_offset`: marks the `deg/*` rows of a reset: `-1` right before (old networks), `0` right after (fresh networks, same `env_steps` and same `metric_key` as before), `5000`, `20000`, `50000` at the first boundary past `reset_step + offset`. All carry `deg/ratio`, `deg/rho_H`, `deg/frac_critic_better`, `deg/grad_norm`, `deg/action_grad_norm` (plus `_s{i}`). The before row also carries `perf/eval_rl` of the old networks, the event row that of the fresh ones.
+- `reset/deg_offset`: marks the `deg/*` rows of a reset: `-1` right before (old networks), `0` right after (fresh networks, same `env_steps` and same `metric_key` as before), `5000`, `20000`, `50000` at the first boundary past `reset_step + offset`. All carry `deg/ratio`, `deg/rho_H`, `deg/frac_critic_better`, `deg/grad_norm`, `deg/action_grad_norm` (plus `_s{i}`).
 - `reset/recovery_steps`: `eval_step - reset_step` of the first eval with `perf/eval_rl >= reset/eval_before`, logged once per reset. If it never happens, logged at run end as `env_steps - reset_step`.
+- `reset/recovered`: on every row with `reset/recovery_steps`. `1` if an eval reached `eval_before`, `0` if `recovery_steps` is the censored run-end value.
+- Reset rows carry no `perf/*`. The regular eval at the reset step logs `perf/eval_rl` of the fresh networks (cached), so `perf/eval_rl` has one value per eval step.
 - The regular `eval.interval` and `deg.interval` schedules keep running, so a regular row can duplicate a reset row at the same `env_steps`.
 
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
