@@ -20,6 +20,7 @@ from config import (
     ProbeConfig,
     RLAlgoConfig,
     RLConfig,
+    ResetConfig,
     RLToEAConfig,
     RunConfig,
     RunEvalConfig,
@@ -86,6 +87,14 @@ def _build_section(cls: type[Any], raw: dict[str, Any], label: str) -> Any:
     return cls(**raw)
 
 
+def _build_reset_config(raw: dict[str, Any]) -> ResetConfig:
+    reset = dict(raw)
+    _check_unknown_keys(ResetConfig, reset, "algorithm.reset")
+    if "at_steps" in reset:
+        reset["at_steps"] = tuple(int(x) for x in reset["at_steps"])
+    return ResetConfig(**reset)
+
+
 def _build_algorithm(
     raw: dict[str, Any],
 ) -> RLAlgoConfig | EvoRainbowAlgoConfig:
@@ -93,10 +102,21 @@ def _build_algorithm(
     name = algo.pop("name", None)
     if name in RL_CONFIG_CLASSES:
         rl = _build_rl_config(str(name), _pop_section(algo, "rl", str(name)))
-        payload: dict[str, Any] = {"name": name, "rl": rl, **algo}
+        reset = _build_reset_config(algo.pop("reset", {}))
+        payload: dict[str, Any] = {
+            "name": name,
+            "rl": rl,
+            "reset": reset,
+            **algo,
+        }
         _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")
         return RLAlgoConfig(**payload)
     if name == "evorainbow":
+        if "reset" in algo:
+            raise ValueError(
+                "algorithm.reset is only supported for standalone td3. "
+                "use algorithm=td3-reset"
+            )
         agent = str(algo.get("agent", "td3"))
         rl = _build_rl_config(agent, _pop_section(algo, "rl", "evorainbow"))
         er_payload: dict[str, Any] = {

@@ -12,6 +12,10 @@
 #   60-69 evorainbow-sac-critic
 #   70-79 evorainbow-sac-hboot
 #
+# Suite: reset (task ID = condition_index * 10 + seed, array 0-19)
+#   0-9   td3
+#   10-19 td3-reset
+#
 # Example usage:
 #   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
@@ -45,10 +49,16 @@ MAIN=(
   "evorainbow-sac-hboot|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=hboot"
 )
 
+RESET=(
+  "td3|algorithm=td3"
+  "td3-reset|algorithm=td3-reset"
+)
+
 case "${SUITE}" in
 main) CONDITIONS=("${MAIN[@]}") ;;
+reset) CONDITIONS=("${RESET[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Only 'main' is supported." >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main' or 'reset'." >&2
   exit 1
   ;;
 esac

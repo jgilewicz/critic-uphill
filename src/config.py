@@ -94,6 +94,22 @@ RL_CONFIG_CLASSES: dict[str, type[RLConfig]] = {
 
 
 @dataclass(frozen=True)
+class ResetConfig:
+    """Full network resets of standalone TD3 at fixed env steps."""
+
+    enabled: bool = False
+    at_steps: tuple[int, ...] = (200_000, 400_000, 600_000)
+
+    def __post_init__(self) -> None:
+        if any(step < 1 for step in self.at_steps):
+            raise ValueError(f"reset.at_steps={self.at_steps}; must be >= 1")
+        if list(self.at_steps) != sorted(set(self.at_steps)):
+            raise ValueError(
+                f"reset.at_steps={self.at_steps}; must be strictly increasing"
+            )
+
+
+@dataclass(frozen=True)
 class RLAlgoConfig:
     """Configuration for standalone off-policy RL agents (td3 | sac)."""
 
@@ -101,9 +117,15 @@ class RLAlgoConfig:
     horizon: int = 1000
     embedding_dim: int = 300
     rl: RLConfig = field(default_factory=TD3RLConfig)
+    reset: ResetConfig = field(default_factory=ResetConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.name", self.name, AgentName)
+        if self.reset.enabled and self.name != "td3":
+            raise ValueError(
+                "algorithm.reset.enabled=true is only supported for td3, "
+                f"not {self.name!r}. set algorithm.reset.enabled=false"
+            )
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -296,3 +318,17 @@ class RunConfig:
                 f"probe.n_perturbations={self.probe.n_perturbations} exceeds "
                 f"the {candidates} perturbations measured by deg"
             )
+        if isinstance(self.algorithm, RLAlgoConfig) and (
+            self.algorithm.reset.enabled
+        ):
+            late = [
+                s
+                for s in self.algorithm.reset.at_steps
+                if s >= self.total_steps
+            ]
+            if late:
+                raise ValueError(
+                    f"algorithm.reset.at_steps={late} never fire within "
+                    f"total_steps={self.total_steps}. lower them or raise "
+                    "total_steps"
+                )

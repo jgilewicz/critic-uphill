@@ -3,8 +3,9 @@ from __future__ import annotations
 import jax
 import numpy as np
 
-from agents import make_agent
+from agents import TD3, make_agent
 from common.replay_buffer import ReplayBuffer
+from common.reset import ResetController
 from common.rollout import Budget, rollout_single_episode
 from common.training import LogFn, print_summary, run_warmup
 from config import RLAlgoConfig, RunConfig
@@ -54,6 +55,24 @@ class RLTrainer:
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
         )
+        self._resetter = self._make_resetter(algo_cfg)
+
+    def _make_resetter(self, algo_cfg: RLAlgoConfig) -> ResetController | None:
+        if not algo_cfg.reset.enabled:
+            return None
+        if not isinstance(self._agent, TD3):
+            raise TypeError(
+                f"reset requires a TD3 agent, got {type(self._agent).__name__}"
+            )
+        return ResetController(
+            algo_cfg.reset,
+            self._agent,
+            self._buffer,
+            seed=self._run_cfg.seed,
+            perf=self._perf,
+            diagnostics=self._diagnostics,
+            on_log=self._on_log,
+        )
 
     def _next_key(self) -> jax.Array:
         self._key, sub = jax.random.split(self._key)
@@ -73,6 +92,8 @@ class RLTrainer:
         num_updates = int(self._algo.rl.train_ratio * ep_steps)
         losses = self._agent.update(self._buffer, num_updates, self._next_key())
         steps = self._budget.env_steps
+        if self._resetter is not None:
+            self._resetter.maybe_reset(steps)
         metrics = budget_metrics(self._budget, 0.0)
         metrics.update(losses)
         eval_metrics = self._perf.maybe_evaluate(self._agent, steps)
@@ -88,6 +109,8 @@ class RLTrainer:
         )
         if self._on_log is not None:
             self._on_log(metrics)
+        if self._resetter is not None:
+            self._resetter.after_iteration(steps, eval_metrics)
 
     def train(self) -> float:
         """Run warmup and episode-by-episode RL until the budget ends."""
@@ -107,6 +130,8 @@ class RLTrainer:
             while not self._budget.exhausted:
                 self._step_episode(episode)
                 episode += 1
+            if self._resetter is not None:
+                self._resetter.finish(self._budget.env_steps)
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return

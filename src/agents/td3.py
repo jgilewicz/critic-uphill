@@ -64,17 +64,8 @@ class TD3(RLAgent):
         embedding_opt = make_adam(1e-3)
         actor_opt = make_adam(rl_cfg.actor_lr)
         critic_opt = make_adam(rl_cfg.critic_lr)
-        self.state: TD3State = init_td3(
-            obs_dim,
-            action_dim,
-            embedding_dim,
-            action_limit=action_limit,
-            key=key,
-            hidden_dims=rl_cfg.critic_hidden_dims,
-            embedding_optimizer=embedding_opt,
-            actor_optimizer=actor_opt,
-            critic_optimizer=critic_opt,
-        )
+        self._optimizers = (embedding_opt, actor_opt, critic_opt)
+        self.state: TD3State = self._init_state(key)
         hyperparams = TD3Hyperparams(
             gamma=rl_cfg.gamma,
             tau=rl_cfg.tau,
@@ -91,6 +82,24 @@ class TD3(RLAgent):
             critic_optimizer=critic_opt,
         )
         _, self._unravel_head = ravel_pytree(self.state.online.actor)
+
+    def _init_state(self, key: jax.Array) -> TD3State:
+        embedding_opt, actor_opt, critic_opt = self._optimizers
+        return init_td3(
+            self.obs_dim,
+            self.action_dim,
+            self.embedding_dim,
+            action_limit=self.action_limit,
+            key=key,
+            hidden_dims=self.rl_cfg.critic_hidden_dims,
+            embedding_optimizer=embedding_opt,
+            actor_optimizer=actor_opt,
+            critic_optimizer=critic_opt,
+        )
+
+    def reset(self, key: jax.Array) -> None:
+        """Re-initialize all networks, targets and optimizer states."""
+        self.state = self._init_state(key)
 
     @property
     def embedding(self) -> SharedStateEmbedding:

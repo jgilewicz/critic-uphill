@@ -1,0 +1,9 @@
+# @package algorithm
+# td3 with a full network reset (embedding, actor, critics, targets and
+# optimizer states) at each algorithm.reset.at_steps
+defaults:
+  - td3
+  - _self_
+
+reset:
+  enabled: true
