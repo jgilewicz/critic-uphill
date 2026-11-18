@@ -87,7 +87,8 @@ MuJoCo v5 only (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer
 
 - `total_steps` (default `1_000_000`) is a hard cap enforced by one `Budget` counter (`rl_steps + pop_steps == env_steps <= total_steps`).
 - Finished environments in `EnvPool` stop stepping immediately (no auto-reset dummy steps), and any rollout reaching `budget.remaining == 0` stops as truncated (`done=False`).
-- Periodic deterministic evaluation (`perf/eval_rl`, `eval.episodes=10` every `eval.interval=5000` steps) runs on a separate `eval_env` outside the budget.
+- Periodic deterministic evaluation (`perf/eval_rl`, `eval.episodes=10` every `eval.interval=5000` steps, seeds `seed + i`) runs on a separate `eval_env` outside the budget.
+- `deg/*` measurements and the truth probe (`probe/*`) use no budget steps: the probe runs paired episodes on `eval_env` only.
 
 ---
 
@@ -125,12 +126,43 @@ just smoke evorainbow Hopper-v5 algorithm.eval.mode=hboot algorithm.eval.h=50
 
 ## Logged Metrics (wandb)
 
-All runs log `config.protocol = 4` with `env_steps` as the x-axis (`wandb.define_metric("*", step_metric="env_steps")`):
+All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define_metric("*", step_metric="env_steps")`). Metrics use no RNG from training (separate `metric_key`).
 
-- `env_steps`: total real environment steps consumed (`rl_steps + pop_steps`).
-- `perf/eval_rl`: mean deterministic RL return over `eval.episodes` every `eval.interval` steps.
-- `cost/pop_steps`: cumulative real environment steps used by the population.
-- `train/critic_loss`: mean TD3 critic loss over the episode or generation updates.
+**Budget** (every iteration)
+
+- `env_steps`: total real environment steps consumed.
+- `budget/steps_total`, `budget/steps_rl`, `budget/steps_pop`: cumulative steps (`rl + pop == total`).
+- `budget/real_frac`: share of population individuals scored by a real episode (0 for td3/sac, 1 for `full`).
+
+**Performance** (every `eval.interval` steps)
+
+- `perf/eval_rl`, `perf/eval_rl_std`: deterministic RL actor return, mean and std over `eval.episodes`.
+- `perf/train_return`: mean training RL episode return since the last eval.
+- `perf/eval_champion`, `perf/champion_beats_actor`: best population head of the last evaluated generation vs the RL actor (EvoRainbow).
+
+**Critic and actor** (per update call, overestimation at eval)
+
+- `critic/td_loss`, `critic/q_mean`: mean over the updates.
+- `critic/overestimation`: mean `Q1(s0, pi(s0))` minus the discounted eval return.
+- `actor/loss` (SAC also `actor/alpha`).
+
+**Surrogate quality** (EvoRainbow, per evaluated generation)
+
+- `pop/dist_to_actor`, `pop/diversity`, `pop/actor_rank`: population geometry (rank only when the RL actor is injected).
+- `surr/critic_share`: fraction of the surrogate score carried by the critic term.
+- `surr/rank_corr`, `surr/top1_regret`, `surr/elite_overlap`, `surr/dist_corr`: only with at least 3 real evals in the generation (no pooling), on the really evaluated subset. `top1_regret` is `max(truth) - truth[argmax surrogate]`, elite size `max(1, n_real // 2)`, `dist_corr` is Spearman of surrogate vs `-dist_to_actor`.
+
+**Degeneration** (every `deg.interval=50000` steps, `deg.n_states=2000`, `deg.n_perturbations=40` per sigma in `deg.sigmas=[0.05, 0.2]`)
+
+- `deg/ratio`: median `|first-order term|` over median `|second-order term|` of the Q1 change along each perturbation (`dS ~ t1 + t2`, `-dist_H = t2`).
+- `deg/rho_H`: Spearman of `dS` (critic gain of the perturbed head) vs `t2`.
+- `deg/frac_critic_better`: share of perturbations with `dS > 0`.
+- All three pooled over sigmas, plus `_s0`, `_s1` per sigma.
+- `deg/grad_norm`, `deg/action_grad_norm`: critic gradient norms at the actor.
+
+**Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
+
+- `probe/top1_true_gain`, `probe/frac_true_better`: real return gain over the actor for the perturbed heads.
 
 ---
 
@@ -144,7 +176,8 @@ src/
 ├── agents/           # TD3 agent (networks, targets, optimizers, jitted updates)
 ├── algos/            # TD3Trainer and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
-├── common/           # ReplayBuffer, Budget, PerfEvaluator, rollouts, jitted TD3 math
+├── common/           # ReplayBuffer, Budget, rollouts, jitted TD3 and SAC math
+├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe
 ├── conf/             # Hydra config.yaml, algorithm/{td3,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl

@@ -6,9 +6,11 @@ import numpy as np
 from agents import make_agent
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
-from common.training import LogFn, PerfEvaluator, print_summary, run_warmup
+from common.training import LogFn, print_summary, run_warmup
 from config import RLAlgoConfig, RunConfig
 from environments import env_dims, make_env
+from metrics.diagnostics import Diagnostics
+from metrics.perf import PerfMetrics, budget_metrics
 
 _EVAL_SEED_OFFSET = 10_000
 
@@ -32,12 +34,14 @@ class RLTrainer:
         self._seed_rng = np.random.default_rng(run_cfg.seed)
         self._budget = Budget(run_cfg.total_steps)
         self._env = make_env(run_cfg.env.id)
-        self._evaluator = PerfEvaluator(
+        self._perf = PerfMetrics(
             run_cfg.eval_env.id,
             interval=run_cfg.eval.interval,
             episodes=run_cfg.eval.episodes,
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
+            gamma=algo_cfg.rl.gamma,
         )
+        self._diagnostics = Diagnostics(run_cfg, self._perf.env)
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
@@ -57,7 +61,7 @@ class RLTrainer:
 
     def _step_episode(self, episode: int) -> None:
         ep_seed = int(self._seed_rng.integers(0, 2**31 - 1))
-        _, ep_steps = rollout_single_episode(
+        ep_return, ep_steps = rollout_single_episode(
             self._env,
             lambda s: self._agent.act(s, self._next_key()),
             self._buffer,
@@ -65,23 +69,23 @@ class RLTrainer:
             max_steps=self._algo.horizon,
             seed=ep_seed,
         )
+        self._perf.record_train_return(ep_return)
         num_updates = int(self._algo.rl.train_ratio * ep_steps)
         losses = self._agent.update(self._buffer, num_updates, self._next_key())
-        eval_ret = self._evaluator.maybe_evaluate(
-            self._agent, self._budget.env_steps
-        )
-        metrics: dict[str, float] = {
-            "env_steps": float(self._budget.env_steps),
-            "cost/pop_steps": float(self._budget.pop_steps),
-        }
+        steps = self._budget.env_steps
+        metrics = budget_metrics(self._budget, 0.0)
         metrics.update(losses)
-        critic_loss = losses.get("train/critic_loss", 0.0)
-        if eval_ret is not None:
-            metrics["perf/eval_rl"] = eval_ret
+        eval_metrics = self._perf.maybe_evaluate(self._agent, steps)
+        if eval_metrics is not None:
+            metrics.update(eval_metrics)
             print(
-                f"ep {episode:4d} | steps {self._budget.env_steps:7d} | "
-                f"eval={eval_ret:.1f} | critic_loss={critic_loss:.4f}"
+                f"ep {episode:4d} | steps {steps:7d} | "
+                f"eval={eval_metrics['perf/eval_rl']:.1f} | "
+                f"critic_loss={losses.get('critic/td_loss', 0.0):.4f}"
             )
+        metrics.update(
+            self._diagnostics.maybe_measure(self._agent, self._buffer, steps)
+        )
         if self._on_log is not None:
             self._on_log(metrics)
 
@@ -96,18 +100,18 @@ class RLTrainer:
                 warmup_steps=self._algo.rl.warmup_steps,
                 horizon=self._algo.horizon,
                 seed_rng=self._seed_rng,
-                evaluator=self._evaluator,
+                perf=self._perf,
                 on_log=self._on_log,
             )
             episode = 0
             while not self._budget.exhausted:
                 self._step_episode(episode)
                 episode += 1
-            final_eval = self._evaluator.evaluate(
+            final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
-            )
+            ).rl_return
             print_summary(self._algo.name, self._budget, final_eval)
             return final_eval
         finally:
             self._env.close()
-            self._evaluator.close()
+            self._perf.close()
