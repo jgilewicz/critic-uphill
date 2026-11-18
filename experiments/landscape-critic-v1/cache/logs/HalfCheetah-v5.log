@@ -1,6 +1,0 @@
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s0_step_300000.json {'landscape': 2.257127046585083, 'critics': 466.4391529560089, 'steps': 52.17821288108826}
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s0_step_600000.json {'landscape': 4.065022945404053, 'critics': 567.2249426841736, 'steps': 67.75940132141113}
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s0_step_1000000.json {'landscape': 4.754472017288208, 'critics': 779.3665759563446, 'steps': 56.15376424789429}
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s1_step_300000.json {'landscape': 4.462538003921509, 'critics': 588.6700568199158, 'steps': 72.35040616989136}
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s1_step_600000.json {'landscape': 5.178596258163452, 'critics': 579.9587409496307, 'steps': 82.52221488952637}
--> /Users/kuba/Home/research/hboot_erl/experiments/landscape-critic-v1/cache/cells/HalfCheetah-v5/s1_step_1000000.json {'landscape': 6.237917900085449, 'critics': 577.1689410209656, 'steps': 87.78334999084473}
