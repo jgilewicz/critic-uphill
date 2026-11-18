@@ -13,17 +13,17 @@ JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL)
 
 Paper reference: EvoRainbow (Li et al., ICML 2024, PMLR v235).
 
-- **TD3** (`algorithm=td3`): Standalone TD3 using the same networks (`SharedStateEmbedding`, `ActorHead`, twin `Critic`), same TD3 hyperparameters, same warmup, and same episode-by-episode RL rollout loop as EvoRainbow's RL side.
+- **TD3** (`algorithm=td3`): Standalone TD3 using the same networks (`SharedStateEmbedding` with `tanh` after both `LayerNorm` layers and `embedding_dim=300`, `ActorHead` with `0.1`-scaled RL init, twin `Critic` `[obs+act -> 400 -> LN -> leaky_relu -> 300 -> LN -> leaky_relu -> 1]` with `0.1`-scaled output layer), separate embedding Adam optimizer (`1e-3`), grad-norm clipping at `10`, `batch_size=128`, and episode-by-episode RL rollout loop.
 - **EvoRainbow** (`algorithm=evorainbow`):
   - Parallel mode: RL actor and CEM population share one replay buffer.
-  - Shared architecture: `SharedStateEmbedding` Z(s) trained by TD3, CEM over per-individual `ActorHead`.
-  - Genetic Soft Update: `theta_rl = tau * theta_elite + (1 - tau) * theta_rl` applied to both online and target RL actor heads (`ea_to_rl.tau = 0.3`).
-  - RL-to-EA injection: RL actor head injected into the weakest individual every `rl_to_ea.period` generations (`1`).
+  - Shared architecture: `SharedStateEmbedding` Z(s) trained by TD3 actor loss, CEM over per-individual `ActorHead` (`mu_init` from an unscaled `ActorHead`, `elitism=false`, antithetic sampling iff `pop_size` is even, `damp` decaying `0.95 * damp + 0.05 * damp_limit`).
+  - Warmup (`rl_steps < rl.warmup_steps`): runs CEM `ask()`/`tell(zeros)` and uniform-random RL episodes without population rollouts or TD3 updates.
+  - Generation order: CEM `ask()` (keeping injected RL slot) -> population fitness -> CEM `tell()` -> genetic soft update of online and target RL actor head toward generation's best (skipped if the best is the injected RL slot) -> one noisy RL episode -> TD3 updates (`int(train_ratio * gen_steps)`) -> RL-to-EA injection into `argmin(fitness)` every `rl_to_ea.period` generations.
 - **Population fitness modes** (`algorithm.eval.mode`):
   - `full`: One full real episode (up to `horizon=1000` steps) per individual.
   - `critic`: Critic(Buffer) from EvoRainbow. Mean of online `Q1(s, pi_i(s))` over `eval.critic_states` (default `50_000`) replay-buffer states, 0 real steps.
   - `hboot`: Critic(H-step Bootstrap) from EvoRainbow. `sum_{t=0}^{H-1} gamma^t r_t + gamma^H Q1(s_H, pi_i(s_H))` with `H = eval.h` (default `200`). Episodes terminating before `H` omit the bootstrap term. All real steps go to the buffer and count toward the budget.
-  - **Generation control**: With probability `eval.p_real` (default `0.0`) per generation, the whole population is scored with `full` instead of the surrogate. Valid only for `critic` and `hboot`.
+  - **Per-individual gating**: In `critic` and `hboot` modes, each individual independently receives a real full episode with probability `eval.p_real` (per-env official `theta`), otherwise the surrogate. Invalid when `eval.mode=full`.
 
 ## Hyperparameters (`algorithm.*`)
 
@@ -31,17 +31,29 @@ Paper reference: EvoRainbow (Li et al., ICML 2024, PMLR v235).
 |---|---|---|
 | `pop_size` | CEM population size | `5` |
 | `horizon` | Max steps per episode | `1000` |
-| `embedding_dim` | Shared state embedding Z(s) size | `256` |
+| `embedding_dim` | Shared state embedding Z(s) size | `300` |
 | `cem.sigma_init` | Initial CEM diagonal variance | `1e-3` |
-| `cem.damp`, `cem.damp_limit`, `cem.elitism` | CEM covariance damping and elitism | `1e-3`, `1e-5`, `true` |
+| `cem.damp`, `cem.damp_limit`, `cem.elitism` | CEM covariance damping and elitism | per-env, `1e-5`, `false` |
 | `rl.critic_hidden_dims` | Twin critic MLP widths | `[400, 300]` |
 | `rl.gamma`, `rl.tau`, `rl.policy_freq` | Discount, Polyak tau, actor delay | `0.99`, `0.005`, `2` |
 | `rl.policy_noise`, `rl.noise_clip`, `rl.exploration_noise` | Target and exploration noise | `0.2`, `0.5`, `0.1` |
-| `rl.actor_lr`, `rl.critic_lr`, `rl.batch_size` | Adam LRs and batch size | `1e-3`, `1e-3`, `256` |
+| `rl.actor_lr`, `rl.critic_lr`, `rl.batch_size` | Adam LRs and batch size | `1e-3`, `1e-3`, `128` |
 | `rl.buffer_capacity`, `rl.warmup_steps`, `rl.train_ratio` | Replay capacity, uniform warmup, updates/step | `1_000_000`, `10_000`, `1.0` |
-| `rl_to_ea.period` | Generations between RL injections (0 disables) | `1` |
-| `ea_to_rl.tau` | Genetic Soft Update weight on online + target actor | `0.3` |
-| `eval.mode`, `eval.h`, `eval.critic_states`, `eval.p_real` | Population fitness estimator and generation control | `hboot`, `200`, `50_000`, `0.0` |
+| `rl_to_ea.period` | Generations between RL injections (0 disables) | per-env |
+| `ea_to_rl.tau` | Genetic Soft Update weight on online + target actor | per-env |
+| `eval.mode`, `eval.h`, `eval.critic_states`, `eval.p_real` | Population fitness estimator and per-individual gate | `hboot`, `200`, `50_000`, per-env |
+
+## Per-Env EvoRainbow Presets (`src/conf/algorithm/env/`)
+
+Selected automatically from `env.id` and individually overridable via CLI:
+
+| Env | `cem.damp` | `ea_to_rl.tau` | `eval.p_real` | `rl_to_ea.period` |
+|---|---|---|---|---|
+| `Ant-v5` | `1e-4` | `0.1` | `0.2` | `1` |
+| `Walker2d-v5` | `1e-1` | `0.1` | `0.6` | `1` |
+| `Swimmer-v5` | `1e-3` | `0.3` | `0.4` | `10` |
+| `HalfCheetah-v5` | `1e-3` | `0.3` | `0.5` | `1` |
+| `Hopper-v5` | `1e-3` | `0.3` | `0.5` | `1` |
 
 ## Budget Accounting Rule
 
@@ -50,7 +62,7 @@ Paper reference: EvoRainbow (Li et al., ICML 2024, PMLR v235).
 - Finished environments stop stepping immediately (no auto-reset dummy steps).
 - Any rollout reaching the remaining budget stops immediately and marks the last transition as truncated (`done=False`), so TD targets still bootstrap.
 - Result: `final env_steps <= total_steps` holds strictly, and `rl_steps + pop_steps == env_steps`.
-- Deterministic performance evaluations (`perf/eval_rl` every `eval.interval` steps for `eval.episodes` episodes) run on a separate environment outside the budget.
+- Deterministic performance evaluations (`perf/eval_rl` every `eval.interval=5000` steps for `eval.episodes=10` episodes) run on a separate environment outside the budget.
 
 ## Environments
 
@@ -101,9 +113,9 @@ MuJoCo v5 only (any other ID fails fast):
     ├── algos/              # TD3Trainer and EvoRainbowTrainer loops
     ├── analysis/           # Wandb run fetching, loading, and bootstrap stats
     ├── common/             # ReplayBuffer, Budget, PerfEvaluator, rollouts, jitted TD3
-    ├── conf/               # Hydra config.yaml and algorithm/{td3,evorainbow}.yaml
+    ├── conf/               # Hydra config.yaml, algorithm/{td3,evorainbow}.yaml, algorithm/env/
     ├── environments/       # MuJoCo v5 registry and EnvPool
-    ├── fitness/            # FullEpisode, CriticBuffer, HStepBootstrap, GenerationControl
+    ├── fitness/            # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl
     └── modules/            # Equinox networks and CEM optimizer
 ```
 
