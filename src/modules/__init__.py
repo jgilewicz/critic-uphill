@@ -5,6 +5,9 @@ from modules.deep_modules import (
     Critic as Critic,
 )
 from modules.deep_modules import (
+    GaussianActorHead as GaussianActorHead,
+)
+from modules.deep_modules import (
     SharedStateEmbedding as SharedStateEmbedding,
 )
 from modules.evo_module import CEM as CEM
