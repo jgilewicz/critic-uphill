@@ -27,8 +27,9 @@ class SurrogateMetrics:
     ) -> dict[str, float]:
         """Metrics of one evaluated generation, using no env steps."""
         dist = np.linalg.norm(flat_pop - actor_flat, axis=1)
+        others = np.arange(len(dist)) != injected
         metrics = {
-            "pop/dist_to_actor": float(dist.mean()),
+            "pop/dist_to_actor": float(dist[others].mean()),
             "pop/diversity": self._diversity(flat_pop),
         }
         if injected is not None:
@@ -58,7 +59,7 @@ class SurrogateMetrics:
         chosen = int(np.argmax(surrogate))
         ranking = {
             "surr/rank_corr": spearman(surrogate, truth),
-            "surr/top1_regret": float(truth.max() - truth[chosen]),
+            "surr/top1_regret": float(truth[chosen] - truth.max()),
             "surr/elite_overlap": _elite_overlap(surrogate, truth),
             "surr/dist_corr": spearman(surrogate, -dist[mask]),
         }

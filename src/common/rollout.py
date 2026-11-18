@@ -174,6 +174,7 @@ class _PrefixTracker:
     def observe(
         self,
         step: int,
+        *,
         active: np.ndarray,
         rewards: np.ndarray,
         states: np.ndarray,
@@ -272,7 +273,12 @@ def rollout_population(
         factor *= discount
         if tracker is not None:
             tracker.observe(
-                step, active, rewards, states, terminated_all, steps_taken
+                step,
+                active=active,
+                rewards=rewards,
+                states=states,
+                terminated=terminated_all,
+                steps_taken=steps_taken,
             )
 
     prefix = (

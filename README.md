@@ -138,7 +138,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 
 - `perf/eval_rl`, `perf/eval_rl_std`: deterministic RL actor return, mean and std over `eval.episodes`.
 - `perf/train_return`: mean training RL episode return since the last eval.
-- `perf/eval_champion`, `perf/champion_beats_actor`: best population head of the last evaluated generation vs the RL actor (EvoRainbow).
+- `perf/eval_champion`, `perf/champion_beats_actor`: best population head of the last evaluated generation vs the RL actor (EvoRainbow). The champion runs on the embedding snapshot it was selected with.
 
 **Critic and actor** (per update call, overestimation at eval)
 
@@ -149,16 +149,20 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 **Surrogate quality** (EvoRainbow, per evaluated generation)
 
 - `pop/dist_to_actor`, `pop/diversity`, `pop/actor_rank`: population geometry (rank only when the RL actor is injected).
-- `surr/critic_share`: fraction of the surrogate score carried by the critic term.
-- `surr/rank_corr`, `surr/top1_regret`, `surr/elite_overlap`, `surr/dist_corr`: only with at least 3 real evals in the generation (no pooling), on the really evaluated subset. `top1_regret` is `max(truth) - truth[argmax surrogate]`, elite size `max(1, n_real // 2)`, `dist_corr` is Spearman of surrogate vs `-dist_to_actor`.
+  - `dist_to_actor` excludes the injected RL slot, `diversity` includes it.
+  - `actor_rank` is `1 + count(fitness > actor)`, so ties favour the actor.
+  - SAC head distances include the unused `log_std_layer` dimensions.
+- `surr/critic_share`: `mean|gamma^H Q| / mean|total score|` over the surrogate-scored individuals (H-bootstrap only).
+- `surr/rank_corr`, `surr/top1_regret`, `surr/elite_overlap`, `surr/dist_corr`: only with at least 3 real evals in the generation (no pooling), on the really evaluated subset. `top1_regret` is `truth[argmax surrogate] - max(truth)` (<= 0, 0 is a perfect pick), elite size `max(1, n_real // 2)`, `dist_corr` is Spearman of surrogate vs `-dist_to_actor`. Flat generations (constant scores) log no ranking keys.
 
 **Degeneration** (every `deg.interval=50000` steps, `deg.n_states=2000`, `deg.n_perturbations=40` per sigma in `deg.sigmas=[0.05, 0.2]`)
 
-- `deg/ratio`: median `|first-order term|` over median `|second-order term|` of the Q1 change along each perturbation (`dS ~ t1 + t2`, `-dist_H = t2`).
+- `deg/ratio`: median `|first-order term|` over median `|second-order term|` of the Q1 change along each perturbation (`dS ~ t1 + t2`, `-dist_H = t2`). Not logged when the median second-order term is 0.
 - `deg/rho_H`: Spearman of `dS` (critic gain of the perturbed head) vs `t2`.
 - `deg/frac_critic_better`: share of perturbations with `dS > 0`.
 - All three pooled over sigmas, plus `_s0`, `_s1` per sigma.
 - `deg/grad_norm`, `deg/action_grad_norm`: critic gradient norms at the actor.
+- `deg/*` is also measured at probe steps (the truth probe picks from the same perturbations). `DegenerationProbe.measure()` sets `.last` as a side channel.
 
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
 
@@ -177,7 +181,7 @@ src/
 ├── algos/            # TD3Trainer and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
 ├── common/           # ReplayBuffer, Budget, rollouts, jitted TD3 and SAC math
-├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe
+├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe, Schedule
 ├── conf/             # Hydra config.yaml, algorithm/{td3,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl

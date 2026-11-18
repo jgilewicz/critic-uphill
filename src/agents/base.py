@@ -130,9 +130,19 @@ class RLAgent(abc.ABC):
     def act(self, state: np.ndarray, key: jax.Array) -> np.ndarray:
         """Sample an exploration action."""
 
-    def act_with_head(self, head: Any, state: np.ndarray) -> np.ndarray:
-        """Compute the deterministic action of any head over Z(s)."""
-        action = _act_deterministic(self.embedding, head, jnp.asarray(state))
+    def act_with_head(
+        self,
+        head: Any,
+        state: np.ndarray,
+        *,
+        embedding: SharedStateEmbedding | None = None,
+    ) -> np.ndarray:
+        """Compute the deterministic action of any head over Z(s).
+
+        Uses the online embedding unless a snapshot embedding is given.
+        """
+        encoder = self.embedding if embedding is None else embedding
+        action = _act_deterministic(encoder, head, jnp.asarray(state))
         return np.asarray(action, dtype=np.float32)
 
     def act_deterministic(self, state: np.ndarray) -> np.ndarray:

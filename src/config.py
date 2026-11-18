@@ -291,7 +291,7 @@ class RunConfig:
         if self.total_steps < 1:
             raise ValueError(f"total_steps={self.total_steps}; must be >= 1")
         candidates = self.deg.n_perturbations * len(self.deg.sigmas)
-        if self.probe.n_perturbations > candidates:
+        if self.probe.enabled and self.probe.n_perturbations > candidates:
             raise ValueError(
                 f"probe.n_perturbations={self.probe.n_perturbations} exceeds "
                 f"the {candidates} perturbations measured by deg"

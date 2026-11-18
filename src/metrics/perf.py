@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -9,6 +9,14 @@ from agents.base import RLAgent
 from common.rollout import Budget, evaluation_episode
 from environments import make_env
 from metrics.schedule import Schedule
+from modules.deep_modules import SharedStateEmbedding
+
+
+class Champion(NamedTuple):
+    """Best individual with the embedding it was scored on."""
+
+    embedding: SharedStateEmbedding
+    head: Any
 
 
 @dataclass(frozen=True)
@@ -77,7 +85,7 @@ class PerfMetrics:
         agent: RLAgent,
         env_steps: int,
         *,
-        champion: Any | None = None,
+        champion: Champion | None = None,
     ) -> dict[str, float] | None:
         """Evaluate if env_steps crossed a new eval.interval boundary."""
         if not self._schedule.due(env_steps):
@@ -93,7 +101,7 @@ class PerfMetrics:
         self,
         agent: RLAgent,
         *,
-        champion: Any | None = None,
+        champion: Champion | None = None,
         env_steps: int | None = None,
     ) -> EvalResult:
         """Run deterministic episodes on shared reset seeds."""
@@ -129,12 +137,14 @@ class PerfMetrics:
         return result
 
     def _mean_return(
-        self, agent: RLAgent, head: Any, seeds: list[int]
+        self, agent: RLAgent, champion: Champion, seeds: list[int]
     ) -> float:
         returns = [
             evaluation_episode(
                 self.env,
-                lambda s: agent.act_with_head(head, s),
+                lambda s: agent.act_with_head(
+                    champion.head, s, embedding=champion.embedding
+                ),
                 seed=seed,
                 gamma=self._gamma,
             ).ret

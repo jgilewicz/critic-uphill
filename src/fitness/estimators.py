@@ -27,7 +27,8 @@ class FitnessResult:
 
     real_mask marks individuals scored by a full real episode. surrogate
     holds surrogate scores of those individuals (valid at real_mask).
-    critic_share is the mean |gamma^H Q| / |score| of surrogate-scored ones.
+    critic_share is mean |gamma^H Q| / mean |score| over the
+    surrogate-scored individuals.
     """
 
     fitness: jax.Array
@@ -163,6 +164,7 @@ class CriticBufferFitness:
             fitness=fitness,
             steps=0,
             real_mask=np.zeros(fitness.shape[0], dtype=bool),
+            surrogate=np.asarray(fitness),
         )
 
     def score_real(
@@ -248,14 +250,14 @@ class HStepBootstrapFitness:
             if active_mask is None
             else np.asarray(active_mask, dtype=bool)
         )
-        share = np.abs(bootstrap[scored]) / np.maximum(
-            np.abs(total[scored]), _EPS
+        share = np.mean(np.abs(bootstrap[scored])) / max(
+            float(np.mean(np.abs(total[scored]))), _EPS
         )
         return FitnessResult(
             fitness=jnp.asarray(total, dtype=jnp.float32),
             steps=rollout.total_steps,
             real_mask=no_real,
-            critic_share=float(np.mean(share)),
+            critic_share=float(share),
         )
 
     def score_real(
@@ -316,12 +318,9 @@ class IndividualControlFitness:
             fitness[real_mask] = np.asarray(real_res.fitness)[real_mask]
             total_steps += real_res.steps
             evaluated = real_res.real_mask
-            if evaluated.any():
-                surrogate = self._surrogate.score_real(
-                    heads, surr_key, real_res
-                )
 
         surr_mask = ~real_mask
+        surr_res: FitnessResult | None = None
         critic_share = None
         if surr_mask.any():
             surr_res = self._surrogate.evaluate(
@@ -330,6 +329,14 @@ class IndividualControlFitness:
             fitness[surr_mask] = np.asarray(surr_res.fitness)[surr_mask]
             total_steps += surr_res.steps
             critic_share = surr_res.critic_share
+
+        if evaluated.any():
+            reusable = None if surr_res is None else surr_res.surrogate
+            surrogate = (
+                reusable
+                if reusable is not None
+                else self._surrogate.score_real(heads, surr_key, real_res)
+            )
 
         return FitnessResult(
             fitness=jnp.asarray(fitness, dtype=jnp.float32),

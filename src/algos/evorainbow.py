@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +13,7 @@ from config import EvoRainbowAlgoConfig, RunConfig
 from environments import env_dims, make_env, make_vec_env
 from fitness import FitnessResult, build_fitness_estimator
 from metrics.diagnostics import Diagnostics
-from metrics.perf import PerfMetrics, budget_metrics
+from metrics.perf import Champion, PerfMetrics, budget_metrics
 from metrics.surrogate import SurrogateMetrics
 from modules.evo_module import CEM
 
@@ -50,7 +49,7 @@ class EvoRainbowTrainer:
         )
         self._diagnostics = Diagnostics(run_cfg, self._perf.env)
         self._surrogate_metrics = SurrogateMetrics()
-        self._champion: Any | None = None
+        self._champion: Champion | None = None
         self._individual_evals = 0
         self._real_evals = 0
         self._buffer = ReplayBuffer(
@@ -160,7 +159,10 @@ class EvoRainbowTrainer:
         best_idx = int(jnp.argmax(fitness))
         gen_metrics: dict[str, float] = {}
         if evaluated:
-            self._champion = self._agent.unravel_head(flat_pop[best_idx])
+            self._champion = Champion(
+                self._agent.embedding,
+                self._agent.unravel_head(flat_pop[best_idx]),
+            )
             gen_metrics = self._surrogate_metrics.measure(
                 np.asarray(flat_pop),
                 np.asarray(actor_flat),

@@ -40,7 +40,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
   - `surrogate.py`: `SurrogateMetrics` (`pop/*`, `surr/*`, ranking keys need >=3 real evals).
   - `degeneration.py`: `DegenerationProbe.measure(agent, buffer, key)` (`deg/*`, schedule lives outside).
   - `truth.py`: `TruthProbe` (paired real episodes on `eval_env`, `probe/*`).
-  - `diagnostics.py`: `Diagnostics` schedules deg and truth probes. `stats.py`: numpy Spearman.
+  - `diagnostics.py`: `Diagnostics` schedules deg and truth probes. `schedule.py`: `Schedule` (interval boundaries), `metric_key`. `stats.py`: numpy Spearman.
 - `src/fitness/estimators.py`: `FitnessEstimator` protocol, `FullEpisodeFitness`, `CriticBufferFitness` (Q1 over `eval.critic_states`), `HStepBootstrapFitness` (H-step discounted return + `gamma^H * Q1`), and `IndividualControlFitness` (per-individual `eval.p_real`).
 - `src/algos/`: `RLTrainer` (generic episode-by-episode RL trainer) and `EvoRainbowTrainer` (supports `algorithm.agent=td3|sac`).
 - `src/analysis/`: Kept utilities (`stats.py`, `fetch.py`, `runs.py`).

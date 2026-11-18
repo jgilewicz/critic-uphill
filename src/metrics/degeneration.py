@@ -14,8 +14,6 @@ from config import DegConfig
 from metrics.stats import spearman
 from modules.deep_modules import Critic, SharedStateEmbedding
 
-_TINY = 1e-30
-
 
 class DegenerationTerms(NamedTuple):
     """Raw outputs of one jitted degeneration measurement."""
@@ -114,12 +112,14 @@ def _measure(
 def _perturbation_stats(
     delta_s: np.ndarray, t1: np.ndarray, t2: np.ndarray, suffix: str
 ) -> dict[str, float]:
-    ratio = np.median(np.abs(t1)) / max(float(np.median(np.abs(t2))), _TINY)
-    return {
-        f"deg/ratio{suffix}": float(ratio),
+    stats = {
         f"deg/rho_H{suffix}": spearman(delta_s, t2),
         f"deg/frac_critic_better{suffix}": float(np.mean(delta_s > 0.0)),
     }
+    median_t2 = float(np.median(np.abs(t2)))
+    if median_t2 > 0.0:
+        stats[f"deg/ratio{suffix}"] = float(np.median(np.abs(t1)) / median_t2)
+    return stats
 
 
 class DegenerationProbe:
