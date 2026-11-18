@@ -61,10 +61,17 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 | Variant | Fitness and role | Real pop steps / gen |
 |---|---|---|
 | `td3` | Standalone TD3 baseline (episode-by-episode rollout and updates), no population | `0` |
+| `td3-reset` (`algorithm=td3-reset`) | `td3` plus a full network reset at `algorithm.reset.at_steps=[200_000, 400_000, 600_000]` | `0` |
 | `sac` | Standalone SAC baseline (same episode loop, automatic entropy tuning), no population | `0` |
 | `evorainbow` (`full`) | Full real episode up to `horizon=1000`, undiscounted return (`p_real=0.0`) | up to `pop_size * 1000` |
 | `evorainbow` (`critic`) | Mean online `Q1(s, pi_i(s))` over `50_000` replay states, or full episode w.p. `p_real` | `0` (+ full episode w.p. `p_real`) |
 | `evorainbow` (`hboot`) | `H`-step discounted return (`H=200`) + `gamma^H Q1(s_H, pi_i(s_H))`, or full episode w.p. `p_real` | up to `pop_size * 200` (+ full episode w.p. `p_real`) |
+
+`td3-reset` is `td3.yaml` with `algorithm.reset.enabled=true` (`td3.yaml` has `reset.enabled=false`, so `td3` is unchanged and bit-identical to the pre-reset code for a fixed seed). `reset.enabled=true` with `sac` or `evorainbow` fails fast.
+
+- At the first episode/update boundary with `env_steps >= at_step` (never inside the fused update scan) the embedding, actor head, both critics, all target networks and all optimizer states are re-initialized with the init functions used at run start (actor head scale `0.1` etc.).
+- Fresh networks take their key from `fold_in(fold_in(key(seed), stream), reset_index)`, so the training RNG stream is untouched, before and after a reset.
+- Replay buffer, step counter, exploration noise and the running episode are kept. Updates continue immediately, no warmup.
 
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
@@ -88,11 +95,25 @@ MuJoCo v5 only (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer
 
 ---
 
+## Experiment Notes: `td3-reset`
+
+Pre-registered prediction (recorded before any `td3-reset` run, Polish original):
+
+> deg/ratio wyraźnie rośnie zaraz po resecie i spada w ciągu kolejnych 50k kroków. Wynik końcowy jest celem drugorzędnym.
+
+English translation: `deg/ratio` rises clearly right after the reset and falls within the following 50k steps. The final score is a secondary target.
+
+- Scope: 5 envs (HalfCheetah, Hopper, Walker2d, Ant, Swimmer `-v5`) x 10 seeds, `td3` and `td3-reset`, one frozen commit, no hyperparameter changes mid-run.
+- Suite `reset` (see Cluster) runs both conditions.
+
+---
+
 ## Step Budget
 
 - `total_steps` (default `1_000_000`) is a hard cap enforced by one `Budget` counter (`rl_steps + pop_steps == env_steps <= total_steps`).
 - Finished environments in `EnvPool` stop stepping immediately (no auto-reset dummy steps), and any rollout reaching `budget.remaining == 0` stops as truncated (`done=False`).
 - Periodic deterministic evaluation (`perf/eval_rl`, `eval.episodes=10` every `eval.interval=5000` steps, seeds `seed + i`) runs on a separate `eval_env` outside the budget.
+- Reset measurements (`reset/*` rows: eval and `deg/*` before and after a reset and at +5k, +20k, +50k) also use no budget steps.
 - `deg/*` measurements and the truth probe (`probe/*`) use no budget steps: the probe runs paired episodes on `eval_env` only.
 
 ---
@@ -105,6 +126,7 @@ just check                                                # ruff check, ruff for
 
 just train td3 Hopper-v5                                  # standalone TD3
 just train sac Hopper-v5                                  # standalone SAC
+just train td3-reset Hopper-v5                            # TD3 with full network resets
 just train evorainbow HalfCheetah-v5                      # EvoRainbow (default eval.mode=hboot)
 just train evorainbow Walker2d-v5 algorithm.eval.mode=critic
 just train evorainbow Hopper-v5 algorithm.agent=sac       # EvoRainbow with SAC agent
@@ -131,10 +153,13 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 - `20-29`: `evorainbow-td3-full`, `30-39`: `evorainbow-td3-critic`, `40-49`: `evorainbow-td3-hboot`
 - `50-59`: `evorainbow-sac-full`, `60-69`: `evorainbow-sac-critic`, `70-79`: `evorainbow-sac-hboot`
 
+Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
+
 Reads `WANDB_API_KEY` from the environment or `wandb login`.
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+./scripts/submit_suite.sh reset HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 ```
 
 ---
@@ -179,6 +204,14 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 - `deg/grad_norm`, `deg/action_grad_norm`: critic gradient norms at the actor.
 - `deg/*` is also measured at probe steps (the truth probe picks from the same perturbations). `DegenerationProbe.measure()` sets `.last` as a side channel.
 
+**Reset** (`td3-reset` only, each reset logs a `before` row and an `event` row at the same `env_steps`, then later rows)
+
+- `reset/index`: 0, 1, 2 (order of the reset), set on every `reset/*` row.
+- `reset/event`: actual reset step (first boundary at or past `at_step`). The event row also holds `reset/eval_before`, `reset/eval_after`, `reset/drop` (`eval_before - eval_after`) and, if `eval_after >= eval_before`, `reset/recovery_steps = 0`.
+- `reset/deg_offset`: marks the `deg/*` rows of a reset: `-1` right before (old networks), `0` right after (fresh networks, same `env_steps` and same `metric_key` as before), `5000`, `20000`, `50000` at the first boundary past `reset_step + offset`. All carry `deg/ratio`, `deg/rho_H`, `deg/frac_critic_better`, `deg/grad_norm`, `deg/action_grad_norm` (plus `_s{i}`). The before row also carries `perf/eval_rl` of the old networks, the event row that of the fresh ones.
+- `reset/recovery_steps`: `eval_step - reset_step` of the first eval with `perf/eval_rl >= reset/eval_before`, logged once per reset. If it never happens, logged at run end as `env_steps - reset_step`.
+- The regular `eval.interval` and `deg.interval` schedules keep running, so a regular row can duplicate a reset row at the same `env_steps`.
+
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
 
 - `probe/top1_true_gain`, `probe/frac_true_better`: real return gain over the actor for the perturbed heads.
@@ -192,11 +225,11 @@ src/
 ├── train.py          # Hydra entrypoint
 ├── runner.py         # Config validation, preset loading, wandb init, trainer dispatch
 ├── config.py         # Frozen config dataclasses matching src/conf/ YAML
-├── agents/           # RLAgent base, TD3, SAC, make_agent factory
+├── agents/           # RLAgent base, TD3 (with reset), SAC, make_agent factory
 ├── algos/            # RLTrainer (td3, sac) and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
-├── common/           # ReplayBuffer, Budget, rollouts, jitted TD3 and SAC math
-├── conf/             # Hydra config.yaml, algorithm/{td3,sac,evorainbow}.yaml, algorithm/env/
+├── common/           # ReplayBuffer, Budget, rollouts, ResetController, jitted TD3 and SAC math
+├── conf/             # Hydra config.yaml, algorithm/{td3,td3-reset,sac,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl
 ├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe, Schedule
