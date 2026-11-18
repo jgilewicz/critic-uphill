@@ -23,6 +23,13 @@ class Diagnostics:
         )
         self._truth_schedule = Schedule(run_cfg.probe.interval)
 
+    def measure_deg(
+        self, agent: RLAgent, buffer: ReplayBuffer, env_steps: int
+    ) -> dict[str, float]:
+        """Measure deg/* now, regardless of the schedule."""
+        deg_key, _ = jax.random.split(metric_key(self._seed, env_steps))
+        return self._deg.measure(agent, buffer, deg_key)
+
     def maybe_measure(
         self, agent: RLAgent, buffer: ReplayBuffer, env_steps: int
     ) -> dict[str, float]:
