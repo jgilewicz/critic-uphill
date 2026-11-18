@@ -11,7 +11,7 @@ JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL)
 ## Research question
 
 ### Why critic surrogates stall
-- Under a shared 1M-step budget, EvoRainbow replaces real population rollouts with critic-based fitness (`critic` or `hboot`) to run more CEM generations.
+- Under a shared 1M-step budget, EvoRainbow replaces full population rollouts with critic-based or `H`-step bootstrapped fitness (`critic` or `hboot`) to run more CEM generations.
 - Comparing `td3` against `evorainbow` (`full`, `critic`, `hboot`) tests whether surrogate selection helps under a fixed budget or fails because of critic geometry around the RL actor.
 
 ### Thesis
@@ -31,7 +31,7 @@ JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL)
                  ▼                                             ▼
      ┌───────────────────────┐                     ┌───────────────────────┐
      │  RL Agent (TD3 | SAC) │◄─ ea_to_rl (soft) ──┤   CEM ES Population   │
-     │ (Actor head, 0.1x)    │── rl_to_ea (period)►│  (5x ActorHead, 1.0x) │
+     │ (Actor head, 0.1x)    ├── rl_to_ea (period)►│  (5x ActorHead, 1.0x) │
      └───────────┬───────────┘                     └───────────┬───────────┘
                  │ (1x Env, up to H=1000)                      │ (5x EnvPool)
                  ▼                                             ▼
@@ -47,11 +47,11 @@ JAX and Equinox codebase studying why critic surrogates in evolutionary RL (ERL)
 
 Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 - **Warmup** (`rl_steps < 10_000`): CEM `ask` and `tell(zeros)` plus one uniform-random RL episode per generation, with no population rollouts or RL updates.
-- **CEM `ask()`**: Sample `pop_size` heads, restoring the pending RL-injected slot if scheduled from the previous generation.
+- **CEM `ask()`**: Sample `pop_size` heads, writing the current RL actor head into the slot scheduled from the previous generation (`pending_injection`) if set.
 - **Population fitness**: Evaluate heads with `full`, `critic`, or `hboot` (plus per-individual `p_real` gating).
 - **CEM `tell()`**: Update mean and diagonal covariance from fitness (skipped if budget exhausted during evaluation).
 - **EA-to-RL**: Genetic soft update (`ea_to_rl.tau`) of the RL actor head (online and target for TD3, online only for SAC) toward `argmax(fitness)` (skipped in warmup, on exhaustion, or if best is the injected RL slot).
-- **RL episode and updates**: Roll out one exploration episode into `ReplayBuffer`, then run `int(rl.train_ratio * (pop_steps + rl_steps))` jitted RL updates once `rl_steps >= rl.warmup_steps`.
+- **RL episode and updates**: Roll out one exploration episode into `ReplayBuffer`, then run `int(rl.train_ratio * gen_steps)` jitted RL updates (where `gen_steps` is this generation's population plus RL steps) once cumulative `rl_steps >= rl.warmup_steps`.
 - **RL-to-EA**: Schedule RL actor head injection into `argmin(fitness)` for the next generation every `rl_to_ea.period` generations (if `period > 0`).
 
 ---
@@ -63,12 +63,12 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 | `td3` | Standalone TD3 baseline (episode-by-episode rollout and updates), no population | `0` |
 | `sac` | Standalone SAC baseline (same episode loop, automatic entropy tuning), no population | `0` |
 | `evorainbow` (`full`) | Full real episode up to `horizon=1000`, undiscounted return (`p_real=0.0`) | up to `pop_size * 1000` |
-| `evorainbow` (`critic`) | Mean online `Q1(s, pi_i(s))` over `50_000` replay states, or full episode w.p. `p_real` | `0` (+ `p_real` full evals) |
-| `evorainbow` (`hboot`) | `H`-step discounted return (`H=200`) + `gamma^H Q1(s_H, pi_i(s_H))`, or full episode w.p. `p_real` | up to `pop_size * 200` (+ `p_real` full evals) |
+| `evorainbow` (`critic`) | Mean online `Q1(s, pi_i(s))` over `50_000` replay states, or full episode w.p. `p_real` | `0` (+ full episode w.p. `p_real`) |
+| `evorainbow` (`hboot`) | `H`-step discounted return (`H=200`) + `gamma^H Q1(s_H, pi_i(s_H))`, or full episode w.p. `p_real` | up to `pop_size * 200` (+ full episode w.p. `p_real`) |
 
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
-TD3 and EvoRainbow defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `pop_size=5`, `horizon=1000`, `embedding_dim=300`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`, `rl.gamma=0.99`, `rl.tau=0.005`, `rl.batch_size=128`, `rl.warmup_steps=10_000`, `rl.train_ratio=1.0`, `rl.actor_lr=rl.critic_lr=1e-3`.
+TD3 and EvoRainbow defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horizon=1000`, `embedding_dim=300`, `rl.gamma=0.99`, `rl.tau=0.005`, `rl.batch_size=128`, `rl.warmup_steps=10_000`, `rl.train_ratio=1.0`, `rl.actor_lr=rl.critic_lr=1e-3`. EvoRainbow-only defaults (`src/conf/algorithm/evorainbow.yaml`): `pop_size=5`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`.
 
 SAC defaults (`src/conf/algorithm/sac.yaml`): `rl.actor_lr=rl.critic_lr=rl.alpha_lr=3e-4`, learned `alpha` (init `1.0`, target entropy `-act_dim`), `log_std` clipped to `[-20, 2]`, target critics only. Under `evorainbow algorithm.agent=sac` these apply unless overridden, and SAC-only keys need Hydra's `+` prefix (e.g. `+algorithm.rl.alpha_lr=1e-4`).
 
@@ -109,7 +109,7 @@ just train evorainbow Walker2d-v5 algorithm.eval.mode=critic
 just train evorainbow Hopper-v5 algorithm.agent=sac       # EvoRainbow with SAC agent
 ```
 
-Smoke runs (`total_steps=3000`, `algorithm.rl.warmup_steps=1000`, `wandb.enabled=false`):
+Smoke runs (`total_steps=3000`, `algorithm.rl.warmup_steps=1000`, `eval.interval=1000`, `eval.episodes=1`, `wandb.enabled=false`):
 
 ```bash
 just smoke td3 Hopper-v5
@@ -124,7 +124,7 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 ## Cluster (SLURM on WCSS Lem)
 
-`slurm_run_array.sh` runs suite `main` (`1_000_000` steps on `lem-gpu`, 1x Hopper GPU, seeds `0-9`) with array `0-79` (task ID = condition index * 10 + seed):
+`slurm_run_array.sh` runs suite `main` (`1_000_000` steps on `lem-gpu`, 1x NVIDIA Hopper GPU, seeds `0-9`) with array `0-79` (task ID = condition index * 10 + seed):
 - `0-9`: `td3`
 - `10-19`: `sac`
 - `20-29`: `evorainbow-td3-full`, `30-39`: `evorainbow-td3-critic`, `40-49`: `evorainbow-td3-hboot`
