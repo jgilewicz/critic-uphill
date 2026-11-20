@@ -5,6 +5,8 @@ from typing import Any, Literal, get_args
 
 EvalMode = Literal["full", "critic", "hboot"]
 AgentName = Literal["td3", "sac"]
+# top-1 by Q1, Q2 and shadow, plus the nearest head (min dist_H)
+SHADOW_PROBE_PICKS = 4
 
 
 def _check_choice(name: str, value: str, kind: Any) -> None:
@@ -199,6 +201,18 @@ class EvalConfig:
 
 
 @dataclass(frozen=True)
+class ShadowConfig:
+    """Shadow twin critic: TD-trained, never in the actor loss."""
+
+    enabled: bool = False
+    surrogate: bool = False
+
+    def __post_init__(self) -> None:
+        if self.surrogate and not self.enabled:
+            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
+
+
+@dataclass(frozen=True)
 class EvoRainbowAlgoConfig:
     """Configuration for EvoRainbow (RL agent + CEM + surrogate fitness)."""
 
@@ -211,9 +225,20 @@ class EvoRainbowAlgoConfig:
     rl_to_ea: RLToEAConfig = field(default_factory=RLToEAConfig)
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
+    shadow: ShadowConfig = field(default_factory=ShadowConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.agent", self.agent, AgentName)
+        if self.shadow.enabled and self.agent != "td3":
+            raise ValueError(
+                "algorithm.shadow.enabled=true is only supported for "
+                f"agent=td3, not {self.agent!r}"
+            )
+        if self.shadow.surrogate and self.eval.mode != "critic":
+            raise ValueError(
+                "algorithm.shadow.surrogate=true needs eval.mode=critic, "
+                f"got {self.eval.mode!r}"
+            )
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -317,6 +342,17 @@ class RunConfig:
             raise ValueError(
                 f"probe.n_perturbations={self.probe.n_perturbations} exceeds "
                 f"the {candidates} perturbations measured by deg"
+            )
+        if (
+            isinstance(self.algorithm, EvoRainbowAlgoConfig)
+            and self.algorithm.shadow.enabled
+            and self.probe.enabled
+            and self.probe.n_perturbations < SHADOW_PROBE_PICKS + 1
+        ):
+            raise ValueError(
+                f"probe.n_perturbations={self.probe.n_perturbations} leaves "
+                f"no random pick next to the {SHADOW_PROBE_PICKS} shadow "
+                f"probe picks. use >= {SHADOW_PROBE_PICKS + 1}"
             )
         if isinstance(self.algorithm, RLAlgoConfig) and (
             self.algorithm.reset.enabled
