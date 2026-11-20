@@ -73,6 +73,13 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 - Fresh networks take their key from `fold_in(fold_in(key(seed), stream), reset_index)`, so the training RNG stream is untouched, before and after a reset.
 - Replay buffer, step counter, exploration noise and the running episode are kept. Updates continue immediately, no warmup.
 
+**Shadow critic** (`algorithm.shadow.enabled=true`, `evorainbow` with `agent=td3` only, default `false`):
+
+- A second twin critic with the TD3 critic architecture, its own init (key `fold_in(agent_key, stream)`), own target networks and own optimizer state.
+- TD-trained on the same batches and the same target-policy-smoothed next action as the main critic, target `min` of its own two target heads. Targets soft-update at the `policy_freq` cadence.
+- Never enters the actor loss. Logs `shadow/*` and `deg_q2/*` (see Logged Metrics) and switches the truth probe to the shadow picks.
+- `algorithm.shadow.surrogate=true` (needs `eval.mode=critic`) scores the population with the shadow's first head instead of Q1. The `p_real` gate is unchanged.
+
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
 TD3 and EvoRainbow defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horizon=1000`, `embedding_dim=300`, `rl.gamma=0.99`, `rl.tau=0.005`, `rl.batch_size=128`, `rl.warmup_steps=10_000`, `rl.train_ratio=1.0`, `rl.actor_lr=rl.critic_lr=1e-3`. EvoRainbow-only defaults (`src/conf/algorithm/evorainbow.yaml`): `pop_size=5`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`.
@@ -155,11 +162,14 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
 
+Suite `shadow` (array `0-19` per env): `0-9` `evorainbow-td3-critic` (shadow trained, Q1 surrogate), `10-19` `evorainbow-td3-shadow` (shadow surrogate). Both use `eval.mode=critic` and `shadow.enabled=true`.
+
 Reads `WANDB_API_KEY` from the environment or `wandb login`.
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 ./scripts/submit_suite.sh reset HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+./scripts/submit_suite.sh shadow Walker2d-v5 HalfCheetah-v5 Hopper-v5
 ```
 
 ---
@@ -203,6 +213,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 - All three pooled over sigmas, plus `_s0`, `_s1` per sigma.
 - `deg/grad_norm`, `deg/action_grad_norm`: critic gradient norms at the actor.
 - `deg/*` is also measured at probe steps (the truth probe picks from the same perturbations). `DegenerationProbe.measure()` sets `.last` as a side channel.
+- With `algorithm.shadow.enabled=true` the same states and perturbed heads are also scored by Q2 (`deg_q2/*`) and the shadow's first head (`shadow/*`), each with the same keys as `deg/*` (`ratio`, `rho_H`, `frac_critic_better`, `_s{i}`, `grad_norm`, `action_grad_norm`). `t1`, `t2` and `dS` come from that critic.
 
 **Reset** (`td3-reset` only, each reset logs a `before` row and an `event` row at the same `env_steps`, then later rows)
 
@@ -217,6 +228,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
 
 - `probe/top1_true_gain`, `probe/frac_true_better`: real return gain over the actor for the perturbed heads.
+- With `algorithm.shadow.enabled=true` the picks from all `deg` perturbations (both sigmas) are top-1 by Q1, Q2 and shadow `dS`, the nearest head (max Q1 `t2`, i.e. min `dist_H`), then distinct random others up to `probe.n_perturbations` (needs `>= 5`). Shared picks run once. Logs `probe/gain_q1`, `probe/gain_q2`, `probe/gain_shadow`, `probe/gain_nearest`, `probe/gain_random` (mean over the random picks), plus `top1_true_gain` (= `gain_q1`) and `frac_true_better` over all distinct picks.
 
 ---
 
@@ -227,7 +239,7 @@ src/
 ├── train.py          # Hydra entrypoint
 ├── runner.py         # Config validation, preset loading, wandb init, trainer dispatch
 ├── config.py         # Frozen config dataclasses matching src/conf/ YAML
-├── agents/           # RLAgent base, TD3 (with reset), SAC, make_agent factory
+├── agents/           # RLAgent base, TD3 (with reset and shadow critic), SAC, make_agent factory
 ├── algos/            # RLTrainer (td3, sac) and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
 ├── common/           # ReplayBuffer, Budget, rollouts, ResetController, jitted TD3 and SAC math

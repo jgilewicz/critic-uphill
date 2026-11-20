@@ -22,12 +22,25 @@ def make_agent(
     *,
     rl_cfg: RLConfig,
     key: jax.Array,
+    shadow: bool = False,
 ) -> RLAgent:
     """Instantiate an RLAgent subclass by algorithm name."""
     agent_cls = _AGENTS.get(name)
     if agent_cls is None:
         choices = tuple(_AGENTS)
         raise ValueError(f"Unsupported agent={name!r}; choose from {choices}")
+    if shadow:
+        if agent_cls is not TD3:
+            raise ValueError(f"shadow critic needs agent=td3, got {name!r}")
+        return TD3(
+            obs_dim,
+            action_dim,
+            action_limit,
+            embedding_dim,
+            rl_cfg=rl_cfg,
+            key=key,
+            shadow=True,
+        )
     return agent_cls(
         obs_dim,
         action_dim,

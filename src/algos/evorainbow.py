@@ -63,6 +63,7 @@ class EvoRainbowTrainer:
             algo_cfg.embedding_dim,
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
+            shadow=algo_cfg.shadow.enabled,
         )
         self._cem = CEM(
             self._agent.init_cem_head(self._next_key()),
@@ -81,6 +82,7 @@ class EvoRainbowTrainer:
             self._budget,
             horizon=algo_cfg.horizon,
             gamma=algo_cfg.rl.gamma,
+            shadow=algo_cfg.shadow.surrogate,
         )
 
     def _next_key(self) -> jax.Array:
@@ -239,7 +241,10 @@ class EvoRainbowTrainer:
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return
-            tag = f"evorainbow-{self._algo.agent}-{self._algo.eval.mode}"
+            mode = "shadow" if self._algo.shadow.surrogate else None
+            tag = (
+                f"evorainbow-{self._algo.agent}-{mode or self._algo.eval.mode}"
+            )
             print_summary(tag, self._budget, final_eval)
             return final_eval
         finally:

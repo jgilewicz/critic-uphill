@@ -22,6 +22,14 @@ class TD3Networks(NamedTuple):
     critic2: Critic
 
 
+class ShadowState(NamedTuple):
+    """Shadow twin critic: online and target heads plus optimizer state."""
+
+    online: tuple[Critic, Critic]
+    target: tuple[Critic, Critic]
+    opt_state: optax.OptState
+
+
 class TD3State(NamedTuple):
     """Full trainable and target state of TD3."""
 
@@ -30,6 +38,7 @@ class TD3State(NamedTuple):
     embedding_opt_state: optax.OptState
     actor_opt_state: optax.OptState
     critic_opt_state: optax.OptState
+    shadow: ShadowState | None = None
 
 
 class TD3Hyperparams(NamedTuple):
@@ -97,9 +106,30 @@ def init_td3(
     )
 
 
-def _td_target(
+def init_shadow(
+    state_dim: int,
+    action_dim: int,
+    *,
+    key: jax.Array,
+    hidden_dims: tuple[int, int],
+    optimizer: optax.GradientTransformation,
+) -> ShadowState:
+    """Initialize a shadow twin critic with its own targets."""
+    k1, k2 = jax.random.split(key)
+    critics = (
+        Critic(state_dim, action_dim, key=k1, hidden_dims=hidden_dims),
+        Critic(state_dim, action_dim, key=k2, hidden_dims=hidden_dims),
+    )
+    return ShadowState(
+        online=critics,
+        target=critics,
+        opt_state=optimizer.init(eqx.filter(critics, eqx.is_array)),
+    )
+
+
+def _next_action(
     cfg: TD3Hyperparams,
-    state: TD3State,
+    target: TD3Networks,
     batch: Batch,
     key: jax.Array,
 ) -> jax.Array:
@@ -108,20 +138,54 @@ def _td_target(
         -cfg.noise_clip,
         cfg.noise_clip,
     )
-    target = state.target
     z_next = jax.vmap(target.embedding)(batch["next_state"])
-    next_action = jnp.clip(
+    return jnp.clip(
         jax.vmap(target.actor)(z_next) + noise,
         -cfg.action_limit,
         cfg.action_limit,
     )
+
+
+def _td_target(
+    cfg: TD3Hyperparams,
+    critics: tuple[Critic, Critic],
+    batch: Batch,
+    next_action: jax.Array,
+) -> jax.Array:
     q_next = jnp.minimum(
-        critic_point(target.critic1, batch["next_state"], next_action),
-        critic_point(target.critic2, batch["next_state"], next_action),
+        critic_point(critics[0], batch["next_state"], next_action),
+        critic_point(critics[1], batch["next_state"], next_action),
     )
     return jax.lax.stop_gradient(
         batch["reward"] + cfg.gamma * (1.0 - batch["done"]) * q_next
     )
+
+
+def _twin_loss(
+    critics: tuple[Critic, Critic], batch: Batch, target_q: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    c1, c2 = critics
+    s, a = batch["state"], batch["action"]
+    loss = critic_loss(c1, s, a, target_q) + critic_loss(c2, s, a, target_q)
+    return loss, jnp.mean(critic_point(c1, s, a))
+
+
+def _shadow_update(
+    cfg: TD3Hyperparams,
+    optimizer: optax.GradientTransformation,
+    shadow: ShadowState,
+    batch: Batch,
+    next_action: jax.Array,
+) -> ShadowState:
+    target_q = _td_target(cfg, shadow.target, batch, next_action)
+    grads = eqx.filter_grad(_twin_loss, has_aux=True)(
+        shadow.online, batch, target_q
+    )[0]
+    updates, opt_state = optimizer.update(
+        grads, shadow.opt_state, eqx.filter(shadow.online, eqx.is_array)
+    )
+    online = eqx.apply_updates(shadow.online, updates)
+    return shadow._replace(online=online, opt_state=opt_state)
 
 
 def _critic_update(
@@ -131,19 +195,13 @@ def _critic_update(
     batch: Batch,
     key: jax.Array,
 ) -> tuple[TD3State, jax.Array, jax.Array]:
-    target_q = _td_target(cfg, state, batch, key)
-    s, a = batch["state"], batch["action"]
-
-    def loss_fn(
-        critics: tuple[Critic, Critic],
-    ) -> tuple[jax.Array, jax.Array]:
-        c1, c2 = critics
-        loss = critic_loss(c1, s, a, target_q) + critic_loss(c2, s, a, target_q)
-        return loss, jnp.mean(critic_point(c1, s, a))
-
+    next_action = _next_action(cfg, state.target, batch, key)
+    target_q = _td_target(
+        cfg, (state.target.critic1, state.target.critic2), batch, next_action
+    )
     critics = (state.online.critic1, state.online.critic2)
-    (loss, q_mean), grads = eqx.filter_value_and_grad(loss_fn, has_aux=True)(
-        critics
+    (loss, q_mean), grads = eqx.filter_value_and_grad(_twin_loss, has_aux=True)(
+        critics, batch, target_q
     )
     updates, opt_state = optimizer.update(
         grads, state.critic_opt_state, eqx.filter(critics, eqx.is_array)
@@ -151,7 +209,23 @@ def _critic_update(
     critic1, critic2 = eqx.apply_updates(critics, updates)
     new_online = state.online._replace(critic1=critic1, critic2=critic2)
     new_state = state._replace(online=new_online, critic_opt_state=opt_state)
+    if state.shadow is not None:
+        new_state = new_state._replace(
+            shadow=_shadow_update(
+                cfg, optimizer, state.shadow, batch, next_action
+            )
+        )
     return new_state, loss, q_mean
+
+
+def _soft_update_shadow(
+    shadow: ShadowState | None, tau: float
+) -> ShadowState | None:
+    if shadow is None:
+        return None
+    return shadow._replace(
+        target=genetic_soft_update(shadow.target, shadow.online, tau)
+    )
 
 
 def _actor_update(
@@ -203,6 +277,7 @@ def _actor_update(
         target=new_target,
         embedding_opt_state=emb_opt_state,
         actor_opt_state=act_opt_state,
+        shadow=_soft_update_shadow(state.shadow, cfg.tau),
     )
     return new_state, actor_loss
 

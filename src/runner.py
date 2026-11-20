@@ -24,6 +24,7 @@ from config import (
     RLToEAConfig,
     RunConfig,
     RunEvalConfig,
+    ShadowConfig,
     WandbConfig,
 )
 from environments import validate_env_id
@@ -140,6 +141,11 @@ def _build_algorithm(
                 EvalConfig,
                 _pop_section(algo, "eval", "evorainbow"),
                 "algorithm.eval",
+            ),
+            "shadow": _build_section(
+                ShadowConfig,
+                _pop_section(algo, "shadow", "evorainbow"),
+                "algorithm.shadow",
             ),
             **algo,
         }
@@ -305,7 +311,9 @@ def run_training(cfg: DictConfig) -> float:
             f"config | env={run_cfg.env.id} | agent={algo.agent} | "
             f"mode={algo.eval.mode} | damp={algo.cem.damp} | "
             f"ea_to_rl.tau={algo.ea_to_rl.tau} | p_real={algo.eval.p_real} | "
-            f"period={algo.rl_to_ea.period}"
+            f"period={algo.rl_to_ea.period} | "
+            f"shadow={algo.shadow.enabled} | "
+            f"shadow_surrogate={algo.shadow.surrogate}"
         )
     run = wandb.init(
         project=run_cfg.wandb.project,
