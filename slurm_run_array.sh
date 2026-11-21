@@ -33,6 +33,8 @@
 #
 # Example usage:
 #   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
+#   SUITE=e1 SEEDS="10 11 12 13 14" TARGET_ENV=Hopper-v5 \
+#     sbatch --array=0-14 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
 #SBATCH -N 1
@@ -96,7 +98,9 @@ e2) CONDITIONS=("${E2[@]}") ;;
   ;;
 esac
 
-SEEDS=(0 1 2 3 4 5 6 7 8 9)
+# SEEDS="10 11 12 13 14" runs other seeds: task ID = condition_index *
+# number of seeds + position of the seed in SEEDS
+read -r -a SEEDS <<<"${SEEDS:-0 1 2 3 4 5 6 7 8 9}"
 N_SEEDS=${#SEEDS[@]}
 
 TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"

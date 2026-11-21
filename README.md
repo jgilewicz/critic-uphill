@@ -184,6 +184,8 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
 
+`SEEDS` (default `"0 1 2 3 4 5 6 7 8 9"`) picks other seeds: task ID = condition index * number of seeds + position in `SEEDS`, so `SEEDS="10 11 12 13 14"` with suite `e1` takes array `0-14` (sbatch directly, `submit_suite.sh` assumes 10 seeds).
+
 Suite `e1` (array `0-29` per env, all with `shadow.enabled=true` and `checkpoint.dir=<PD>/checkpoints/<TAG>/<run>`): `0-9` `td3`, `10-19` `evorainbow-td3-full` (ERL), `20-29` `evorainbow-td3-critic` (SC-ERL, per-env `p_real`).
 
 Suite `e2` (array `0-49` per env, all with `shadow.enabled=true`): `0-9` `evorainbow-td3-critic-p0`, `10-19` / `20-29` / `30-39` `evorainbow-td3-prefix-h{100,200,400}`, `40-49` `evorainbow-td3-prefix-h200-matched`. The matched condition needs `MATCH_GENERATIONS` and `MATCH_UPDATES` (medians of final `budget/generation` and `budget/rl_updates` of the e1 ERL runs in that env), so `e2` is submitted one env per call.
