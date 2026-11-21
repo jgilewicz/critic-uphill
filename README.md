@@ -225,7 +225,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
 
 - `probe/top1_true_gain`, `probe/frac_true_better`: real return gain over the actor for the perturbed heads.
-- With `algorithm.shadow.enabled=true` the picks from all `deg` perturbations (both sigmas) are top-1 by Q1, Q2 and shadow `dS`, the nearest head (max Q1 `t2`, i.e. min `dist_H`), then distinct random others up to `probe.n_perturbations` (needs `>= 5`). Shared picks run once. Logs `probe/gain_q1`, `probe/gain_q2`, `probe/gain_shadow`, `probe/gain_nearest`, `probe/gain_random` (mean over the random picks), plus `top1_true_gain` (= `gain_q1`) and `frac_true_better` over all distinct picks.
+- With `algorithm.shadow.enabled=true` the picks from all `deg` perturbations (both sigmas) are top-1 by Q1, Q2 and shadow `dS`, the nearest head (max Q1 `t2`, i.e. min `dist_H`), then distinct random others up to `probe.n_perturbations` (needs `>= 5`). Shared picks run once. Logs `probe/gain_q1`, `probe/gain_q2`, `probe/gain_shadow`, `probe/gain_nearest`, `probe/gain_random` (mean over the random picks), plus `top1_true_gain` (= `gain_q1`) and `frac_true_better` over all distinct picks. `probe/pick_{q1,q2,shadow,nearest}` log the picked index into the `deg` perturbations (level-major: index `// deg.n_perturbations` is the sigma level).
 
 ---
 

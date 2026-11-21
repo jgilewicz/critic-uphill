@@ -116,6 +116,9 @@ class TruthProbe:
             f"probe/gain_{name}": float(gains[idx])
             for name, idx in named.items()
         }
+        metrics |= {
+            f"probe/pick_{name}": float(idx) for name, idx in named.items()
+        }
         metrics["probe/gain_random"] = float(
             np.mean([gains[i] for i in randoms])
         )

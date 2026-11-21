@@ -42,7 +42,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
   - `perf.py`: `PerfMetrics` (eval, overestimation, champion, train return) and `budget_metrics`.
   - `surrogate.py`: `SurrogateMetrics` (`pop/*`, `surr/*`, ranking keys need >=3 real evals, `full` mode scores a metrics-only Q1 surrogate for all individuals).
   - `degeneration.py`: `DegenerationProbe.measure(agent, buffer, key)` (`deg/*`, with `shadow=True` also `deg_q2/*` and `shadow/*` on the same heads, schedule lives outside).
-  - `truth.py`: `TruthProbe` (paired real episodes on `eval_env`, `probe/*`, shadow mode picks top-1 by Q1, Q2, shadow and nearest plus random, `probe/gain_*`).
+  - `truth.py`: `TruthProbe` (paired real episodes on `eval_env`, `probe/*`, shadow mode picks top-1 by Q1, Q2, shadow and nearest plus random, `probe/gain_*`, `probe/pick_*` indices).
   - `diagnostics.py`: `Diagnostics` schedules deg and truth probes. `schedule.py`: `Schedule` (interval boundaries), `metric_key`. `stats.py`: numpy Spearman.
 - `src/fitness/estimators.py`: `FitnessEstimator` protocol, `FullEpisodeFitness`, `CriticBufferFitness` (Q1 over `eval.critic_states`, shadow head with `shadow=True`), `HStepBootstrapFitness` (H-step discounted return + `gamma^H * Q1`), and `IndividualControlFitness` (per-individual `eval.p_real`).
 - `src/algos/`: `RLTrainer` (generic episode-by-episode RL trainer) and `EvoRainbowTrainer` (supports `algorithm.agent=td3|sac`).
