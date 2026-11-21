@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from agents import make_agent
+from common.checkpoint import GenerationRecord, make_checkpointer
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
 from common.training import LogFn, print_summary
@@ -52,6 +53,7 @@ class EvoRainbowTrainer:
         self._champion: Champion | None = None
         self._individual_evals = 0
         self._real_evals = 0
+        self._rl_updates = 0
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
@@ -63,6 +65,7 @@ class EvoRainbowTrainer:
             algo_cfg.embedding_dim,
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
+            shadow=algo_cfg.shadow.enabled,
         )
         self._cem = CEM(
             self._agent.init_cem_head(self._next_key()),
@@ -81,6 +84,10 @@ class EvoRainbowTrainer:
             self._budget,
             horizon=algo_cfg.horizon,
             gamma=algo_cfg.rl.gamma,
+            shadow=algo_cfg.shadow.surrogate,
+        )
+        self._checkpointer = make_checkpointer(
+            run_cfg, self._agent, self._buffer
         )
 
     def _next_key(self) -> jax.Array:
@@ -169,6 +176,9 @@ class EvoRainbowTrainer:
                 result,
                 pending_injection,
             )
+            self._record_generation(
+                generation, flat_pop, actor_flat, result, pending_injection
+            )
         if not self._budget.exhausted:
             self._cem.tell(fitness, flat_pop)
             if not in_warmup and best_idx != pending_injection:
@@ -181,14 +191,53 @@ class EvoRainbowTrainer:
         post_warmup = self._budget.rl_steps >= self._algo.rl.warmup_steps
         gen_steps = result.steps + rl_steps
         num_updates = (
-            int(self._algo.rl.train_ratio * gen_steps) if post_warmup else 0
+            self._num_updates(generation, gen_steps) if post_warmup else 0
         )
         losses = self._agent.update(self._buffer, num_updates, self._next_key())
+        self._rl_updates += num_updates
         self._log_generation(
             generation, {**losses, **gen_metrics}, result, in_warmup=in_warmup
         )
+        if self._checkpointer is not None:
+            self._checkpointer.maybe_save(self._budget.env_steps)
         return self._next_injection(
             generation, fitness, post_warmup=post_warmup
+        )
+
+    def _num_updates(self, generation: int, gen_steps: int) -> int:
+        matched = self._algo.matched
+        if not matched.enabled:
+            return int(self._algo.rl.train_ratio * gen_steps)
+        # spread the rest evenly, so the last generation hits rl_updates
+        left = matched.rl_updates - self._rl_updates
+        return left // (matched.generations - generation)
+
+    def _done(self, generation: int) -> bool:
+        matched = self._algo.matched
+        if matched.enabled and generation >= matched.generations:
+            return True
+        return self._budget.exhausted
+
+    def _record_generation(
+        self,
+        generation: int,
+        flat_pop: jax.Array,
+        actor_flat: jax.Array,
+        result: FitnessResult,
+        injected: int | None,
+    ) -> None:
+        if self._checkpointer is None:
+            return
+        self._checkpointer.record_generation(
+            GenerationRecord(
+                generation=generation,
+                env_steps=self._budget.env_steps,
+                flat_pop=np.asarray(flat_pop),
+                actor_flat=np.asarray(actor_flat),
+                injected=-1 if injected is None else injected,
+                fitness=np.asarray(result.fitness),
+                real_mask=np.asarray(result.real_mask),
+            )
         )
 
     def _log_generation(
@@ -201,6 +250,8 @@ class EvoRainbowTrainer:
     ) -> None:
         steps = self._budget.env_steps
         metrics = budget_metrics(self._budget, self._real_frac)
+        metrics["budget/generation"] = float(generation + 1)
+        metrics["budget/rl_updates"] = float(self._rl_updates)
         metrics.update(metrics_in)
         eval_metrics = self._perf.maybe_evaluate(
             self._agent, steps, champion=self._champion
@@ -231,15 +282,20 @@ class EvoRainbowTrainer:
         try:
             generation = 0
             pending_injection: int | None = None
-            while not self._budget.exhausted:
+            while not self._done(generation):
                 pending_injection = self._step_generation(
                     generation, pending_injection
                 )
                 generation += 1
+            if self._checkpointer is not None:
+                self._checkpointer.finish(self._budget.env_steps)
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return
-            tag = f"evorainbow-{self._algo.agent}-{self._algo.eval.mode}"
+            mode = "shadow" if self._algo.shadow.surrogate else None
+            tag = (
+                f"evorainbow-{self._algo.agent}-{mode or self._algo.eval.mode}"
+            )
             print_summary(tag, self._budget, final_eval)
             return final_eval
         finally:

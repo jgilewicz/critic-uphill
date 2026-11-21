@@ -142,7 +142,10 @@ class FullEpisodeFitness:
 
 
 class CriticBufferFitness:
-    """Score each individual by mean Q1(s, pi_i(s)) on replay buffer states."""
+    """Score each individual by mean Q1(s, pi_i(s)) on replay buffer states.
+
+    With shadow=True the shadow critic's first head scores instead of Q1.
+    """
 
     uses_real_steps: bool = False
 
@@ -152,10 +155,22 @@ class CriticBufferFitness:
         buffer: ReplayBuffer,
         *,
         critic_states: int,
+        shadow: bool = False,
     ) -> None:
+        if shadow and agent.shadow_critic is None:
+            raise ValueError(
+                "shadow surrogate needs an agent with a shadow critic, "
+                "set algorithm.shadow.enabled=true"
+            )
         self._agent = agent
         self._buffer = buffer
         self._critic_states = critic_states
+        self._shadow = shadow
+
+    def _scores(self, heads: Any, key: jax.Array) -> jax.Array:
+        states = self._buffer.sample_states(key, self._critic_states)
+        critic = self._agent.shadow_critic if self._shadow else None
+        return self._agent.q1_population_mean(heads, states, critic=critic)
 
     def evaluate(
         self,
@@ -165,10 +180,9 @@ class CriticBufferFitness:
         seed: int,
         active_mask: np.ndarray | None = None,
     ) -> FitnessResult:
-        """Sample buffer states and evaluate mean online Q1."""
+        """Sample buffer states and evaluate the mean surrogate critic."""
         del seed, active_mask
-        states = self._buffer.sample_states(key, self._critic_states)
-        fitness = self._agent.q1_population_mean(heads, states)
+        fitness = self._scores(heads, key)
         return FitnessResult(
             fitness=fitness,
             steps=0,
@@ -179,10 +193,9 @@ class CriticBufferFitness:
     def score_real(
         self, heads: Any, key: jax.Array, real: FitnessResult
     ) -> np.ndarray:
-        """Mean Q1 of every head on the states used for surrogate fitness."""
+        """Surrogate score of every head on the surrogate fitness states."""
         del real
-        states = self._buffer.sample_states(key, self._critic_states)
-        return np.asarray(self._agent.q1_population_mean(heads, states))
+        return np.asarray(self._scores(heads, key))
 
 
 def _hboot_scores(
@@ -279,6 +292,53 @@ class HStepBootstrapFitness:
         return _hboot_scores(self._agent, heads, real.prefix, self._gamma)[0]
 
 
+class PrefixFitness:
+    """Score by the undiscounted return of the first h real steps."""
+
+    uses_real_steps: bool = True
+
+    def __init__(
+        self,
+        pool: EnvPool,
+        agent: RLAgent,
+        buffer: ReplayBuffer,
+        budget: Budget,
+        *,
+        h: int,
+    ) -> None:
+        self._pool = pool
+        self._agent = agent
+        self._buffer = buffer
+        self._budget = budget
+        self._h = h
+
+    def evaluate(
+        self,
+        heads: Any,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
+    ) -> FitnessResult:
+        """Run up to h real steps per individual and sum the rewards."""
+        del key
+        rollout = rollout_population(
+            self._pool,
+            lambda states: self._agent.act_population(heads, states),
+            self._buffer,
+            self._budget,
+            max_steps=self._h,
+            discount=1.0,
+            seed=seed,
+            active_mask=active_mask,
+        )
+        return FitnessResult(
+            fitness=jnp.asarray(rollout.returns, dtype=jnp.float32),
+            steps=rollout.total_steps,
+            real_mask=np.zeros(self._pool.num_envs, dtype=bool),
+        )
+
+
 class IndividualControlFitness:
     """Per-individual gate: full episode w.p. p_real, else surrogate."""
 
@@ -365,6 +425,7 @@ def build_fitness_estimator(
     *,
     horizon: int,
     gamma: float,
+    shadow: bool = False,
 ) -> FitnessEstimator:
     """Construct the configured fitness estimator with per-individual gating."""
     full = FullEpisodeFitness(
@@ -381,9 +442,14 @@ def build_fitness_estimator(
     )
     if eval_cfg.mode == "full":
         return full
+    if eval_cfg.mode == "prefix":
+        return PrefixFitness(pool, agent, buffer, budget, h=eval_cfg.h)
     if eval_cfg.mode == "critic":
         surrogate: SurrogateEstimator = CriticBufferFitness(
-            agent, buffer, critic_states=eval_cfg.critic_states
+            agent,
+            buffer,
+            critic_states=eval_cfg.critic_states,
+            shadow=shadow,
         )
     else:
         surrogate = HStepBootstrapFitness(

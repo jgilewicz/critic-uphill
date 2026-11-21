@@ -4,6 +4,7 @@ import jax
 import numpy as np
 
 from agents import TD3, make_agent
+from common.checkpoint import make_checkpointer
 from common.replay_buffer import ReplayBuffer
 from common.reset import ResetController
 from common.rollout import Budget, rollout_single_episode
@@ -54,8 +55,12 @@ class RLTrainer:
             algo_cfg.embedding_dim,
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
+            shadow=algo_cfg.shadow.enabled,
         )
         self._resetter = self._make_resetter(algo_cfg)
+        self._checkpointer = make_checkpointer(
+            run_cfg, self._agent, self._buffer
+        )
 
     def _make_resetter(self, algo_cfg: RLAlgoConfig) -> ResetController | None:
         if not algo_cfg.reset.enabled:
@@ -111,6 +116,8 @@ class RLTrainer:
             self._on_log(metrics)
         if self._resetter is not None:
             self._resetter.after_iteration(steps, eval_metrics)
+        if self._checkpointer is not None:
+            self._checkpointer.maybe_save(steps)
 
     def train(self) -> float:
         """Run warmup and episode-by-episode RL until the budget ends."""
@@ -132,6 +139,8 @@ class RLTrainer:
                 episode += 1
             if self._resetter is not None:
                 self._resetter.finish(self._budget.env_steps)
+            if self._checkpointer is not None:
+                self._checkpointer.finish(self._budget.env_steps)
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return

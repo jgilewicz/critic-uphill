@@ -66,12 +66,22 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 | `evorainbow` (`full`) | Full real episode up to `horizon=1000`, undiscounted return (`p_real=0.0`) | up to `pop_size * 1000` |
 | `evorainbow` (`critic`) | Mean online `Q1(s, pi_i(s))` over `50_000` replay states, or full episode w.p. `p_real` | `0` (+ full episode w.p. `p_real`) |
 | `evorainbow` (`hboot`) | `H`-step discounted return (`H=200`) + `gamma^H Q1(s_H, pi_i(s_H))`, or full episode w.p. `p_real` | up to `pop_size * 200` (+ full episode w.p. `p_real`) |
+| `evorainbow` (`prefix`) | Undiscounted return of the first `eval.h` real steps, no critic (`p_real=0.0`) | up to `pop_size * h` |
+
+**Matched run** (`algorithm.matched.generations=G algorithm.matched.rl_updates=U`, both `> 0`, default `0`/`0` = off): EvoRainbow stops after `G` generations (warmup included) or at the budget, whichever comes first. Post-warmup generation `g` runs `(U - done) // (G - g)` RL updates instead of `int(train_ratio * gen_steps)`, so the total is exactly `U`. Not combinable with `checkpoint.dir`.
 
 `td3-reset` is `td3.yaml` with `algorithm.reset.enabled=true` (`td3.yaml` has `reset.enabled=false`, so `td3` is unchanged and bit-identical to the pre-reset code for a fixed seed). `reset.enabled=true` with `sac` or `evorainbow` fails fast.
 
 - At the first episode/update boundary with `env_steps >= at_step` (never inside the fused update scan) the embedding, actor head, both critics, all target networks and all optimizer states are re-initialized with the init functions used at run start (actor head scale `0.1` etc.).
 - Fresh networks take their key from `fold_in(fold_in(key(seed), stream), reset_index)`, so the training RNG stream is untouched, before and after a reset.
 - Replay buffer, step counter, exploration noise and the running episode are kept. Updates continue immediately, no warmup.
+
+**Shadow critic** (`algorithm.shadow.enabled=true`, standalone `td3` or `evorainbow` with `agent=td3`, default `false`):
+
+- A second twin critic with the TD3 critic architecture, its own init (key `fold_in(agent_key, stream)`), own target networks and own optimizer state.
+- TD-trained on the same batches and the same target-policy-smoothed next action as the main critic, target `min` of its own two target heads. Targets soft-update at the `policy_freq` cadence.
+- Never enters the actor loss. Logs `shadow/*` and `deg_q2/*` (see Logged Metrics) and switches the truth probe to the shadow picks.
+- `algorithm.shadow.surrogate=true` (`evorainbow` only, needs `eval.mode=critic`) scores the population with the shadow's first head instead of Q1. The `p_real` gate is unchanged. No suite uses it.
 
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
@@ -80,6 +90,25 @@ TD3 and EvoRainbow defaults (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horiz
 SAC defaults (`src/conf/algorithm/sac.yaml`): `rl.actor_lr=rl.critic_lr=rl.alpha_lr=3e-4`, learned `alpha` (init `1.0`, target entropy `-act_dim`), `log_std` clipped to `[-20, 2]`, target critics only. Under `evorainbow algorithm.agent=sac` these apply unless overridden, and SAC-only keys need Hydra's `+` prefix (e.g. `+algorithm.rl.alpha_lr=1e-4`).
 
 ---
+
+**Checkpoints** (`checkpoint.dir=<path>`, td3 agents only, off while `dir` is `null`):
+
+- Saved at the first episode/generation boundary with `env_steps >= fraction * total_steps` for `checkpoint.fractions=[0.1, 0.5, 1.0]` into `<dir>/p010`, `p050`, `p100`. A run that ends before a fraction fails.
+- `state.eqx`: full `TD3State` (online and target networks, optimizer states, shadow critic) via `eqx.tree_serialise_leaves`.
+- `data.npz`: last `checkpoint.buffer_tail=200_000` transitions in insertion order (`buffer_{state,action,reward,next_state,done}`). EvoRainbow adds the last `checkpoint.generations=4` evaluated generations: `pop_flat` (gen x pop x head), `pop_actor_flat` (RL actor head at ask time), `pop_injected` (slot of the injected RL actor, `-1` none), `pop_fitness`, `pop_real_mask`, `pop_generation`, `pop_env_steps`.
+- `meta.json`: `fraction`, `env_steps`, `buffer_size`, resolved `run_config`. `common.checkpoint.load_checkpoint(dir)` rebuilds the TD3 agent.
+- Read-only: logs are bit-identical with checkpoints on or off.
+
+**Offline E1 measurement** (`python -m measure_offline checkpoint=<dir>/p050 out=<file>.json`, conf `src/conf/offline.yaml`, `just offline <dir> <out>`):
+- Own RNG stream `fold_in(fold_in(key(seed), stream), env_steps)`, no budget, the checkpoint is only read. Output is deterministic.
+- Seed set B (`truth_episodes=30`): truth, full episodes paired per seed with the checkpoint actor, gain = mean return difference. Seed set A (`prefix_seeds=5`, disjoint): `prefix_h=200`-step rollouts.
+- Perturbations: `n_perturbations=40` actor heads per sigma in `sigmas=[0.02, 0.05, 0.1, 0.2]` (per-leaf std as in `deg/*`). `deg` holds `ratio`, `rho_H`, `frac_critic_better` per sigma (`_s{i}`) for `q1`, `q2`, `shadow` (if saved) and `fqe`.
+- Signals per head, higher is better: `q1`, `q2`, `shadow`, `fqe` (mean Q over `n_states=2000` buffer-tail states), `own_q1` (mean Q1 over the head's own prefix states), `prefix_return`, `dist_action` (minus mean squared action distance to the actor), `dist_weight` (minus head-weight distance).
+- `fqe`: fresh twin critic trained `fqe_steps=100_000` steps (batch `256`) on the buffer tail for the frozen actor, TD3 target (min twin, clipped target noise, Polyak every `policy_freq`).
+- Truth per sigma: top-1 of each signal plus random fill up to `truth_heads=20`. Population (EvoRainbow checkpoints): every saved individual, scored with the checkpoint embedding.
+- Per set: Spearman with truth, top-1 index and gain, top-1 gain minus the gain of the nearest head by `dist_action` and by `dist_weight`.
+- `gradient`: head gradient of mean Q1 on buffer vs fresh actor states (from the B episodes), norms, cosine, and paired gains of three steps along the fresh gradient with length equal to the expected perturbation norm at `step_sigmas=[0.02, 0.05, 0.1]`.
+- `cost`: env steps (`prefix`, `truth`, `gradient`) and seconds per phase.
 
 ## Per-Env Presets (`src/conf/algorithm/env/*.yaml`)
 
@@ -155,11 +184,17 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
 
+Suite `e1` (array `0-29` per env, all with `shadow.enabled=true` and `checkpoint.dir=<PD>/checkpoints/<TAG>/<run>`): `0-9` `td3`, `10-19` `evorainbow-td3-full` (ERL), `20-29` `evorainbow-td3-critic` (SC-ERL, per-env `p_real`).
+
+Suite `e2` (array `0-49` per env, all with `shadow.enabled=true`): `0-9` `evorainbow-td3-critic-p0`, `10-19` / `20-29` / `30-39` `evorainbow-td3-prefix-h{100,200,400}`, `40-49` `evorainbow-td3-prefix-h200-matched`. The matched condition needs `MATCH_GENERATIONS` and `MATCH_UPDATES` (medians of final `budget/generation` and `budget/rl_updates` of the e1 ERL runs in that env), so `e2` is submitted one env per call.
+
 Reads `WANDB_API_KEY` from the environment or `wandb login`.
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 ./scripts/submit_suite.sh reset HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+./scripts/submit_suite.sh e1 HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+MATCH_GENERATIONS=<G> MATCH_UPDATES=<U> ./scripts/submit_suite.sh e2 Hopper-v5
 ```
 
 ---
@@ -173,6 +208,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 - `env_steps`: total real environment steps consumed.
 - `budget/steps_total`, `budget/steps_rl`, `budget/steps_pop`: cumulative steps (`rl + pop == total`).
 - `budget/real_frac`: share of population individuals scored by a real episode (0 for td3/sac, 1 for `full`).
+- `budget/generation`, `budget/rl_updates` (EvoRainbow only): generations run (warmup included) and cumulative RL updates.
 
 **Performance** (every `eval.interval` steps)
 
@@ -203,6 +239,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 - All three pooled over sigmas, plus `_s0`, `_s1` per sigma.
 - `deg/grad_norm`, `deg/action_grad_norm`: critic gradient norms at the actor.
 - `deg/*` is also measured at probe steps (the truth probe picks from the same perturbations). `DegenerationProbe.measure()` sets `.last` as a side channel.
+- With `algorithm.shadow.enabled=true` the same states and perturbed heads are also scored by Q2 (`deg_q2/*`) and the shadow's first head (`shadow/*`), each with the same keys as `deg/*` (`ratio`, `rho_H`, `frac_critic_better`, `_s{i}`, `grad_norm`, `action_grad_norm`). `t1`, `t2` and `dS` come from that critic.
 
 **Reset** (`td3-reset` only, each reset logs a `before` row and an `event` row at the same `env_steps`, then later rows)
 
@@ -217,6 +254,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 **Truth probe** (every `probe.interval=100000` steps, `probe.n_perturbations=8`: top-1 by critic gain plus random, `probe.episodes=3` paired seeds)
 
 - `probe/top1_true_gain`, `probe/frac_true_better`: real return gain over the actor for the perturbed heads.
+- With `algorithm.shadow.enabled=true` the picks from all `deg` perturbations (both sigmas) are top-1 by Q1, Q2 and shadow `dS`, the nearest head (max Q1 `t2`, i.e. min `dist_H`), then distinct random others up to `probe.n_perturbations` (needs `>= 5`). Shared picks run once. Logs `probe/gain_q1`, `probe/gain_q2`, `probe/gain_shadow`, `probe/gain_nearest`, `probe/gain_random` (mean over the random picks), plus `top1_true_gain` (= `gain_q1`) and `frac_true_better` over all distinct picks. `probe/pick_{q1,q2,shadow,nearest}` log the picked index into the `deg` perturbations (level-major: index `// deg.n_perturbations` is the sigma level).
 
 ---
 
@@ -225,15 +263,17 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 ```text
 src/
 ├── train.py          # Hydra entrypoint
+├── measure_offline.py # Hydra entrypoint of the offline E1 measurement
 ├── runner.py         # Config validation, preset loading, wandb init, trainer dispatch
 ├── config.py         # Frozen config dataclasses matching src/conf/ YAML
-├── agents/           # RLAgent base, TD3 (with reset), SAC, make_agent factory
+├── agents/           # RLAgent base, TD3 (with reset and shadow critic), SAC, make_agent factory
 ├── algos/            # RLTrainer (td3, sac) and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
 ├── common/           # ReplayBuffer, Budget, rollouts, ResetController, jitted TD3 and SAC math
-├── conf/             # Hydra config.yaml, algorithm/{td3,td3-reset,sac,evorainbow}.yaml, algorithm/env/
+├── conf/             # Hydra config.yaml, offline.yaml, algorithm/{td3,td3-reset,sac,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl
 ├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe, Schedule
-└── modules/          # Equinox SharedStateEmbedding, ActorHead, GaussianActorHead, Critic, and CEM
+├── modules/          # Equinox SharedStateEmbedding, ActorHead, GaussianActorHead, Critic, and CEM
+└── offline/          # HeadRunner, SignalScorer, GradientProbe, OfflineMeasurement
 ```

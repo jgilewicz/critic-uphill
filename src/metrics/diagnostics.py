@@ -16,7 +16,9 @@ class Diagnostics:
 
     def __init__(self, run_cfg: RunConfig, env: gym.Env) -> None:
         self._seed = run_cfg.seed
-        self._deg = DegenerationProbe(run_cfg.deg)
+        self._deg = DegenerationProbe(
+            run_cfg.deg, shadow=run_cfg.algorithm.shadow.enabled
+        )
         self._deg_schedule = Schedule(run_cfg.deg.interval)
         self._truth = (
             TruthProbe(env, run_cfg.probe) if run_cfg.probe.enabled else None

@@ -17,5 +17,8 @@ from fitness.estimators import (
     HStepBootstrapFitness as HStepBootstrapFitness,
 )
 from fitness.estimators import (
+    PrefixFitness as PrefixFitness,
+)
+from fitness.estimators import (
     build_fitness_estimator as build_fitness_estimator,
 )

@@ -29,3 +29,8 @@ rl:
 reset:
   enabled: false
   at_steps: [200_000, 400_000, 600_000]
+
+# Shadow twin critic as a metric (td3 only): own init and targets,
+# TD-trained on the critic's batches, never in the actor loss
+shadow:
+  enabled: false
