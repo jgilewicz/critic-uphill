@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
-EvalMode = Literal["full", "critic", "hboot"]
+EvalMode = Literal["full", "critic", "hboot", "prefix"]
 AgentName = Literal["td3", "sac"]
 # top-1 by Q1, Q2 and shadow, plus the nearest head (min dist_H)
 SHADOW_PROBE_PICKS = 4
@@ -216,11 +216,35 @@ class EvalConfig:
             )
         if not 0.0 <= self.p_real <= 1.0:
             raise ValueError(f"eval.p_real={self.p_real}; must be in [0, 1]")
-        if self.mode == "full" and self.p_real != 0.0:
+        if self.mode in ("full", "prefix") and self.p_real != 0.0:
             raise ValueError(
                 f"eval.p_real={self.p_real} is only valid for eval.mode in "
-                "('critic', 'hboot'), not 'full'"
+                f"('critic', 'hboot'), not {self.mode!r}"
             )
+
+
+@dataclass(frozen=True)
+class MatchedConfig:
+    """Stop at a fixed generation count with a fixed total of RL updates.
+
+    0/0 is off (run to the step budget). Generations include warmup.
+    """
+
+    generations: int = 0
+    rl_updates: int = 0
+
+    def __post_init__(self) -> None:
+        _check_min("matched.generations", self.generations, 0)
+        _check_min("matched.rl_updates", self.rl_updates, 0)
+        if (self.generations == 0) != (self.rl_updates == 0):
+            raise ValueError(
+                f"matched.generations={self.generations} and "
+                f"matched.rl_updates={self.rl_updates}: set both or neither"
+            )
+
+    @property
+    def enabled(self) -> bool:
+        return self.generations > 0
 
 
 @dataclass(frozen=True)
@@ -237,6 +261,7 @@ class EvoRainbowAlgoConfig:
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
     shadow: ShadowConfig = field(default_factory=ShadowConfig)
+    matched: MatchedConfig = field(default_factory=MatchedConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.agent", self.agent, AgentName)
@@ -258,7 +283,7 @@ class EvoRainbowAlgoConfig:
             )
         if self.pop_size < 2:
             raise ValueError(f"pop_size={self.pop_size}; must be >= 2")
-        if self.eval.mode == "hboot" and self.eval.h > self.horizon:
+        if self.eval.mode in ("hboot", "prefix") and self.eval.h > self.horizon:
             raise ValueError(
                 f"eval.h={self.eval.h} exceeds horizon={self.horizon}"
             )
@@ -398,6 +423,15 @@ class RunConfig:
                 f"probe.n_perturbations={self.probe.n_perturbations} leaves "
                 f"no random pick next to the {SHADOW_PROBE_PICKS} shadow "
                 f"probe picks. use >= {SHADOW_PROBE_PICKS + 1}"
+            )
+        if (
+            self.checkpoint.enabled
+            and isinstance(self.algorithm, EvoRainbowAlgoConfig)
+            and self.algorithm.matched.enabled
+        ):
+            raise ValueError(
+                "checkpoint.dir with algorithm.matched: a matched run stops "
+                "before the budget fractions are reached"
             )
         if self.checkpoint.enabled and _agent_name(self.algorithm) != "td3":
             raise ValueError(

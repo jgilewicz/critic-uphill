@@ -50,7 +50,8 @@ rl_to_ea:
 ea_to_rl:
   tau: 0.3
 
-# Population fitness estimator: full | critic | hboot.
+# Population fitness estimator: full | critic | hboot | prefix.
+# prefix scores the undiscounted return of the first h real steps.
 # Critic surrogate (critic and hboot bootstrap) uses online critic Q1.
 # In critic/hboot modes, each individual independently gets a full episode
 # with probability eval.p_real, else the surrogate.
@@ -67,3 +68,10 @@ eval:
 shadow:
   enabled: false
   surrogate: false
+
+# Matched run (both > 0): stop after `generations` generations (warmup
+# included) with exactly `rl_updates` RL updates spread over the
+# post-warmup generations. 0/0 runs to the step budget.
+matched:
+  generations: 0
+  rl_updates: 0

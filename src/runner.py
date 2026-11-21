@@ -18,6 +18,7 @@ from config import (
     EnvConfig,
     EvalConfig,
     EvoRainbowAlgoConfig,
+    MatchedConfig,
     ProbeConfig,
     RLAlgoConfig,
     RLConfig,
@@ -153,6 +154,11 @@ def _build_algorithm(
                 _pop_section(algo, "shadow", "evorainbow"),
                 "algorithm.shadow",
             ),
+            "matched": _build_section(
+                MatchedConfig,
+                _pop_section(algo, "matched", "evorainbow"),
+                "algorithm.matched",
+            ),
             **algo,
         }
         _check_unknown_keys(
@@ -277,11 +283,12 @@ def _apply_env_preset(cfg: DictConfig) -> None:
             cfg.algorithm[section][field] = preset[section][field]
 
 
-def _clear_preset_p_real_for_full(
-    raw_algo: dict[str, Any], cfg: DictConfig
-) -> None:
+def _clear_preset_p_real(raw_algo: dict[str, Any], cfg: DictConfig) -> None:
     eval_raw = raw_algo.get("eval")
-    if not isinstance(eval_raw, dict) or eval_raw.get("mode") != "full":
+    if not isinstance(eval_raw, dict) or eval_raw.get("mode") not in (
+        "full",
+        "prefix",
+    ):
         return
     if _was_overridden("algorithm.eval.p_real"):
         return
@@ -302,7 +309,7 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
 
     env = _build_section(EnvConfig, raw["env"], "env")
     eval_env = _build_section(EnvConfig, raw["eval_env"], "eval_env")
-    _clear_preset_p_real_for_full(raw["algorithm"], cfg)
+    _clear_preset_p_real(raw["algorithm"], cfg)
 
     return RunConfig(
         env=env,
@@ -330,7 +337,8 @@ def run_training(cfg: DictConfig) -> float:
             f"ea_to_rl.tau={algo.ea_to_rl.tau} | p_real={algo.eval.p_real} | "
             f"period={algo.rl_to_ea.period} | "
             f"shadow={algo.shadow.enabled} | "
-            f"shadow_surrogate={algo.shadow.surrogate}"
+            f"shadow_surrogate={algo.shadow.surrogate} | "
+            f"matched={algo.matched.generations}/{algo.matched.rl_updates}"
         )
     run = wandb.init(
         project=run_cfg.wandb.project,

@@ -66,6 +66,9 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 | `evorainbow` (`full`) | Full real episode up to `horizon=1000`, undiscounted return (`p_real=0.0`) | up to `pop_size * 1000` |
 | `evorainbow` (`critic`) | Mean online `Q1(s, pi_i(s))` over `50_000` replay states, or full episode w.p. `p_real` | `0` (+ full episode w.p. `p_real`) |
 | `evorainbow` (`hboot`) | `H`-step discounted return (`H=200`) + `gamma^H Q1(s_H, pi_i(s_H))`, or full episode w.p. `p_real` | up to `pop_size * 200` (+ full episode w.p. `p_real`) |
+| `evorainbow` (`prefix`) | Undiscounted return of the first `eval.h` real steps, no critic (`p_real=0.0`) | up to `pop_size * h` |
+
+**Matched run** (`algorithm.matched.generations=G algorithm.matched.rl_updates=U`, both `> 0`, default `0`/`0` = off): EvoRainbow stops after `G` generations (warmup included) or at the budget, whichever comes first. Post-warmup generation `g` runs `(U - done) // (G - g)` RL updates instead of `int(train_ratio * gen_steps)`, so the total is exactly `U`. Not combinable with `checkpoint.dir`.
 
 `td3-reset` is `td3.yaml` with `algorithm.reset.enabled=true` (`td3.yaml` has `reset.enabled=false`, so `td3` is unchanged and bit-identical to the pre-reset code for a fixed seed). `reset.enabled=true` with `sac` or `evorainbow` fails fast.
 
@@ -170,11 +173,17 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
 
+Suite `e1` (array `0-29` per env, all with `shadow.enabled=true` and `checkpoint.dir=<PD>/checkpoints/<TAG>/<run>`): `0-9` `td3`, `10-19` `evorainbow-td3-full` (ERL), `20-29` `evorainbow-td3-critic` (SC-ERL, per-env `p_real`).
+
+Suite `e2` (array `0-49` per env, all with `shadow.enabled=true`): `0-9` `evorainbow-td3-critic-p0`, `10-19` / `20-29` / `30-39` `evorainbow-td3-prefix-h{100,200,400}`, `40-49` `evorainbow-td3-prefix-h200-matched`. The matched condition needs `MATCH_GENERATIONS` and `MATCH_UPDATES` (medians of final `budget/generation` and `budget/rl_updates` of the e1 ERL runs in that env), so `e2` is submitted one env per call.
+
 Reads `WANDB_API_KEY` from the environment or `wandb login`.
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 ./scripts/submit_suite.sh reset HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+./scripts/submit_suite.sh e1 HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
+MATCH_GENERATIONS=<G> MATCH_UPDATES=<U> ./scripts/submit_suite.sh e2 Hopper-v5
 ```
 
 ---
@@ -188,6 +197,7 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 - `env_steps`: total real environment steps consumed.
 - `budget/steps_total`, `budget/steps_rl`, `budget/steps_pop`: cumulative steps (`rl + pop == total`).
 - `budget/real_frac`: share of population individuals scored by a real episode (0 for td3/sac, 1 for `full`).
+- `budget/generation`, `budget/rl_updates` (EvoRainbow only): generations run (warmup included) and cumulative RL updates.
 
 **Performance** (every `eval.interval` steps)
 

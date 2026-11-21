@@ -53,6 +53,7 @@ class EvoRainbowTrainer:
         self._champion: Champion | None = None
         self._individual_evals = 0
         self._real_evals = 0
+        self._rl_updates = 0
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
@@ -190,9 +191,10 @@ class EvoRainbowTrainer:
         post_warmup = self._budget.rl_steps >= self._algo.rl.warmup_steps
         gen_steps = result.steps + rl_steps
         num_updates = (
-            int(self._algo.rl.train_ratio * gen_steps) if post_warmup else 0
+            self._num_updates(generation, gen_steps) if post_warmup else 0
         )
         losses = self._agent.update(self._buffer, num_updates, self._next_key())
+        self._rl_updates += num_updates
         self._log_generation(
             generation, {**losses, **gen_metrics}, result, in_warmup=in_warmup
         )
@@ -201,6 +203,20 @@ class EvoRainbowTrainer:
         return self._next_injection(
             generation, fitness, post_warmup=post_warmup
         )
+
+    def _num_updates(self, generation: int, gen_steps: int) -> int:
+        matched = self._algo.matched
+        if not matched.enabled:
+            return int(self._algo.rl.train_ratio * gen_steps)
+        # spread the rest evenly, so the last generation hits rl_updates
+        left = matched.rl_updates - self._rl_updates
+        return left // (matched.generations - generation)
+
+    def _done(self, generation: int) -> bool:
+        matched = self._algo.matched
+        if matched.enabled and generation >= matched.generations:
+            return True
+        return self._budget.exhausted
 
     def _record_generation(
         self,
@@ -234,6 +250,8 @@ class EvoRainbowTrainer:
     ) -> None:
         steps = self._budget.env_steps
         metrics = budget_metrics(self._budget, self._real_frac)
+        metrics["budget/generation"] = float(generation + 1)
+        metrics["budget/rl_updates"] = float(self._rl_updates)
         metrics.update(metrics_in)
         eval_metrics = self._perf.maybe_evaluate(
             self._agent, steps, champion=self._champion
@@ -264,7 +282,7 @@ class EvoRainbowTrainer:
         try:
             generation = 0
             pending_injection: int | None = None
-            while not self._budget.exhausted:
+            while not self._done(generation):
                 pending_injection = self._step_generation(
                     generation, pending_injection
                 )
