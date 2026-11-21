@@ -29,6 +29,7 @@ packages = [
     "src/fitness",
     "src/metrics",
     "src/modules",
+    "src/offline",
 ]
 
 [tool.ruff]

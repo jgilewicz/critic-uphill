@@ -99,6 +99,17 @@ SAC defaults (`src/conf/algorithm/sac.yaml`): `rl.actor_lr=rl.critic_lr=rl.alpha
 - `meta.json`: `fraction`, `env_steps`, `buffer_size`, resolved `run_config`. `common.checkpoint.load_checkpoint(dir)` rebuilds the TD3 agent.
 - Read-only: logs are bit-identical with checkpoints on or off.
 
+**Offline E1 measurement** (`python -m measure_offline checkpoint=<dir>/p050 out=<file>.json`, conf `src/conf/offline.yaml`, `just offline <dir> <out>`):
+- Own RNG stream `fold_in(fold_in(key(seed), stream), env_steps)`, no budget, the checkpoint is only read. Output is deterministic.
+- Seed set B (`truth_episodes=30`): truth, full episodes paired per seed with the checkpoint actor, gain = mean return difference. Seed set A (`prefix_seeds=5`, disjoint): `prefix_h=200`-step rollouts.
+- Perturbations: `n_perturbations=40` actor heads per sigma in `sigmas=[0.02, 0.05, 0.1, 0.2]` (per-leaf std as in `deg/*`). `deg` holds `ratio`, `rho_H`, `frac_critic_better` per sigma (`_s{i}`) for `q1`, `q2`, `shadow` (if saved) and `fqe`.
+- Signals per head, higher is better: `q1`, `q2`, `shadow`, `fqe` (mean Q over `n_states=2000` buffer-tail states), `own_q1` (mean Q1 over the head's own prefix states), `prefix_return`, `dist_action` (minus mean squared action distance to the actor), `dist_weight` (minus head-weight distance).
+- `fqe`: fresh twin critic trained `fqe_steps=100_000` steps (batch `256`) on the buffer tail for the frozen actor, TD3 target (min twin, clipped target noise, Polyak every `policy_freq`).
+- Truth per sigma: top-1 of each signal plus random fill up to `truth_heads=20`. Population (EvoRainbow checkpoints): every saved individual, scored with the checkpoint embedding.
+- Per set: Spearman with truth, top-1 index and gain, top-1 gain minus the gain of the nearest head by `dist_action` and by `dist_weight`.
+- `gradient`: head gradient of mean Q1 on buffer vs fresh actor states (from the B episodes), norms, cosine, and paired gains of three steps along the fresh gradient with length equal to the expected perturbation norm at `step_sigmas=[0.02, 0.05, 0.1]`.
+- `cost`: env steps (`prefix`, `truth`, `gradient`) and seconds per phase.
+
 ## Per-Env Presets (`src/conf/algorithm/env/*.yaml`)
 
 MuJoCo v5 only (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`). Applied automatically from `env.id` for `evorainbow` unless overridden via CLI:
@@ -252,15 +263,17 @@ All runs log `config.protocol = 5` with `env_steps` as the x-axis (`wandb.define
 ```text
 src/
 ├── train.py          # Hydra entrypoint
+├── measure_offline.py # Hydra entrypoint of the offline E1 measurement
 ├── runner.py         # Config validation, preset loading, wandb init, trainer dispatch
 ├── config.py         # Frozen config dataclasses matching src/conf/ YAML
 ├── agents/           # RLAgent base, TD3 (with reset and shadow critic), SAC, make_agent factory
 ├── algos/            # RLTrainer (td3, sac) and EvoRainbowTrainer loops
 ├── analysis/         # Wandb run fetching, loading, and bootstrap stats
 ├── common/           # ReplayBuffer, Budget, rollouts, ResetController, jitted TD3 and SAC math
-├── conf/             # Hydra config.yaml, algorithm/{td3,td3-reset,sac,evorainbow}.yaml, algorithm/env/
+├── conf/             # Hydra config.yaml, offline.yaml, algorithm/{td3,td3-reset,sac,evorainbow}.yaml, algorithm/env/
 ├── environments/     # MuJoCo v5 registry and EnvPool
 ├── fitness/          # FullEpisode, CriticBuffer, HStepBootstrap, IndividualControl
 ├── metrics/          # PerfMetrics, SurrogateMetrics, DegenerationProbe, TruthProbe, Schedule
-└── modules/          # Equinox SharedStateEmbedding, ActorHead, GaussianActorHead, Critic, and CEM
+├── modules/          # Equinox SharedStateEmbedding, ActorHead, GaussianActorHead, Critic, and CEM
+└── offline/          # HeadRunner, SignalScorer, GradientProbe, OfflineMeasurement
 ```

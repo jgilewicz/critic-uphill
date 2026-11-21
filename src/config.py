@@ -452,3 +452,45 @@ class RunConfig:
                     f"total_steps={self.total_steps}. lower them or raise "
                     "total_steps"
                 )
+
+
+@dataclass(frozen=True)
+class OfflineConfig:
+    """Offline E1 measurement on one checkpoint, outside any budget."""
+
+    checkpoint: str
+    out: str
+    sigmas: tuple[float, ...] = (0.02, 0.05, 0.1, 0.2)
+    n_perturbations: int = 40
+    n_states: int = 2000
+    truth_heads: int = 20
+    truth_episodes: int = 30
+    prefix_seeds: int = 5
+    prefix_h: int = 200
+    fqe_steps: int = 100_000
+    fqe_batch_size: int = 256
+    step_sigmas: tuple[float, ...] = (0.02, 0.05, 0.1)
+    max_envs: int = 256
+
+    def __post_init__(self) -> None:
+        if not self.sigmas:
+            raise ValueError("sigmas must have at least 1 entry")
+        for sigma in (*self.sigmas, *self.step_sigmas):
+            _check_positive("sigmas/step_sigmas entry", sigma)
+        for name in (
+            "n_perturbations",
+            "n_states",
+            "truth_heads",
+            "truth_episodes",
+            "prefix_seeds",
+            "prefix_h",
+            "fqe_steps",
+            "fqe_batch_size",
+            "max_envs",
+        ):
+            _check_min(name, getattr(self, name), 1)
+        if self.truth_heads > self.n_perturbations:
+            raise ValueError(
+                f"truth_heads={self.truth_heads} exceeds the "
+                f"n_perturbations={self.n_perturbations} per sigma"
+            )

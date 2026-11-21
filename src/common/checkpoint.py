@@ -19,6 +19,7 @@ from environments import env_dims
 STATE_FILE = "state.eqx"
 DATA_FILE = "data.npz"
 META_FILE = "meta.json"
+BUFFER_COLUMNS = ("state", "action", "reward", "next_state", "done")
 
 
 class LoadedCheckpoint(NamedTuple):
@@ -49,10 +50,9 @@ def buffer_tail(buffer: ReplayBuffer, count: int) -> dict[str, np.ndarray]:
     """Last `count` transitions in insertion order (oldest first)."""
     n = min(count, buffer.size)
     indices = (buffer.ptr - n + np.arange(n)) % buffer.capacity
-    names = ("state", "action", "reward", "next_state", "done")
     return {
         f"buffer_{name}": np.asarray(column)[indices]
-        for name, column in zip(names, buffer.data, strict=True)
+        for name, column in zip(BUFFER_COLUMNS, buffer.data, strict=True)
     }
 
 

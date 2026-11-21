@@ -21,13 +21,14 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 ## Architecture and Layout
 
 - `src/train.py`: Thin Hydra entrypoint delegating to `runner.run_training`.
+- `src/measure_offline.py`: Thin Hydra entrypoint (`conf/offline.yaml`, `OfflineConfig`) running `offline.OfflineMeasurement` on one checkpoint dir and writing JSON.
 - `src/runner.py`: Validates Hydra `DictConfig` into `config.RunConfig`, applies `algorithm/<agent>.yaml` `rl` defaults when `algorithm.agent != td3` and `algorithm/env/<env.id>.yaml` presets (unless CLI-overridden), initializes wandb (`env_steps` metric), and dispatches `RLTrainer` (`td3` or `sac`) or `EvoRainbowTrainer`. Under `algorithm=evorainbow algorithm.agent=sac`, `evorainbow.yaml` still carries TD3's `rl` schema at Hydra compose time, so overriding SAC-only `rl` keys requires Hydra's `+` prefix (e.g. `+algorithm.rl.alpha_lr=1e-4`).
-- `src/config.py`: Frozen dataclasses (`RLConfig`, `TD3RLConfig`, `SACRLConfig`, `ResetConfig`, `RLAlgoConfig`, `ShadowConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `MatchedConfig`, `DegConfig`, `ProbeConfig`, `CheckpointConfig`, `EvoRainbowAlgoConfig`, `RunConfig`) mirrored 1:1 by `src/conf/config.yaml`, `src/conf/algorithm/{td3,td3-reset,sac,evorainbow}.yaml`, and `src/conf/algorithm/env/<env>.yaml`. Unknown keys and invalid `algorithm.agent` fail fast.
+- `src/config.py`: Frozen dataclasses (`RLConfig`, `TD3RLConfig`, `SACRLConfig`, `ResetConfig`, `RLAlgoConfig`, `ShadowConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `MatchedConfig`, `DegConfig`, `ProbeConfig`, `CheckpointConfig`, `EvoRainbowAlgoConfig`, `RunConfig`, plus `OfflineConfig` for `conf/offline.yaml`) mirrored 1:1 by `src/conf/config.yaml`, `src/conf/algorithm/{td3,td3-reset,sac,evorainbow}.yaml`, and `src/conf/algorithm/env/<env>.yaml`. Unknown keys and invalid `algorithm.agent` fail fast.
 - `src/environments/`: MuJoCo v5 registry (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5` only, others fail fast) and `EnvPool` (steps only active envs, no auto-reset).
 - `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `GaussianActorHead` (`log_std` clipped to `[-20, 2]`, deterministic `tanh(mean) * action_limit`), `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
 - `src/common/`:
   - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`.
-  - `td3.py`: Pure jitted TD3 training loop (`make_td3_train`). Optional `ShadowState` (`init_shadow`) in `TD3State.shadow`: TD-trained on the same batches and next action, own targets, never in the actor loss.
+  - `td3.py`: Pure jitted TD3 training loop (`make_td3_train`). Optional `ShadowState` (`init_shadow`) in `TD3State.shadow`: TD-trained on the same batches and next action, own targets, never in the actor loss. `make_fqe_train`: same twin-critic TD update for a frozen policy (offline FQE).
   - `sac.py`: Pure jitted SAC training loop (`make_sac_train`) with automatic entropy tuning (`target_entropy = -act_dim`, init `alpha = 1.0`) and target critics only.
   - `rollout.py`: `Budget`, `rollout_single_episode`, `rollout_population`.
   - `training.py`: `run_warmup`, `print_summary`.
@@ -47,6 +48,11 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
   - `diagnostics.py`: `Diagnostics` schedules deg and truth probes. `schedule.py`: `Schedule` (interval boundaries), `metric_key`. `stats.py`: numpy Spearman.
 - `src/fitness/estimators.py`: `FitnessEstimator` protocol, `FullEpisodeFitness`, `CriticBufferFitness` (Q1 over `eval.critic_states`, shadow head with `shadow=True`), `HStepBootstrapFitness` (H-step discounted return + `gamma^H * Q1`), `PrefixFitness` (`eval.mode=prefix`, undiscounted return of the first `eval.h` steps, no critic), and `IndividualControlFitness` (per-individual `eval.p_real`).
 - `src/algos/`: `RLTrainer` (generic episode-by-episode RL trainer) and `EvoRainbowTrainer` (supports `algorithm.agent=td3|sac`).
+- `src/offline/` (E1, never imported by training):
+  - `rollouts.py`: `HeadRunner` (every stacked head on every seed, chunked over `max_envs` envs, sums Q1 over visited states, no buffer or budget).
+  - `signals.py`: `SignalScorer` (`q1`, `q2`, `shadow`, `fqe`, `own_q1`, `prefix_return`, `dist_action`, `dist_weight`, higher is better).
+  - `gradient.py`: `GradientProbe` (Q1 head gradient on buffer vs fresh states, steps along the fresh gradient).
+  - `measurement.py`: `OfflineMeasurement` (own stream `fold_in(key(seed), OFFLINE_STREAM)` then `env_steps`, seed sets A and B disjoint, `deg` via `metrics.degeneration.measure_terms`/`term_metrics`, truth picks, population, cost).
 - `src/analysis/`: Kept utilities (`stats.py`, `fetch.py`, `runs.py`).
 
 ## Conventions
