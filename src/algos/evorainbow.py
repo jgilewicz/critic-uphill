@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from agents import make_agent
+from common.checkpoint import GenerationRecord, make_checkpointer
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
 from common.training import LogFn, print_summary
@@ -83,6 +84,9 @@ class EvoRainbowTrainer:
             horizon=algo_cfg.horizon,
             gamma=algo_cfg.rl.gamma,
             shadow=algo_cfg.shadow.surrogate,
+        )
+        self._checkpointer = make_checkpointer(
+            run_cfg, self._agent, self._buffer
         )
 
     def _next_key(self) -> jax.Array:
@@ -171,6 +175,9 @@ class EvoRainbowTrainer:
                 result,
                 pending_injection,
             )
+            self._record_generation(
+                generation, flat_pop, actor_flat, result, pending_injection
+            )
         if not self._budget.exhausted:
             self._cem.tell(fitness, flat_pop)
             if not in_warmup and best_idx != pending_injection:
@@ -189,8 +196,32 @@ class EvoRainbowTrainer:
         self._log_generation(
             generation, {**losses, **gen_metrics}, result, in_warmup=in_warmup
         )
+        if self._checkpointer is not None:
+            self._checkpointer.maybe_save(self._budget.env_steps)
         return self._next_injection(
             generation, fitness, post_warmup=post_warmup
+        )
+
+    def _record_generation(
+        self,
+        generation: int,
+        flat_pop: jax.Array,
+        actor_flat: jax.Array,
+        result: FitnessResult,
+        injected: int | None,
+    ) -> None:
+        if self._checkpointer is None:
+            return
+        self._checkpointer.record_generation(
+            GenerationRecord(
+                generation=generation,
+                env_steps=self._budget.env_steps,
+                flat_pop=np.asarray(flat_pop),
+                actor_flat=np.asarray(actor_flat),
+                injected=-1 if injected is None else injected,
+                fitness=np.asarray(result.fitness),
+                real_mask=np.asarray(result.real_mask),
+            )
         )
 
     def _log_generation(
@@ -238,6 +269,8 @@ class EvoRainbowTrainer:
                     generation, pending_injection
                 )
                 generation += 1
+            if self._checkpointer is not None:
+                self._checkpointer.finish(self._budget.env_steps)
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return

@@ -88,6 +88,14 @@ SAC defaults (`src/conf/algorithm/sac.yaml`): `rl.actor_lr=rl.critic_lr=rl.alpha
 
 ---
 
+**Checkpoints** (`checkpoint.dir=<path>`, td3 agents only, off while `dir` is `null`):
+
+- Saved at the first episode/generation boundary with `env_steps >= fraction * total_steps` for `checkpoint.fractions=[0.1, 0.5, 1.0]` into `<dir>/p010`, `p050`, `p100`. A run that ends before a fraction fails.
+- `state.eqx`: full `TD3State` (online and target networks, optimizer states, shadow critic) via `eqx.tree_serialise_leaves`.
+- `data.npz`: last `checkpoint.buffer_tail=200_000` transitions in insertion order (`buffer_{state,action,reward,next_state,done}`). EvoRainbow adds the last `checkpoint.generations=4` evaluated generations: `pop_flat` (gen x pop x head), `pop_actor_flat` (RL actor head at ask time), `pop_injected` (slot of the injected RL actor, `-1` none), `pop_fitness`, `pop_real_mask`, `pop_generation`, `pop_env_steps`.
+- `meta.json`: `fraction`, `env_steps`, `buffer_size`, resolved `run_config`. `common.checkpoint.load_checkpoint(dir)` rebuilds the TD3 agent.
+- Read-only: logs are bit-identical with checkpoints on or off.
+
 ## Per-Env Presets (`src/conf/algorithm/env/*.yaml`)
 
 MuJoCo v5 only (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`). Applied automatically from `env.id` for `evorainbow` unless overridden via CLI:

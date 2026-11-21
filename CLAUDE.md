@@ -22,7 +22,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 
 - `src/train.py`: Thin Hydra entrypoint delegating to `runner.run_training`.
 - `src/runner.py`: Validates Hydra `DictConfig` into `config.RunConfig`, applies `algorithm/<agent>.yaml` `rl` defaults when `algorithm.agent != td3` and `algorithm/env/<env.id>.yaml` presets (unless CLI-overridden), initializes wandb (`env_steps` metric), and dispatches `RLTrainer` (`td3` or `sac`) or `EvoRainbowTrainer`. Under `algorithm=evorainbow algorithm.agent=sac`, `evorainbow.yaml` still carries TD3's `rl` schema at Hydra compose time, so overriding SAC-only `rl` keys requires Hydra's `+` prefix (e.g. `+algorithm.rl.alpha_lr=1e-4`).
-- `src/config.py`: Frozen dataclasses (`RLConfig`, `TD3RLConfig`, `SACRLConfig`, `ResetConfig`, `RLAlgoConfig`, `ShadowConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `DegConfig`, `ProbeConfig`, `EvoRainbowAlgoConfig`, `RunConfig`) mirrored 1:1 by `src/conf/config.yaml`, `src/conf/algorithm/{td3,td3-reset,sac,evorainbow}.yaml`, and `src/conf/algorithm/env/<env>.yaml`. Unknown keys and invalid `algorithm.agent` fail fast.
+- `src/config.py`: Frozen dataclasses (`RLConfig`, `TD3RLConfig`, `SACRLConfig`, `ResetConfig`, `RLAlgoConfig`, `ShadowConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `DegConfig`, `ProbeConfig`, `CheckpointConfig`, `EvoRainbowAlgoConfig`, `RunConfig`) mirrored 1:1 by `src/conf/config.yaml`, `src/conf/algorithm/{td3,td3-reset,sac,evorainbow}.yaml`, and `src/conf/algorithm/env/<env>.yaml`. Unknown keys and invalid `algorithm.agent` fail fast.
 - `src/environments/`: MuJoCo v5 registry (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5` only, others fail fast) and `EnvPool` (steps only active envs, no auto-reset).
 - `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `GaussianActorHead` (`log_std` clipped to `[-20, 2]`, deterministic `tanh(mean) * action_limit`), `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
 - `src/common/`:
@@ -32,6 +32,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
   - `rollout.py`: `Budget`, `rollout_single_episode`, `rollout_population`.
   - `training.py`: `run_warmup`, `print_summary`.
   - `reset.py`: `ResetController` (standalone TD3 only): fires resets at the first episode/update boundary past `reset.at_steps`, measures eval + `deg/*` before/after and at +5k/+20k/+50k via `Diagnostics.measure_deg`, logs `reset/*`. Reset keys come from `fold_in(key(seed), stream)`, never from the training key.
+  - `checkpoint.py`: `Checkpointer` (td3 agents, `checkpoint.dir`): `TD3State` (`state.eqx`), buffer tail plus last EvoRainbow generations (`data.npz`), `meta.json` at `checkpoint.fractions` of the budget. `load_checkpoint` rebuilds the agent. Read-only.
   - `utils.py`: `make_adam`, `critic_point`, `critic_loss`, `genetic_soft_update`.
 - `src/agents/`:
   - `__init__.py`: `make_agent` factory dispatching `td3` and `sac`.

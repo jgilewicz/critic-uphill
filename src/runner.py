@@ -12,6 +12,7 @@ from algos import EvoRainbowTrainer, RLTrainer
 from config import (
     RL_CONFIG_CLASSES,
     CEMConfig,
+    CheckpointConfig,
     DegConfig,
     EAToRLConfig,
     EnvConfig,
@@ -40,6 +41,7 @@ _ALLOWED_TOP_KEYS = frozenset(
         "deg",
         "probe",
         "wandb",
+        "checkpoint",
         "algorithm",
     }
 )
@@ -171,6 +173,16 @@ def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
     return WandbConfig(**wb)
 
 
+def _build_checkpoint_config(raw: dict[str, Any]) -> CheckpointConfig:
+    checkpoint = dict(raw)
+    _check_unknown_keys(CheckpointConfig, checkpoint, "checkpoint")
+    if "fractions" in checkpoint:
+        checkpoint["fractions"] = tuple(
+            float(x) for x in checkpoint["fractions"]
+        )
+    return CheckpointConfig(**checkpoint)
+
+
 def _build_deg_config(raw: dict[str, Any]) -> DegConfig:
     deg = dict(raw)
     _check_unknown_keys(DegConfig, deg, "deg")
@@ -299,6 +311,7 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
         deg=_build_deg_config(raw["deg"]),
         probe=_build_section(ProbeConfig, raw["probe"], "probe"),
         wandb=_build_wandb_config(raw["wandb"]),
+        checkpoint=_build_checkpoint_config(raw["checkpoint"]),
         seed=int(raw["seed"]),
         total_steps=int(raw["total_steps"]),
         protocol=int(raw["protocol"]),

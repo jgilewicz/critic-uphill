@@ -320,6 +320,36 @@ class ProbeConfig:
 
 
 @dataclass(frozen=True)
+class CheckpointConfig:
+    """Offline-analysis checkpoints at fractions of the step budget."""
+
+    dir: str | None = None
+    fractions: tuple[float, ...] = (0.1, 0.5, 1.0)
+    buffer_tail: int = 200_000
+    generations: int = 4
+
+    def __post_init__(self) -> None:
+        if not self.fractions:
+            raise ValueError("checkpoint.fractions must have at least 1 entry")
+        if list(self.fractions) != sorted(set(self.fractions)):
+            raise ValueError(
+                f"checkpoint.fractions={list(self.fractions)} must be "
+                "strictly increasing"
+            )
+        for fraction in self.fractions:
+            if not 0.0 < fraction <= 1.0:
+                raise ValueError(
+                    f"checkpoint.fractions entry {fraction} not in (0, 1]"
+                )
+        _check_min("checkpoint.buffer_tail", self.buffer_tail, 1)
+        _check_min("checkpoint.generations", self.generations, 1)
+
+    @property
+    def enabled(self) -> bool:
+        return self.dir is not None
+
+
+@dataclass(frozen=True)
 class WandbConfig:
     """Weights & Biases logging configuration."""
 
@@ -328,6 +358,10 @@ class WandbConfig:
     entity: str | None = None
     name: str | None = None
     tags: tuple[str, ...] = ()
+
+
+def _agent_name(algo: RLAlgoConfig | EvoRainbowAlgoConfig) -> str:
+    return algo.name if isinstance(algo, RLAlgoConfig) else algo.agent
 
 
 @dataclass(frozen=True)
@@ -340,6 +374,7 @@ class RunConfig:
     deg: DegConfig
     probe: ProbeConfig
     wandb: WandbConfig
+    checkpoint: CheckpointConfig
     seed: int
     total_steps: int
     protocol: int
@@ -363,6 +398,11 @@ class RunConfig:
                 f"probe.n_perturbations={self.probe.n_perturbations} leaves "
                 f"no random pick next to the {SHADOW_PROBE_PICKS} shadow "
                 f"probe picks. use >= {SHADOW_PROBE_PICKS + 1}"
+            )
+        if self.checkpoint.enabled and _agent_name(self.algorithm) != "td3":
+            raise ValueError(
+                "checkpoint.dir is only supported for td3 agents, "
+                f"not {_agent_name(self.algorithm)!r}"
             )
         if isinstance(self.algorithm, RLAlgoConfig) and (
             self.algorithm.reset.enabled
