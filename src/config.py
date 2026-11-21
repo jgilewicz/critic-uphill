@@ -112,6 +112,18 @@ class ResetConfig:
 
 
 @dataclass(frozen=True)
+class ShadowConfig:
+    """Shadow twin critic: TD-trained, never in the actor loss."""
+
+    enabled: bool = False
+    surrogate: bool = False
+
+    def __post_init__(self) -> None:
+        if self.surrogate and not self.enabled:
+            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
+
+
+@dataclass(frozen=True)
 class RLAlgoConfig:
     """Configuration for standalone off-policy RL agents (td3 | sac)."""
 
@@ -120,9 +132,20 @@ class RLAlgoConfig:
     embedding_dim: int = 300
     rl: RLConfig = field(default_factory=TD3RLConfig)
     reset: ResetConfig = field(default_factory=ResetConfig)
+    shadow: ShadowConfig = field(default_factory=ShadowConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.name", self.name, AgentName)
+        if self.shadow.enabled and self.name != "td3":
+            raise ValueError(
+                "algorithm.shadow.enabled=true is only supported for td3, "
+                f"not {self.name!r}"
+            )
+        if self.shadow.surrogate:
+            raise ValueError(
+                "algorithm.shadow.surrogate=true needs a population, "
+                "use algorithm=evorainbow"
+            )
         if self.reset.enabled and self.name != "td3":
             raise ValueError(
                 "algorithm.reset.enabled=true is only supported for td3, "
@@ -198,18 +221,6 @@ class EvalConfig:
                 f"eval.p_real={self.p_real} is only valid for eval.mode in "
                 "('critic', 'hboot'), not 'full'"
             )
-
-
-@dataclass(frozen=True)
-class ShadowConfig:
-    """Shadow twin critic: TD-trained, never in the actor loss."""
-
-    enabled: bool = False
-    surrogate: bool = False
-
-    def __post_init__(self) -> None:
-        if self.surrogate and not self.enabled:
-            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
 
 
 @dataclass(frozen=True)
@@ -344,8 +355,7 @@ class RunConfig:
                 f"the {candidates} perturbations measured by deg"
             )
         if (
-            isinstance(self.algorithm, EvoRainbowAlgoConfig)
-            and self.algorithm.shadow.enabled
+            self.algorithm.shadow.enabled
             and self.probe.enabled
             and self.probe.n_perturbations < SHADOW_PROBE_PICKS + 1
         ):

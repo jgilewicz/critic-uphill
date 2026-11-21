@@ -54,6 +54,7 @@ class RLTrainer:
             algo_cfg.embedding_dim,
             rl_cfg=algo_cfg.rl,
             key=self._next_key(),
+            shadow=algo_cfg.shadow.enabled,
         )
         self._resetter = self._make_resetter(algo_cfg)
 

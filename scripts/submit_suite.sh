@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-suite="${1:?usage: submit_suite.sh <main|reset|shadow> <env>...}"
+suite="${1:?usage: submit_suite.sh <main|reset> <env>...}"
 shift
 (($# > 0)) || {
   echo "usage: submit_suite.sh ${suite} <env>..." >&2
@@ -10,9 +10,9 @@ shift
 
 case "${suite}" in
 main) array=0-79 ;;
-reset | shadow) array=0-19 ;;
+reset) array=0-19 ;;
 *)
-  echo "unknown suite '${suite}'; choose 'main', 'reset' or 'shadow'" >&2
+  echo "unknown suite '${suite}'; choose 'main' or 'reset'" >&2
   exit 1
   ;;
 esac

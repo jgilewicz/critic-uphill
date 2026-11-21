@@ -104,10 +104,14 @@ def _build_algorithm(
     if name in RL_CONFIG_CLASSES:
         rl = _build_rl_config(str(name), _pop_section(algo, "rl", str(name)))
         reset = _build_reset_config(algo.pop("reset", {}))
+        shadow = _build_section(
+            ShadowConfig, algo.pop("shadow", {}), "algorithm.shadow"
+        )
         payload: dict[str, Any] = {
             "name": name,
             "rl": rl,
             "reset": reset,
+            "shadow": shadow,
             **algo,
         }
         _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")

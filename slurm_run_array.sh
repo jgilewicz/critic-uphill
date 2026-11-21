@@ -16,10 +16,6 @@
 #   0-9   td3
 #   10-19 td3-reset
 #
-# Suite: shadow (task ID = condition_index * 10 + seed, array 0-19)
-#   0-9   evorainbow-td3-critic (shadow trained, Q1 surrogate)
-#   10-19 evorainbow-td3-shadow (shadow trained, shadow surrogate)
-#
 # Example usage:
 #   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
@@ -58,17 +54,11 @@ RESET=(
   "td3-reset|algorithm=td3-reset"
 )
 
-SHADOW=(
-  "evorainbow-td3-critic|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic algorithm.shadow.enabled=true"
-  "evorainbow-td3-shadow|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic algorithm.shadow.enabled=true algorithm.shadow.surrogate=true"
-)
-
 case "${SUITE}" in
 main) CONDITIONS=("${MAIN[@]}") ;;
 reset) CONDITIONS=("${RESET[@]}") ;;
-shadow) CONDITIONS=("${SHADOW[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset' or 'shadow'." >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main' or 'reset'." >&2
   exit 1
   ;;
 esac

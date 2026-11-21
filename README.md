@@ -73,12 +73,12 @@ Generation loop in [src/algos/evorainbow.py](src/algos/evorainbow.py):
 - Fresh networks take their key from `fold_in(fold_in(key(seed), stream), reset_index)`, so the training RNG stream is untouched, before and after a reset.
 - Replay buffer, step counter, exploration noise and the running episode are kept. Updates continue immediately, no warmup.
 
-**Shadow critic** (`algorithm.shadow.enabled=true`, `evorainbow` with `agent=td3` only, default `false`):
+**Shadow critic** (`algorithm.shadow.enabled=true`, standalone `td3` or `evorainbow` with `agent=td3`, default `false`):
 
 - A second twin critic with the TD3 critic architecture, its own init (key `fold_in(agent_key, stream)`), own target networks and own optimizer state.
 - TD-trained on the same batches and the same target-policy-smoothed next action as the main critic, target `min` of its own two target heads. Targets soft-update at the `policy_freq` cadence.
 - Never enters the actor loss. Logs `shadow/*` and `deg_q2/*` (see Logged Metrics) and switches the truth probe to the shadow picks.
-- `algorithm.shadow.surrogate=true` (needs `eval.mode=critic`) scores the population with the shadow's first head instead of Q1. The `p_real` gate is unchanged.
+- `algorithm.shadow.surrogate=true` (`evorainbow` only, needs `eval.mode=critic`) scores the population with the shadow's first head instead of Q1. The `p_real` gate is unchanged. No suite uses it.
 
 `evorainbow` takes `algorithm.agent=td3|sac` (default `td3`). With SAC, CEM evolves the full `GaussianActorHead` through its deterministic `tanh(mean)` path (rollouts and surrogates), and the genetic soft update blends into the online head only.
 
@@ -162,14 +162,11 @@ just smoke evorainbow Hopper-v5 algorithm.agent=sac algorithm.eval.mode=critic
 
 Suite `reset` (array `0-19` per env, task ID = condition index * 10 + seed): `0-9` `td3`, `10-19` `td3-reset`.
 
-Suite `shadow` (array `0-19` per env): `0-9` `evorainbow-td3-critic` (shadow trained, Q1 surrogate), `10-19` `evorainbow-td3-shadow` (shadow surrogate). Both use `eval.mode=critic` and `shadow.enabled=true`.
-
 Reads `WANDB_API_KEY` from the environment or `wandb login`.
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 ./scripts/submit_suite.sh reset HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
-./scripts/submit_suite.sh shadow Walker2d-v5 HalfCheetah-v5 Hopper-v5
 ```
 
 ---
