@@ -1,4 +1,7 @@
 from environments.base import (
+    ALLOWED_ENVS as ALLOWED_ENVS,
+)
+from environments.base import (
     EnvDims as EnvDims,
 )
 from environments.base import (
@@ -15,7 +18,4 @@ from environments.base import (
 )
 from environments.base import (
     validate_env_id as validate_env_id,
-)
-from environments.base import (
-    ALLOWED_ENVS as ALLOWED_ENVS,
 )

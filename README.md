@@ -121,7 +121,7 @@ Any Hydra key can be appended as an override. Configs live in `src/conf/` and ar
 | `Swimmer-v5` | `1e-3` | `0.3` | `0.4` | `10` |
 | `Walker2d-v5` | `1e-1` | `0.1` | `0.6` | `1` |
 
-`Humanoid-v5` values come from the official `run.sh` (`-damp=1e-2 -EA_tau=0.1 -theta=0.8`) and `parameters.py` (sync period 1). The DMC tasks have no official preset, so `evorainbow` keeps the defaults below for them.
+`Humanoid-v5` values are carried over from the official `Humanoid-v2` entries in `run.sh` (`-damp=1e-2 -EA_tau=0.1 -theta=0.8`) and `parameters.py` (sync period 1). The DMC tasks have no official preset, so `evorainbow` keeps the defaults below for them.
 
 **Environments** (`src/environments/`, any other id fails fast):
 

@@ -29,6 +29,7 @@ from config import (
     WandbConfig,
 )
 from environments import validate_env_id
+from environments.dmc_env import DMC_ENVS
 
 _ALLOWED_TOP_KEYS = frozenset(
     {
@@ -239,9 +240,13 @@ def _apply_env_preset(cfg: DictConfig) -> None:
         return
     env_id = str(cfg.env.id)
     preset_path = _CONF_ALGO_DIR / "env" / f"{env_id}.yaml"
-    if not preset_path.is_file():
+    if env_id in DMC_ENVS and not preset_path.is_file():
         # DMC tasks have no official preset and keep the evorainbow.yaml values
         return
+    if not preset_path.is_file():
+        raise FileNotFoundError(
+            f"no evorainbow preset for env {env_id!r}: expected {preset_path}"
+        )
     preset = cast("DictConfig", OmegaConf.load(preset_path))
     _validate_preset(preset, preset_path)
     for section, field in _PRESET_KEYS:

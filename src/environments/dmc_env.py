@@ -28,8 +28,14 @@ class DmcStateEnv(gym.Env):
         self._inner = inner
         obs_space = inner.observation_space
         action_space = inner.action_space
-        assert isinstance(obs_space, gym.spaces.Dict)
-        assert isinstance(action_space, gym.spaces.Box)
+        if not isinstance(obs_space, gym.spaces.Dict) or not isinstance(
+            action_space, gym.spaces.Box
+        ):
+            raise TypeError(
+                "DmcStateEnv expects a Dict observation space and a Box "
+                f"action space, got {type(obs_space).__name__} and "
+                f"{type(action_space).__name__}"
+            )
         self._keys = tuple(sorted(obs_space.spaces))
         obs_dim = sum(
             math.prod(obs_space.spaces[key].shape or ()) for key in self._keys
@@ -73,8 +79,9 @@ class DmcStateEnv(gym.Env):
 def make_dmc_env(env_id: str) -> gym.Env:
     """Instantiate a DMC suite task through shimmy, without a GL backend."""
     # dm_control imports a GL backend at import time unless MUJOCO_GL is set,
-    # which fails or hangs on headless nodes. Observations are state only.
-    os.environ.setdefault("MUJOCO_GL", "disable")
+    # which fails or hangs on headless nodes. Observations are state only, so
+    # an inherited backend is overridden.
+    os.environ["MUJOCO_GL"] = "disable"
     from dm_control import suite
     from shimmy import DmControlCompatibilityV0
 
