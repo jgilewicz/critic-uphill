@@ -4,7 +4,7 @@
 [![Equinox](https://img.shields.io/badge/Equinox-0.13+-9cf.svg)](https://github.com/patrick-kidger/equinox)
 [![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 
-Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget? This repository holds the training code (TD3 and EvoRainbow on MuJoCo v5), the online metrics logged during training, the offline measurements run on saved checkpoints, and the scripts that turn both into the tables of the paper.
+Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget? This repository holds the training code (TD3 and EvoRainbow on MuJoCo v5 and DeepMind Control tasks), the online metrics logged during training, the offline measurements run on saved checkpoints, and the scripts that turn both into the tables of the paper.
 
 ---
 
@@ -117,8 +117,19 @@ Any Hydra key can be appended as an override. Configs live in `src/conf/` and ar
 | `Ant-v5` | `1e-4` | `0.1` | `0.2` | `1` |
 | `HalfCheetah-v5` | `1e-3` | `0.3` | `0.5` | `1` |
 | `Hopper-v5` | `1e-3` | `0.3` | `0.5` | `1` |
+| `Humanoid-v5` | `1e-2` | `0.1` | `0.8` | `1` |
 | `Swimmer-v5` | `1e-3` | `0.3` | `0.4` | `10` |
 | `Walker2d-v5` | `1e-1` | `0.1` | `0.6` | `1` |
+
+`Humanoid-v5` values come from the official `run.sh` (`-damp=1e-2 -EA_tau=0.1 -theta=0.8`) and `parameters.py` (sync period 1). The DMC tasks have no official preset, so `evorainbow` keeps the defaults below for them.
+
+**Environments** (`src/environments/`, any other id fails fast):
+
+- MuJoCo v5: `HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`, `Humanoid-v5`.
+- DMC suite through `shimmy`: `dmc-cheetah-run`, `dmc-quadruped-run`, `dmc-humanoid-run`, `dmc-dog-run` (`dmc-<domain>-<task>`, no slashes or underscores because ids end up in run names and file names).
+- DMC adapter (`DmcStateEnv`): observation dict concatenated in sorted-key order as one float32 vector, actions in `[-1, 1]` mapped affinely onto the task bounds (`quadruped` has non-unit bounds), 1000-step episodes ending by truncation only (a termination raises), no action repeat, `reset(seed=...)` seeds the task's RNG.
+- State only: `MUJOCO_GL=disable` is set (unless already set) before `dm_control` is imported, so no GL backend is loaded on headless nodes.
+- Pinned `mujoco==3.6.0` and `dm_control==1.0.38`, the newest release that accepts it. Newer `dm_control` needs `mujoco>=3.7`, and `mujoco==4.0.1` changes fixed-seed MuJoCo v5 trajectories.
 
 **Defaults** (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horizon=1000`, `embedding_dim=300`, `gamma=0.99`, `tau=0.005`, `batch_size=128`, `warmup_steps=10_000`, `train_ratio=1.0`, `actor_lr=critic_lr=1e-3`, grad-norm clip `10`. EvoRainbow adds `pop_size=5`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`.
 
@@ -297,7 +308,7 @@ src/
 ├── agents/             # RLAgent base, TD3 (reset, shadow critic)
 ├── algos/              # RLTrainer (td3) and EvoRainbowTrainer
 ├── common/             # replay buffer, budget and rollouts, jitted TD3 math, ResetController, checkpoints
-├── environments/       # MuJoCo v5 registry and EnvPool
+├── environments/       # MuJoCo v5 and DMC registry, DmcStateEnv, EnvPool
 ├── fitness/            # full, critic, hboot, prefix fitness and the p_real gate
 ├── metrics/            # perf, surrogate, degeneration, truth probe, schedules
 ├── modules/            # Equinox embedding, actor head, critic, CEM

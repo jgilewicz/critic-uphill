@@ -240,9 +240,8 @@ def _apply_env_preset(cfg: DictConfig) -> None:
     env_id = str(cfg.env.id)
     preset_path = _CONF_ALGO_DIR / "env" / f"{env_id}.yaml"
     if not preset_path.is_file():
-        raise FileNotFoundError(
-            f"Missing per-env preset for {env_id!r}: {preset_path}"
-        )
+        # DMC tasks have no official preset and keep the evorainbow.yaml values
+        return
     preset = cast("DictConfig", OmegaConf.load(preset_path))
     _validate_preset(preset, preset_path)
     for section, field in _PRESET_KEYS:

@@ -16,4 +16,6 @@ from environments.base import (
 from environments.base import (
     validate_env_id as validate_env_id,
 )
-from environments.mujoco_env import ALLOWED_ENVS as ALLOWED_ENVS
+from environments.base import (
+    ALLOWED_ENVS as ALLOWED_ENVS,
+)

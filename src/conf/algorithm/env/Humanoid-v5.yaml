@@ -1,0 +1,12 @@
+# @package algorithm
+cem:
+  damp: 1e-2
+
+rl_to_ea:
+  period: 1
+
+ea_to_rl:
+  tau: 0.1
+
+eval:
+  p_real: 0.8

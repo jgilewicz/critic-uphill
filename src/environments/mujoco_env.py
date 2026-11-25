@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import gymnasium as gym
 
-ALLOWED_ENVS: tuple[str, ...] = (
+MUJOCO_ENVS: tuple[str, ...] = (
     "HalfCheetah-v5",
     "Hopper-v5",
     "Walker2d-v5",
     "Ant-v5",
     "Swimmer-v5",
+    "Humanoid-v5",
 )
 
 
