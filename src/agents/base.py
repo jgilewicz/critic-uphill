@@ -114,6 +114,11 @@ class RLAgent(abc.ABC):
         """Online Q1 critic used by surrogate fitness estimators."""
 
     @property
+    def shadow_critic(self) -> Critic | None:
+        """First head of the shadow critic, None without one."""
+        return None
+
+    @property
     def unravel_head(self) -> Callable[[jax.Array], Any]:
         """Map a flat vector back into the agent's actor head PyTree."""
         return self._unravel_head
@@ -162,16 +167,25 @@ class RLAgent(abc.ABC):
         return np.asarray(actions, dtype=np.float32)
 
     def q1_population_mean(
-        self, heads: Any, states: jax.Array, *, chunk_size: int = 4096
+        self,
+        heads: Any,
+        states: jax.Array,
+        *,
+        chunk_size: int = 4096,
+        critic: Critic | None = None,
     ) -> jax.Array:
-        """Mean online Q1(s, head(Z(s))) over states for each head."""
+        """Mean Q(s, head(Z(s))) over states for each head.
+
+        Uses online Q1 unless another critic is given.
+        """
+        scorer = self.critic1 if critic is None else critic
         total = int(states.shape[0])
         pop_size = int(jax.tree.leaves(heads)[0].shape[0])
         acc = jnp.zeros(pop_size, dtype=jnp.float32)
         for start in range(0, total, chunk_size):
             batch_states = states[start : start + chunk_size]
             acc = acc + _q1_population_sum(
-                self.critic1, self.embedding, heads, batch_states
+                scorer, self.embedding, heads, batch_states
             )
         return acc / float(total)
 

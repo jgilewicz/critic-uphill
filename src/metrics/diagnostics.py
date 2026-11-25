@@ -5,7 +5,7 @@ import jax
 
 from agents.base import RLAgent
 from common.replay_buffer import ReplayBuffer
-from config import RunConfig
+from config import EvoRainbowAlgoConfig, RunConfig
 from metrics.degeneration import DegenerationProbe
 from metrics.schedule import Schedule, metric_key
 from metrics.truth import TruthProbe
@@ -16,7 +16,9 @@ class Diagnostics:
 
     def __init__(self, run_cfg: RunConfig, env: gym.Env) -> None:
         self._seed = run_cfg.seed
-        self._deg = DegenerationProbe(run_cfg.deg)
+        algo = run_cfg.algorithm
+        shadow = isinstance(algo, EvoRainbowAlgoConfig) and algo.shadow.enabled
+        self._deg = DegenerationProbe(run_cfg.deg, shadow=shadow)
         self._deg_schedule = Schedule(run_cfg.deg.interval)
         self._truth = (
             TruthProbe(env, run_cfg.probe) if run_cfg.probe.enabled else None

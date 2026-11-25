@@ -59,3 +59,11 @@ eval:
   h: 200
   critic_states: 50_000
   p_real: 0.5
+
+# Shadow twin critic (agent=td3): own init and targets, TD-trained on the
+# critic's batches against the min of its own target heads at the target
+# actor, never in the actor loss. surrogate=true scores eval.mode=critic
+# with the shadow's first head instead of Q1.
+shadow:
+  enabled: false
+  surrogate: false

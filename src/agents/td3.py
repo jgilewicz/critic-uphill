@@ -11,12 +11,15 @@ from common.replay_buffer import ReplayBuffer
 from common.td3 import (
     TD3Hyperparams,
     TD3State,
+    init_shadow,
     init_td3,
     make_td3_train,
 )
 from common.utils import genetic_soft_update, make_adam
 from config import RLConfig, TD3RLConfig
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
+
+_SHADOW_STREAM = 104_729
 
 
 @eqx.filter_jit
@@ -46,6 +49,7 @@ class TD3(RLAgent):
         *,
         rl_cfg: RLConfig,
         key: jax.Array,
+        shadow: bool = False,
     ) -> None:
         if not isinstance(rl_cfg, TD3RLConfig):
             raise TypeError(
@@ -60,6 +64,7 @@ class TD3(RLAgent):
             key=key,
         )
         self.rl_cfg = rl_cfg
+        self._shadow = shadow
 
         embedding_opt = make_adam(1e-3)
         actor_opt = make_adam(rl_cfg.actor_lr)
@@ -85,7 +90,7 @@ class TD3(RLAgent):
 
     def _init_state(self, key: jax.Array) -> TD3State:
         embedding_opt, actor_opt, critic_opt = self._optimizers
-        return init_td3(
+        state = init_td3(
             self.obs_dim,
             self.action_dim,
             self.embedding_dim,
@@ -96,6 +101,17 @@ class TD3(RLAgent):
             actor_optimizer=actor_opt,
             critic_optimizer=critic_opt,
         )
+        if not self._shadow:
+            return state
+        # own stream: the shadow init never shifts the TD3 init keys
+        shadow = init_shadow(
+            self.obs_dim,
+            self.action_dim,
+            key=jax.random.fold_in(key, _SHADOW_STREAM),
+            hidden_dims=self.rl_cfg.critic_hidden_dims,
+            optimizer=critic_opt,
+        )
+        return state._replace(shadow=shadow)
 
     def reset(self, key: jax.Array) -> None:
         """Re-initialize all networks, targets and optimizer states."""
@@ -120,6 +136,18 @@ class TD3(RLAgent):
     def critic1(self) -> Critic:
         """Online Q1 critic."""
         return self.state.online.critic1
+
+    @property
+    def critic2(self) -> Critic:
+        """Online Q2 critic."""
+        return self.state.online.critic2
+
+    @property
+    def shadow_critic(self) -> Critic | None:
+        """First head of the online shadow critic, None when disabled."""
+        if self.state.shadow is None:
+            return None
+        return self.state.shadow.online[0]
 
     def init_cem_head(self, key: jax.Array) -> jax.Array:
         """Sample an unscaled ActorHead vector to initialize CEM's mean."""
