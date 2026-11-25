@@ -8,12 +8,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from agents.base import RLAgent
-from agents.td3 import TD3
+from agents.base import OfflineAgent
 from common.replay_buffer import ReplayBuffer
 from config import DegConfig
 from metrics.stats import spearman
-from modules.deep_modules import Critic, SharedStateEmbedding
+from modules.protocols import QCritic, StateEmbedding
 
 
 class DegenerationTerms(NamedTuple):
@@ -69,8 +68,8 @@ def _stack_levels(
 
 @eqx.filter_jit
 def measure_terms(
-    embedding: SharedStateEmbedding,
-    critic: Critic,
+    embedding: StateEmbedding,
+    critic: QCritic,
     head: Any,
     states: jax.Array,
     key: jax.Array,
@@ -169,8 +168,8 @@ class DegenerationProbe:
 
     def _terms(
         self,
-        agent: RLAgent,
-        critic: Critic,
+        agent: OfflineAgent,
+        critic: QCritic,
         states: jax.Array,
         key: jax.Array,
     ) -> DegenerationTerms:
@@ -185,7 +184,7 @@ class DegenerationProbe:
         )
 
     def measure(
-        self, agent: TD3, buffer: ReplayBuffer, key: jax.Array
+        self, agent: OfflineAgent, buffer: ReplayBuffer, key: jax.Array
     ) -> dict[str, float]:
         """Measure deg/* on buffer states, using no environment steps."""
         cfg = self._cfg

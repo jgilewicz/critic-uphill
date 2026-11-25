@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import fields
 from pathlib import Path
 from typing import Any, cast
@@ -27,9 +28,11 @@ from config import (
     ShadowConfig,
     TD3RLConfig,
     WandbConfig,
+    XQCConfig,
 )
 from environments import validate_env_id
 from environments.dmc_env import DMC_ENVS
+from xqc.trainer import XQCTrainer
 
 _ALLOWED_TOP_KEYS = frozenset(
     {
@@ -93,75 +96,75 @@ def _build_reset_config(raw: dict[str, Any]) -> ResetConfig:
     return ResetConfig(**reset)
 
 
+def _build_td3(algo: dict[str, Any]) -> RLAlgoConfig:
+    rl = _build_rl_config(_pop_section(algo, "rl", "td3"))
+    reset = _build_reset_config(algo.pop("reset", {}))
+    shadow = _build_section(
+        ShadowConfig, algo.pop("shadow", {}), "algorithm.shadow"
+    )
+    payload: dict[str, Any] = {
+        "rl": rl,
+        "reset": reset,
+        "shadow": shadow,
+        **algo,
+    }
+    _check_unknown_keys(RLAlgoConfig, payload, "algorithm (td3)")
+    return RLAlgoConfig(**payload)
+
+
+def _build_evorainbow(algo: dict[str, Any]) -> EvoRainbowAlgoConfig:
+    if "reset" in algo:
+        raise ValueError(
+            "algorithm.reset is only supported for standalone td3. "
+            "use algorithm=td3-reset"
+        )
+    algo.pop("name")
+    rl = _build_rl_config(_pop_section(algo, "rl", "evorainbow"))
+    sections: dict[str, type[Any]] = {
+        "cem": CEMConfig,
+        "rl_to_ea": RLToEAConfig,
+        "ea_to_rl": EAToRLConfig,
+        "eval": EvalConfig,
+        "shadow": ShadowConfig,
+        "matched": MatchedConfig,
+    }
+    payload: dict[str, Any] = {
+        key: _build_section(
+            cls, _pop_section(algo, key, "evorainbow"), f"algorithm.{key}"
+        )
+        for key, cls in sections.items()
+    }
+    payload |= {"rl": rl, **algo}
+    _check_unknown_keys(EvoRainbowAlgoConfig, payload, "algorithm (evorainbow)")
+    return EvoRainbowAlgoConfig(**payload)
+
+
+def _build_xqc(algo: dict[str, Any]) -> XQCConfig:
+    _check_unknown_keys(XQCConfig, algo, "algorithm (xqc)")
+    for key in ("actor_hidden_dims", "critic_hidden_dims"):
+        if key in algo:
+            algo[key] = tuple(int(d) for d in algo[key])
+    return XQCConfig(**algo)
+
+
+_ALGORITHM_BUILDERS: dict[str, Callable[[dict[str, Any]], Any]] = {
+    "td3": _build_td3,
+    "evorainbow": _build_evorainbow,
+    "xqc": _build_xqc,
+}
+
+
 def _build_algorithm(
     raw: dict[str, Any],
-) -> RLAlgoConfig | EvoRainbowAlgoConfig:
+) -> RLAlgoConfig | EvoRainbowAlgoConfig | XQCConfig:
     algo = dict(raw)
-    name = algo.pop("name", None)
-    if name == "td3":
-        rl = _build_rl_config(_pop_section(algo, "rl", "td3"))
-        reset = _build_reset_config(algo.pop("reset", {}))
-        shadow = _build_section(
-            ShadowConfig, algo.pop("shadow", {}), "algorithm.shadow"
+    name = algo.get("name")
+    if name not in _ALGORITHM_BUILDERS:
+        choices = tuple(_ALGORITHM_BUILDERS)
+        raise ValueError(
+            f"Unsupported algorithm.name={name!r}; choose from {choices}"
         )
-        payload: dict[str, Any] = {
-            "name": name,
-            "rl": rl,
-            "reset": reset,
-            "shadow": shadow,
-            **algo,
-        }
-        _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")
-        return RLAlgoConfig(**payload)
-    if name == "evorainbow":
-        if "reset" in algo:
-            raise ValueError(
-                "algorithm.reset is only supported for standalone td3. "
-                "use algorithm=td3-reset"
-            )
-        rl = _build_rl_config(_pop_section(algo, "rl", "evorainbow"))
-        er_payload: dict[str, Any] = {
-            "rl": rl,
-            "cem": _build_section(
-                CEMConfig,
-                _pop_section(algo, "cem", "evorainbow"),
-                "algorithm.cem",
-            ),
-            "rl_to_ea": _build_section(
-                RLToEAConfig,
-                _pop_section(algo, "rl_to_ea", "evorainbow"),
-                "algorithm.rl_to_ea",
-            ),
-            "ea_to_rl": _build_section(
-                EAToRLConfig,
-                _pop_section(algo, "ea_to_rl", "evorainbow"),
-                "algorithm.ea_to_rl",
-            ),
-            "eval": _build_section(
-                EvalConfig,
-                _pop_section(algo, "eval", "evorainbow"),
-                "algorithm.eval",
-            ),
-            "shadow": _build_section(
-                ShadowConfig,
-                _pop_section(algo, "shadow", "evorainbow"),
-                "algorithm.shadow",
-            ),
-            "matched": _build_section(
-                MatchedConfig,
-                _pop_section(algo, "matched", "evorainbow"),
-                "algorithm.matched",
-            ),
-            **algo,
-        }
-        _check_unknown_keys(
-            EvoRainbowAlgoConfig, er_payload, "algorithm (evorainbow)"
-        )
-        return EvoRainbowAlgoConfig(**er_payload)
-    choices = ("td3", "evorainbow")
-    raise ValueError(
-        f"Unsupported algorithm.name={name!r}; choose from {choices}"
-    )
+    return _ALGORITHM_BUILDERS[name](algo)
 
 
 def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
@@ -296,6 +299,17 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
     )
 
 
+def _make_trainer(
+    run_cfg: RunConfig, on_log: Callable[[dict[str, float]], None]
+) -> RLTrainer | EvoRainbowTrainer | XQCTrainer:
+    algo = run_cfg.algorithm
+    if isinstance(algo, RLAlgoConfig):
+        return RLTrainer(run_cfg, algo, on_log=on_log)
+    if isinstance(algo, XQCConfig):
+        return XQCTrainer(run_cfg, algo, on_log=on_log)
+    return EvoRainbowTrainer(run_cfg, algo, on_log=on_log)
+
+
 def run_training(cfg: DictConfig) -> float:
     """Initialize config, wandb logging, and the selected trainer."""
     run_cfg = build_run_config(cfg)
@@ -322,15 +336,7 @@ def run_training(cfg: DictConfig) -> float:
     wandb.define_metric("env_steps")
     wandb.define_metric("*", step_metric="env_steps")
     try:
-        if isinstance(run_cfg.algorithm, RLAlgoConfig):
-            trainer: RLTrainer | EvoRainbowTrainer = RLTrainer(
-                run_cfg, run_cfg.algorithm, on_log=wandb.log
-            )
-        else:
-            trainer = EvoRainbowTrainer(
-                run_cfg, run_cfg.algorithm, on_log=wandb.log
-            )
-        eval_reward = trainer.train()
+        eval_reward = _make_trainer(run_cfg, wandb.log).train()
     except BaseException:
         run.finish(exit_code=1)
         raise

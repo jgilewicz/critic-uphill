@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from modules.deep_modules import Critic
+from modules.protocols import QCritic
 
 Params = TypeVar("Params")
 
@@ -25,14 +25,14 @@ def make_adam(
 
 
 def critic_point(
-    critic: Critic, states: jax.Array, actions: jax.Array
+    critic: QCritic, states: jax.Array, actions: jax.Array
 ) -> jax.Array:
     """Evaluate Q(s, a) over a batch of states and actions."""
     return jax.vmap(critic)(states, actions)
 
 
 def critic_loss(
-    critic: Critic,
+    critic: QCritic,
     states: jax.Array,
     actions: jax.Array,
     target: jax.Array,

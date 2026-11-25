@@ -4,7 +4,7 @@
 [![Equinox](https://img.shields.io/badge/Equinox-0.13+-9cf.svg)](https://github.com/patrick-kidger/equinox)
 [![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 
-Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget? This repository holds the training code (TD3 and EvoRainbow on MuJoCo v5 and DeepMind Control tasks), the online metrics logged during training, the offline measurements run on saved checkpoints, and the scripts that turn both into the tables of the paper.
+Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a fair step budget? This repository holds the training code (TD3, EvoRainbow and a JAX port of XQC on MuJoCo v5 and DeepMind Control tasks), the online metrics logged during training, the offline measurements run on saved checkpoints, and the scripts that turn both into the tables of the paper.
 
 ---
 
@@ -44,9 +44,11 @@ Why do critic surrogates in evolutionary RL (ERL) fail to beat plain TD3 under a
 ```bash
 uv sync
 just check                                  # ruff check, ruff format --check, ty check src
+just test                                   # pytest (tests/xqc)
 
 just train td3 Hopper-v5                    # standalone TD3
 just train td3-reset Hopper-v5              # TD3 with full network resets
+just train xqc Hopper-v5                    # XQC port (BatchNorm, categorical critics)
 just train evorainbow HalfCheetah-v5        # EvoRainbow (default eval.mode=hboot)
 just train evorainbow Walker2d-v5 algorithm.eval.mode=critic
 ```
@@ -59,6 +61,7 @@ just smoke evorainbow Hopper-v5 algorithm.eval.mode=full
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=critic
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=hboot algorithm.eval.h=50
 just smoke evorainbow Hopper-v5 algorithm.eval.mode=prefix algorithm.eval.h=50
+just smoke-xqc dmc-cheetah-run /tmp/xqc-smoke   # XQC, 3 checkpoints in /tmp/xqc-smoke
 ```
 
 Any Hydra key can be appended as an override. Configs live in `src/conf/` and are validated into frozen dataclasses in `src/config.py`, unknown keys fail fast.
@@ -130,6 +133,18 @@ Any Hydra key can be appended as an override. Configs live in `src/conf/` and ar
 - DMC adapter (`DmcStateEnv`): observation dict concatenated in sorted-key order as one float32 vector, actions in `[-1, 1]` mapped affinely onto the task bounds (`quadruped` has non-unit bounds), 1000-step episodes ending by truncation only (a termination raises), no action repeat, `reset(seed=...)` seeds the task's RNG.
 - State only: `MUJOCO_GL=disable` is set (overriding any inherited value) before `dm_control` is imported, so no GL backend is loaded on headless nodes.
 - Pinned `mujoco==3.6.0` and `dm_control==1.0.38`, the newest release that accepts it. Newer `dm_control` needs `mujoco>=3.7`, and `mujoco==4.0.1` changes fixed-seed MuJoCo v5 trajectories.
+
+**XQC** (`algorithm=xqc`, `src/xqc/`, port of [Palenicek et al.](https://github.com/danielpalenicek/xqc) at commit `9a6832b`, MIT notice in `src/xqc/LICENSE`):
+
+- Actor: BatchNorm embedder, 4 x `Dense(256, no bias) -> BN -> ReLU`, tanh-Gaussian head. Critic: 2 independent members (BatchNorm embedder, 4 x `Dense(512, no bias) -> BN -> ReLU`, 101-bin categorical value on `[-5, 5]`).
+- Weight-norm projection of every Dense kernel after each update. Update order per step: critic, target (`tau=0.005`), actor, temperature. Actor and temperature update every 3rd step with lr `3e-4 -> 3e-5` linear, UTD `2`, batch `256`, random actions until `start_training=5000`.
+- BatchNorm mode: eval (running statistics) for the actor, for every `Q` used by the offline pipeline and for the actor loss's critic, training mode for the critic update and the actor forward in the actor loss, as in the original.
+- Rewards are divided by the running std of the discounted return (`RewardNormalizer`, updated every env step), so the critic lives in normalized reward units. The buffer keeps raw rewards.
+- Discount `gamma = clip((T/5 - 1) / (T/5), 0.95, 0.995)` with `horizon=1000`: `0.995` on every env. The original DMC runs use action repeat 2, so `T=500` and `gamma=0.99`, here DMC runs without action repeat and also gets `0.995`.
+- Budget and logging as the other algorithms: one `Budget`, `perf/eval_rl` every `eval.interval` (deterministic `tanh(mean)`, 10 episodes), `xqc/*` training statistics and `xqc/reward_scale`. In-training `deg/*`, `probe/*` and `surr/*` are not computed (offline measurement only).
+- Checkpoints (`checkpoint.dir`): `state.eqx` holds actor, both critics (BN statistics included), targets, temperature, optimizer states and RNG, `data.npz` the last `checkpoint.buffer_tail` transitions (actions in env scale), `meta.json` has `algo="xqc"`, `gamma`, `reward_scale` and library versions. `load_checkpoint` dispatches on `meta["algo"]`.
+- Offline signal mapping (recorded as `signal_mapping` in the measurement JSON header): `q1` = min over the 2 critics, `q2` = critic member 0, `shadow` unavailable (skipped), `fqe` = same twin-critic FQE as for TD3. Perturbed head = the mean output layer, embedding = actor trunk with running BN statistics. `q1_at_actor` is rescaled to raw reward units.
+- Tests (`just test`): adapter bit-exact against the internal networks, offline pipeline on a short CPU run, fidelity against the original code (needs the reference checkout, `XQC_REF` defaults to `~/Home/research/xqc-ref`, skipped when missing).
 
 **Defaults** (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horizon=1000`, `embedding_dim=300`, `gamma=0.99`, `tau=0.005`, `batch_size=128`, `warmup_steps=10_000`, `train_ratio=1.0`, `actor_lr=critic_lr=1e-3`, grad-norm clip `10`. EvoRainbow adds `pop_size=5`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`.
 
@@ -284,11 +299,13 @@ just analyze-final data/surrogate.json logs/slurm-*.out   # older runs: final ev
 | `reset` | `0-19` | `td3`, `td3-reset` | Do resets break degeneration? |
 | `measure` | `0-29` | `td3`, `evorainbow-td3-full` (ERL), `evorainbow-td3-critic` (SC-ERL), all with shadow critic and checkpoints | Online metrics and checkpoints for the offline measurements |
 | `surrogate` | `0-49` | `evorainbow-td3-critic-p0`, `evorainbow-td3-prefix-h{100,200,400}`, `evorainbow-td3-prefix-h200-matched` | Surrogate type and budget |
+| `xqc` | `0-(seeds-1)` | `xqc`, checkpoints on, `--mem=48gb` | XQC on the 10 envs, offline measurements |
 
 ```bash
 ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5 Walker2d-v5 Ant-v5 Swimmer-v5
 SEEDS="10 11 12 13 14" ./scripts/submit_suite.sh measure Hopper-v5
 MATCH_GENERATIONS=<G> MATCH_UPDATES=<U> ./scripts/submit_suite.sh surrogate Hopper-v5
+SEEDS="0 1 2" ./scripts/submit_suite.sh xqc Hopper-v5 dmc-dog-run
 ```
 
 - `surrogate` takes one env per call: the matched condition needs that env's median generations and RL updates of the `measure` ERL runs.
@@ -304,14 +321,16 @@ src/
 ├── measure_offline.py  # Hydra entrypoint: offline measurement of one checkpoint
 ├── runner.py           # config validation, presets, wandb init, trainer dispatch
 ├── config.py           # frozen config dataclasses mirroring src/conf/
-├── conf/               # config.yaml, offline.yaml, algorithm/{td3,td3-reset,evorainbow}.yaml, algorithm/env/
-├── agents/             # RLAgent base, TD3 (reset, shadow critic)
+├── conf/               # config.yaml, offline.yaml, algorithm/{td3,td3-reset,evorainbow,xqc}.yaml, algorithm/env/
+├── agents/             # OfflineAgent/RLAgent bases, TD3 (reset, shadow critic)
 ├── algos/              # RLTrainer (td3) and EvoRainbowTrainer
 ├── common/             # replay buffer, budget and rollouts, jitted TD3 math, ResetController, checkpoints
 ├── environments/       # MuJoCo v5 and DMC registry, DmcStateEnv, EnvPool
 ├── fitness/            # full, critic, hboot, prefix fitness and the p_real gate
 ├── metrics/            # perf, surrogate, degeneration, truth probe, schedules
 ├── modules/            # Equinox embedding, actor head, critic, CEM
+├── xqc/                # XQC port: networks, learner, agent, trainer, checkpointer
 ├── offline/            # signals, extra and pairs measurements on checkpoints
 └── analysis/           # offline tables, wandb fetch, SLURM log parser, final-score statistics
+tests/xqc/              # adapter, offline pipeline and fidelity tests
 ```

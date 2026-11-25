@@ -78,4 +78,6 @@ class OfflineSetup:
             "fraction": meta["fraction"],
             "env_steps": meta["env_steps"],
             "seeds_b": self.seeds_b.tolist(),
+            "algo": meta.get("algo", "td3"),
+            "signal_mapping": self.agent.signal_mapping,
         }

@@ -43,7 +43,9 @@ class RLTrainer:
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
             gamma=algo_cfg.rl.gamma,
         )
-        self._diagnostics = Diagnostics(run_cfg, self._perf.env)
+        self._diagnostics = Diagnostics(
+            run_cfg, self._perf.env, shadow=algo_cfg.shadow.enabled
+        )
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )

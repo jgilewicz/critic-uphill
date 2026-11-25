@@ -53,6 +53,14 @@ class TD3Hyperparams(NamedTuple):
     batch_size: int = 128
 
 
+class FQESettings(NamedTuple):
+    """What offline FQE needs from an agent: TD3-style twin critic setup."""
+
+    hyperparams: TD3Hyperparams
+    hidden_dims: tuple[int, int]
+    critic_lr: float
+
+
 class TD3Stats(NamedTuple):
     """Means over one fused update loop."""
 
@@ -61,7 +69,6 @@ class TD3Stats(NamedTuple):
     actor_loss: jax.Array
 
 
-Batch = dict[str, jnp.ndarray]
 TrainFn = Callable[
     [TD3State, BufferData, jax.Array, jax.Array, jax.Array],
     tuple[TD3State, TD3Stats],
@@ -127,23 +134,32 @@ def init_shadow(
     )
 
 
-def _next_action(
-    cfg: TD3Hyperparams,
-    target: TD3Networks,
-    batch: Batch,
-    key: jax.Array,
-) -> jax.Array:
-    noise = jnp.clip(
-        jax.random.normal(key, batch["action"].shape) * cfg.policy_noise,
-        -cfg.noise_clip,
-        cfg.noise_clip,
-    )
-    z_next = jax.vmap(target.embedding)(batch["next_state"])
-    return jnp.clip(
-        jax.vmap(target.actor)(z_next) + noise,
-        -cfg.action_limit,
-        cfg.action_limit,
-    )
+Batch = dict[str, jnp.ndarray]
+
+
+class TargetPolicy(eqx.Module):
+    """Frozen policy for TD-style targets: smoothed action of embedding+head.
+
+    TD3 uses its target actor, offline FQE uses the checkpoint actor.
+    """
+
+    embedding: Any
+    actor: Any
+    cfg: TD3Hyperparams = eqx.field(static=True)
+
+    def __call__(self, batch: Batch, key: jax.Array) -> jax.Array:
+        cfg = self.cfg
+        noise = jnp.clip(
+            jax.random.normal(key, batch["action"].shape) * cfg.policy_noise,
+            -cfg.noise_clip,
+            cfg.noise_clip,
+        )
+        z_next = jax.vmap(self.embedding)(batch["next_state"])
+        return jnp.clip(
+            jax.vmap(self.actor)(z_next) + noise,
+            -cfg.action_limit,
+            cfg.action_limit,
+        )
 
 
 def _td_target(
@@ -195,7 +211,10 @@ def _critic_update(
     batch: Batch,
     key: jax.Array,
 ) -> tuple[TD3State, jax.Array, jax.Array]:
-    next_action = _next_action(cfg, state.target, batch, key)
+    target_policy = TargetPolicy(
+        state.target.embedding, state.target.actor, cfg
+    )
+    next_action = target_policy(batch, key)
     target_q = _td_target(
         cfg, (state.target.critic1, state.target.critic2), batch, next_action
     )
@@ -350,7 +369,7 @@ def make_td3_train(
 
 
 FQETrainFn = Callable[
-    [ShadowState, TD3Networks, BufferData, jax.Array, jax.Array],
+    [ShadowState, TargetPolicy, BufferData, jax.Array, jax.Array],
     ShadowState,
 ]
 
@@ -368,7 +387,7 @@ def make_fqe_train(
     @eqx.filter_jit
     def train(
         fqe: ShadowState,
-        policy: TD3Networks,
+        policy: TargetPolicy,
         data: BufferData,
         num_steps: jax.Array,
         key: jax.Array,
@@ -387,7 +406,7 @@ def make_fqe_train(
             dynamic, key = carry
             key, sample_key, noise_key = jax.random.split(key, 3)
             batch = sample_batch(data, size, sample_key, cfg.batch_size)
-            next_action = _next_action(cfg, policy, batch, noise_key)
+            next_action = policy(batch, noise_key)
             updated = _shadow_update(
                 cfg,
                 optimizer,

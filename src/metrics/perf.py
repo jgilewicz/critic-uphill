@@ -5,17 +5,17 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from agents.base import RLAgent
+from agents.base import OfflineAgent
 from common.rollout import Budget, evaluation_episode
 from environments import make_env
 from metrics.schedule import Schedule
-from modules.deep_modules import SharedStateEmbedding
+from modules.protocols import StateEmbedding
 
 
 class Champion(NamedTuple):
     """Best individual with the embedding it was scored on."""
 
-    embedding: SharedStateEmbedding
+    embedding: StateEmbedding
     head: Any
 
 
@@ -82,7 +82,7 @@ class PerfMetrics:
 
     def maybe_evaluate(
         self,
-        agent: RLAgent,
+        agent: OfflineAgent,
         env_steps: int,
         *,
         champion: Champion | None = None,
@@ -99,7 +99,7 @@ class PerfMetrics:
 
     def evaluate(
         self,
-        agent: RLAgent,
+        agent: OfflineAgent,
         *,
         champion: Champion | None = None,
         env_steps: int | None = None,
@@ -137,7 +137,7 @@ class PerfMetrics:
         return result
 
     def _mean_return(
-        self, agent: RLAgent, champion: Champion, seeds: list[int]
+        self, agent: OfflineAgent, champion: Champion, seeds: list[int]
     ) -> float:
         returns = [
             evaluation_episode(

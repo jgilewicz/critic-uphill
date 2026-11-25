@@ -22,6 +22,10 @@ lint-check:
 types:
     uv run ty check src
 
+# unit tests (CPU)
+test *args:
+    uv run pytest -q {{args}}
+
 # everything: lint-check, types
 check: lint-check types
 
@@ -42,6 +46,14 @@ smoke algo="evorainbow" env="Hopper-v5" *overrides:
       total_steps=3000 algorithm.rl.warmup_steps=1000 \
       eval.interval=1000 eval.episodes=1 wandb.enabled=false \
       {{overrides}}
+
+# quick XQC smoke run (3 checkpoints in CKPT) with wandb disabled
+smoke-xqc env="Hopper-v5" ckpt="/tmp/xqc-smoke" *overrides:
+    uv run python -m train \
+      algorithm=xqc env.id={{env}} eval_env.id={{env}} \
+      total_steps=3000 algorithm.start_training=1000 \
+      eval.interval=1000 eval.episodes=1 wandb.enabled=false \
+      checkpoint.dir={{ckpt}} {{overrides}}
 
 # offline measurement of one checkpoint dir (signals | extra | pairs)
 #   just offline checkpoints/run/p050 results/run_p050.json
