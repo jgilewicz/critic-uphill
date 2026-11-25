@@ -27,7 +27,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 - `src/environments/`: registry (MuJoCo v5 `HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`, `Humanoid-v5` in `mujoco_env.py`, DMC `dmc-{cheetah,quadruped,humanoid,dog}-run` in `dmc_env.py`, others fail fast) and `EnvPool` (steps only active envs, no auto-reset). `DmcStateEnv` wraps shimmy: sorted-key float32 flat obs, actions `[-1, 1]` rescaled to the task bounds, truncation only (termination raises), `MUJOCO_GL=disable` set before the lazy `dm_control` import. Env ids must not contain `_` (run-name regex).
 - `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
 - `src/common/`:
-  - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`.
+  - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`. `add` donates the buffer arrays (in-place scatter), so never keep `buffer.data` across an `add`.
   - `td3.py`: Pure jitted TD3 training loop (`make_td3_train`). Optional `ShadowState` (`init_shadow`) in `TD3State.shadow`: TD-trained on the same batches and next action, own targets, never in the actor loss. `make_fqe_train`: same twin-critic TD update for a frozen policy (offline FQE).
   - `rollout.py`: `Budget`, `rollout_single_episode`, `rollout_population`.
   - `training.py`: `run_warmup`, `print_summary`.
