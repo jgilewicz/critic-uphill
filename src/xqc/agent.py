@@ -177,8 +177,8 @@ class XQCAgent(XQCOfflineAgent):
 
     def update(
         self, data: Any, size: int, reward_scale: float
-    ) -> dict[str, float]:
-        """Run updates_per_step fused updates and return mean statistics."""
+    ) -> dict[str, jax.Array]:
+        """Run updates_per_step fused updates and return mean device stats."""
         self.reward_scale = reward_scale
         self.state, info = self._train(
             self.state,
@@ -186,4 +186,4 @@ class XQCAgent(XQCOfflineAgent):
             jnp.asarray(size),
             jnp.asarray(reward_scale, dtype=jnp.float32),
         )
-        return {name: float(value) for name, value in info.items()}
+        return info

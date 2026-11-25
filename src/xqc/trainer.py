@@ -59,7 +59,7 @@ class XQCTrainer:
         self._checkpointer = make_xqc_checkpointer(
             run_cfg, self._agent, self._buffer, self._normalizer
         )
-        self._stats: dict[str, float] = {}
+        self._stats: dict[str, jax.Array] = {}
 
     def _policy_action(self, state: np.ndarray, step: int) -> np.ndarray:
         """Policy-scale action: uniform random before start_training."""
@@ -110,14 +110,15 @@ class XQCTrainer:
         self._agent.reward_scale = self._normalizer.scale
         eval_metrics = self._perf.maybe_evaluate(self._agent, steps)
         if eval_metrics is not None:
+            stats = {k: float(v) for k, v in self._stats.items()}
             print(
                 f"steps {steps:7d} | eval={eval_metrics['perf/eval_rl']:.1f} | "
-                f"critic_loss={self._stats.get('critic_loss', 0.0):.4f}"
+                f"critic_loss={stats.get('critic_loss', 0.0):.4f}"
             )
             if self._on_log is not None:
                 metrics = budget_metrics(self._budget, 0.0)
                 metrics.update(eval_metrics)
-                metrics.update({f"xqc/{k}": v for k, v in self._stats.items()})
+                metrics.update({f"xqc/{k}": v for k, v in stats.items()})
                 metrics["xqc/reward_scale"] = self._normalizer.scale
                 self._on_log(metrics)
         if self._checkpointer is not None:

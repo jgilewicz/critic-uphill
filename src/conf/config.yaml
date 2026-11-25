@@ -29,7 +29,7 @@ probe:
   n_perturbations: 8
   episodes: 3
 
-# Offline-analysis checkpoints (td3 agents), off while dir is null
+# Offline-analysis checkpoints (td3 and xqc agents), off while dir is null
 checkpoint:
   dir: null
   fractions: [0.1, 0.5, 1.0]

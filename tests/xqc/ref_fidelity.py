@@ -17,6 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from xqc.agents.xqc.xqc_learner import XQCLearner
+from xqc.normalization import RewardNormalizer
 from xqc.replay_buffer import Batch
 
 OBS_DIM = 11
@@ -116,6 +117,27 @@ def make_batch(rng: np.random.Generator) -> Batch:
     )
 
 
+def dump_normalizer(
+    rng: np.random.Generator, out: dict[str, Any], n_steps: int = 40
+) -> None:
+    norm = RewardNormalizer(n_seeds=1, gamma=GAMMA, max_v=5.0)
+    rewards = rng.normal(loc=1.5, scale=2.0, size=n_steps).astype(np.float64)
+    dones = (rng.random(n_steps) < 0.15).astype(bool)
+    scales = np.empty(n_steps, dtype=np.float64)
+    variances = np.empty(n_steps, dtype=np.float64)
+    for idx, (reward, done) in enumerate(zip(rewards, dones)):
+        norm.update(
+            np.asarray([reward], dtype=np.float64),
+            np.asarray([done], dtype=bool),
+        )
+        variances[idx] = norm.G_rms.var[0]
+        scales[idx] = 1.0 / norm.normalize(np.ones((1, 1, 1)))[0, 0, 0]
+    out["norm/rewards"] = rewards
+    out["norm/dones"] = dones
+    out["norm/scales"] = scales
+    out["norm/vars"] = variances
+
+
 def main(path: str) -> None:
     rng = np.random.default_rng(0)
     learner = make_learner()
@@ -133,6 +155,7 @@ def main(path: str) -> None:
         for name in ("critic_loss", "actor_loss", "entropy", "temperature"):
             out[f"step{step}/info/{name}"] = np.asarray(info[name])[0]
         snapshot(f"step{step}", learner, out)
+    dump_normalizer(rng, out)
     np.savez(path, **out)
     print(f"wrote {len(out)} arrays to {path}")
 

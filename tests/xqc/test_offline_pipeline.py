@@ -13,7 +13,21 @@ import numpy as np
 import pytest
 
 from common.checkpoint import BUFFER_COLUMNS, load_checkpoint
+from common.replay_buffer import ReplayBuffer, Transition
+from config import (
+    CheckpointConfig,
+    DegConfig,
+    EnvConfig,
+    ProbeConfig,
+    RunConfig,
+    RunEvalConfig,
+    WandbConfig,
+    XQCConfig,
+)
+from environments import env_dims
 from xqc.agent import XQCAgent
+from xqc.checkpoint import XQCCheckpointer
+from xqc.normalizer import RewardNormalizer
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_ID = "Hopper-v5"
@@ -127,11 +141,72 @@ def test_three_checkpoints_with_full_state(checkpoints: Path) -> None:
             assert ckpt.arrays[f"buffer_{column}"].shape[0] > 0
         assert isinstance(ckpt.agent, XQCAgent)
         assert np.asarray(ckpt.agent.state.rng).shape == (2,)
-
-
-def test_checkpoint_holds_env_scale_actions(checkpoints: Path) -> None:
-    ckpt = load_checkpoint(checkpoints / "p100")
     assert np.abs(ckpt.arrays["buffer_action"]).max() <= 1.0
+
+
+@pytest.mark.parametrize(
+    ("env_id", "action_limit"),
+    [("Hopper-v5", 1.0), ("Humanoid-v5", 0.4)],
+)
+def test_checkpoint_holds_env_scale_actions(
+    tmp_path: Path, env_id: str, action_limit: float
+) -> None:
+    dims = env_dims(env_id)
+    assert dims.action_limit == pytest.approx(action_limit)
+    cfg = XQCConfig(
+        actor_hidden_dims=(16, 16),
+        critic_hidden_dims=(16, 16),
+        start_training=1,
+    )
+    run_cfg = RunConfig(
+        env=EnvConfig(env_id),
+        eval_env=EnvConfig(env_id),
+        eval=RunEvalConfig(),
+        deg=DegConfig(),
+        probe=ProbeConfig(),
+        wandb=WandbConfig(enabled=False),
+        checkpoint=CheckpointConfig(dir=str(tmp_path), fractions=(1.0,)),
+        seed=0,
+        total_steps=10,
+        protocol=5,
+        algorithm=cfg,
+    )
+    agent = XQCAgent(
+        dims.obs_dim,
+        dims.action_dim,
+        dims.action_limit,
+        cfg=cfg,
+        total_steps=10,
+        seed=0,
+    )
+    buffer = ReplayBuffer(32, dims.obs_dim, dims.action_dim)
+    actions = np.linspace(-1.0, 1.0, 10, dtype=np.float32)
+    policy_actions = np.broadcast_to(
+        actions[:, None], (10, dims.action_dim)
+    ).copy()
+    zeros_obs = np.zeros((10, dims.obs_dim), dtype=np.float32)
+    buffer.add(
+        Transition(
+            state=zeros_obs,
+            action=policy_actions,
+            reward=np.ones((10, 1), dtype=np.float32),
+            next_state=zeros_obs,
+            done=np.zeros((10, 1), dtype=np.float32),
+        )
+    )
+    ckpt_writer = XQCCheckpointer(
+        run_cfg, agent, buffer, RewardNormalizer(agent.gamma)
+    )
+    ckpt_writer.maybe_save(10)
+    ckpt = load_checkpoint(tmp_path / "p100")
+    assert ckpt.meta["action_limit"] == pytest.approx(action_limit)
+    np.testing.assert_allclose(
+        ckpt.arrays["buffer_action"],
+        policy_actions * np.float32(action_limit),
+    )
+    assert np.abs(ckpt.arrays["buffer_action"]).max() == pytest.approx(
+        action_limit
+    )
 
 
 def test_signals_measurement(checkpoints: Path) -> None:

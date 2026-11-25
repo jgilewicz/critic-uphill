@@ -15,7 +15,6 @@ from agents.td3 import TD3
 from common.replay_buffer import ReplayBuffer
 from config import CheckpointConfig, RunConfig, TD3RLConfig, XQCConfig
 from environments import env_dims
-from xqc.agent import XQCAgent
 
 STATE_FILE = "state.eqx"
 DATA_FILE = "data.npz"
@@ -175,7 +174,9 @@ def _load_td3(path: Path, meta: dict[str, Any]) -> TD3:
     return agent
 
 
-def _load_xqc(path: Path, meta: dict[str, Any]) -> XQCAgent:
+def _load_xqc(path: Path, meta: dict[str, Any]) -> OfflineAgent:
+    from xqc.agent import XQCAgent
+
     run = meta["run_config"]
     algo = dict(run["algorithm"])
     for name in ("actor_hidden_dims", "critic_hidden_dims"):

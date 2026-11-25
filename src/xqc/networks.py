@@ -124,6 +124,7 @@ def sample_tanh_gaussian(
         jnp.square((x - mean) / std) + jnp.log(2 * jnp.pi) + 2 * jnp.log(std),
         axis=-1,
     )
+    # intentional deviation from xqc-ref tfp atanh round trip: exact pre-tanh
     log_det = 2.0 * (math.log(2.0) - x - jax.nn.softplus(-2.0 * x))
     return jnp.tanh(x), base - jnp.sum(log_det, axis=-1)
 
