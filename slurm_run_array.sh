@@ -37,7 +37,7 @@
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
 #SBATCH -N 1
-#SBATCH -c 4
+#SBATCH -c 2
 #SBATCH --mem=16gb
 #SBATCH --time=0-12:00:00
 #SBATCH --job-name=critic-uphill
