@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from agents import make_agent
+from agents import TD3
 from common.checkpoint import GenerationRecord, make_checkpointer
 from common.replay_buffer import ReplayBuffer
 from common.rollout import Budget, rollout_single_episode
@@ -57,8 +57,7 @@ class EvoRainbowTrainer:
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
-        self._agent = make_agent(
-            algo_cfg.agent,
+        self._agent = TD3(
             dims.obs_dim,
             dims.action_dim,
             dims.action_limit,
@@ -84,7 +83,6 @@ class EvoRainbowTrainer:
             self._budget,
             horizon=algo_cfg.horizon,
             gamma=algo_cfg.rl.gamma,
-            shadow=algo_cfg.shadow.surrogate,
         )
         self._checkpointer = make_checkpointer(
             run_cfg, self._agent, self._buffer
@@ -292,10 +290,7 @@ class EvoRainbowTrainer:
             final_eval = self._perf.evaluate(
                 self._agent, env_steps=self._budget.env_steps
             ).rl_return
-            mode = "shadow" if self._algo.shadow.surrogate else None
-            tag = (
-                f"evorainbow-{self._algo.agent}-{mode or self._algo.eval.mode}"
-            )
+            tag = f"evorainbow-td3-{self._algo.eval.mode}"
             print_summary(tag, self._budget, final_eval)
             return final_eval
         finally:

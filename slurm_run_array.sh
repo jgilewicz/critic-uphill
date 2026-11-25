@@ -2,38 +2,34 @@
 # critic-uphill benchmark array on WCSS Lem (MuJoCo v5).
 # Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5
 #
-# Suite: main (task ID = condition_index * 10 + seed, array 0-79)
+# Suite: main (task ID = condition_index * 10 + seed, array 0-39)
 #   0-9   td3
-#   10-19 sac
-#   20-29 evorainbow-td3-full
-#   30-39 evorainbow-td3-critic
-#   40-49 evorainbow-td3-hboot
-#   50-59 evorainbow-sac-full
-#   60-69 evorainbow-sac-critic
-#   70-79 evorainbow-sac-hboot
+#   10-19 evorainbow-td3-full
+#   20-29 evorainbow-td3-critic
+#   30-39 evorainbow-td3-hboot
 #
 # Suite: reset (task ID = condition_index * 10 + seed, array 0-19)
 #   0-9   td3
 #   10-19 td3-reset
 #
-# Suite: e1 (array 0-29), shadow critic as a metric, checkpoints saved to
+# Suite: measure (array 0-29), shadow critic as a metric, checkpoints saved to
 # <PD>/checkpoints/<TAG>/<run> at 10%, 50%, 100% of the budget
 #   0-9   td3
 #   10-19 evorainbow-td3-full (ERL)
 #   20-29 evorainbow-td3-critic (SC-ERL, per-env p_real gate)
 #
-# Suite: e2 (array 0-49), shadow critic as a metric
+# Suite: surrogate (array 0-49), shadow critic as a metric
 #   0-9   evorainbow-td3-critic-p0 (Q1 surrogate always)
 #   10-19 evorainbow-td3-prefix-h100
 #   20-29 evorainbow-td3-prefix-h200
 #   30-39 evorainbow-td3-prefix-h400
 #   40-49 evorainbow-td3-prefix-h200-matched (needs MATCH_GENERATIONS and
-#         MATCH_UPDATES: median generations and RL updates of the e1 ERL
+#         MATCH_UPDATES: median generations and RL updates of the measure ERL
 #         runs in this env)
 #
 # Example usage:
-#   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
-#   SUITE=e1 SEEDS="10 11 12 13 14" TARGET_ENV=Hopper-v5 \
+#   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-39 slurm_run_array.sh
+#   SUITE=measure SEEDS="10 11 12 13 14" TARGET_ENV=Hopper-v5 \
 #     sbatch --array=0-14 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
@@ -57,13 +53,9 @@ SUITE="${SUITE:-main}"
 
 MAIN=(
   "td3|algorithm=td3"
-  "sac|algorithm=sac"
-  "evorainbow-td3-full|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=full"
-  "evorainbow-td3-critic|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic"
-  "evorainbow-td3-hboot|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=hboot"
-  "evorainbow-sac-full|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=full"
-  "evorainbow-sac-critic|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=critic"
-  "evorainbow-sac-hboot|algorithm=evorainbow algorithm.agent=sac algorithm.eval.mode=hboot"
+  "evorainbow-td3-full|algorithm=evorainbow algorithm.eval.mode=full"
+  "evorainbow-td3-critic|algorithm=evorainbow algorithm.eval.mode=critic"
+  "evorainbow-td3-hboot|algorithm=evorainbow algorithm.eval.mode=hboot"
 )
 
 RESET=(
@@ -71,15 +63,15 @@ RESET=(
   "td3-reset|algorithm=td3-reset"
 )
 
-ER_TD3="algorithm=evorainbow algorithm.agent=td3 algorithm.shadow.enabled=true"
-E1=(
+ER_TD3="algorithm=evorainbow algorithm.shadow.enabled=true"
+MEASURE=(
   "td3|algorithm=td3 algorithm.shadow.enabled=true"
   "evorainbow-td3-full|${ER_TD3} algorithm.eval.mode=full"
   "evorainbow-td3-critic|${ER_TD3} algorithm.eval.mode=critic"
 )
 
 PREFIX="${ER_TD3} algorithm.eval.mode=prefix"
-E2=(
+SURROGATE=(
   "evorainbow-td3-critic-p0|${ER_TD3} algorithm.eval.mode=critic algorithm.eval.p_real=0"
   "evorainbow-td3-prefix-h100|${PREFIX} algorithm.eval.h=100"
   "evorainbow-td3-prefix-h200|${PREFIX} algorithm.eval.h=200"
@@ -90,10 +82,10 @@ E2=(
 case "${SUITE}" in
 main) CONDITIONS=("${MAIN[@]}") ;;
 reset) CONDITIONS=("${RESET[@]}") ;;
-e1) CONDITIONS=("${E1[@]}") ;;
-e2) CONDITIONS=("${E2[@]}") ;;
+measure) CONDITIONS=("${MEASURE[@]}") ;;
+surrogate) CONDITIONS=("${SURROGATE[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset', 'e1' or 'e2'." >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset', 'measure' or 'surrogate'." >&2
   exit 1
   ;;
 esac
@@ -117,8 +109,8 @@ ENV_SLUG="${ENV//\//_}"
 RUN_NAME="${NAME}_${ENV_SLUG}_s${SEED}"
 if [[ "${NAME}" == *-matched ]]; then
   OVERRIDES+=(
-    "algorithm.matched.generations=${MATCH_GENERATIONS:?set MATCH_GENERATIONS (median e1 ERL generations in ${ENV})}"
-    "algorithm.matched.rl_updates=${MATCH_UPDATES:?set MATCH_UPDATES (median e1 ERL RL updates in ${ENV})}"
+    "algorithm.matched.generations=${MATCH_GENERATIONS:?set MATCH_GENERATIONS (median measure ERL generations in ${ENV})}"
+    "algorithm.matched.rl_updates=${MATCH_UPDATES:?set MATCH_UPDATES (median measure ERL RL updates in ${ENV})}"
   )
 fi
 
@@ -146,7 +138,7 @@ else
 fi
 export WANDB_DIR="${DATA_ROOT}/wandb_logs/${RUN_NAME}"
 mkdir -p logs "${WANDB_DIR}"
-if [[ "${SUITE}" == e1 ]]; then
+if [[ "${SUITE}" == measure ]]; then
   OVERRIDES+=("checkpoint.dir=${DATA_ROOT}/checkpoints/${TAG}/${RUN_NAME}")
 fi
 

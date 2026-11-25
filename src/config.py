@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
 EvalMode = Literal["full", "critic", "hboot", "prefix"]
-AgentName = Literal["td3", "sac"]
+AgentName = Literal["td3"]
+MeasurementName = Literal["signals", "extra", "pairs"]
 # top-1 by Q1, Q2 and shadow, plus the nearest head (min dist_H)
 SHADOW_PROBE_PICKS = 4
 
@@ -26,8 +27,8 @@ def _check_positive(name: str, value: float) -> None:
 
 
 @dataclass(frozen=True)
-class RLConfig:
-    """Shared RL hyperparameters common to all off-policy agents."""
+class TD3RLConfig:
+    """TD3 hyperparameters shared between standalone TD3 and EvoRainbow."""
 
     critic_hidden_dims: tuple[int, int] = (400, 300)
     gamma: float = 0.99
@@ -36,6 +37,12 @@ class RLConfig:
     buffer_capacity: int = 1_000_000
     warmup_steps: int = 10_000
     train_ratio: float = 1.0
+    policy_noise: float = 0.2
+    noise_clip: float = 0.5
+    policy_freq: int = 2
+    exploration_noise: float = 0.1
+    actor_lr: float = 1e-3
+    critic_lr: float = 1e-3
 
     def __post_init__(self) -> None:
         if len(self.critic_hidden_dims) != 2:
@@ -51,48 +58,12 @@ class RLConfig:
         _check_min("rl.buffer_capacity", self.buffer_capacity, 1)
         _check_min("rl.warmup_steps", self.warmup_steps, 0)
         _check_min("rl.train_ratio", self.train_ratio, 0.0)
-
-
-@dataclass(frozen=True)
-class TD3RLConfig(RLConfig):
-    """TD3 hyperparameters shared between standalone TD3 and EvoRainbow."""
-
-    policy_noise: float = 0.2
-    noise_clip: float = 0.5
-    policy_freq: int = 2
-    exploration_noise: float = 0.1
-    actor_lr: float = 1e-3
-    critic_lr: float = 1e-3
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
         _check_min("rl.policy_noise", self.policy_noise, 0.0)
         _check_min("rl.noise_clip", self.noise_clip, 0.0)
         _check_min("rl.policy_freq", self.policy_freq, 1)
         _check_min("rl.exploration_noise", self.exploration_noise, 0.0)
         _check_positive("rl.actor_lr", self.actor_lr)
         _check_positive("rl.critic_lr", self.critic_lr)
-
-
-@dataclass(frozen=True)
-class SACRLConfig(RLConfig):
-    """SAC hyperparameters shared between standalone SAC and EvoRainbow."""
-
-    actor_lr: float = 3e-4
-    critic_lr: float = 3e-4
-    alpha_lr: float = 3e-4
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        _check_positive("rl.actor_lr", self.actor_lr)
-        _check_positive("rl.critic_lr", self.critic_lr)
-        _check_positive("rl.alpha_lr", self.alpha_lr)
-
-
-RL_CONFIG_CLASSES: dict[str, type[RLConfig]] = {
-    "td3": TD3RLConfig,
-    "sac": SACRLConfig,
-}
 
 
 @dataclass(frozen=True)
@@ -116,41 +87,21 @@ class ShadowConfig:
     """Shadow twin critic: TD-trained, never in the actor loss."""
 
     enabled: bool = False
-    surrogate: bool = False
-
-    def __post_init__(self) -> None:
-        if self.surrogate and not self.enabled:
-            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
 
 
 @dataclass(frozen=True)
 class RLAlgoConfig:
-    """Configuration for standalone off-policy RL agents (td3 | sac)."""
+    """Configuration for standalone TD3."""
 
     name: AgentName
     horizon: int = 1000
     embedding_dim: int = 300
-    rl: RLConfig = field(default_factory=TD3RLConfig)
+    rl: TD3RLConfig = field(default_factory=TD3RLConfig)
     reset: ResetConfig = field(default_factory=ResetConfig)
     shadow: ShadowConfig = field(default_factory=ShadowConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.name", self.name, AgentName)
-        if self.shadow.enabled and self.name != "td3":
-            raise ValueError(
-                "algorithm.shadow.enabled=true is only supported for td3, "
-                f"not {self.name!r}"
-            )
-        if self.shadow.surrogate:
-            raise ValueError(
-                "algorithm.shadow.surrogate=true needs a population, "
-                "use algorithm=evorainbow"
-            )
-        if self.reset.enabled and self.name != "td3":
-            raise ValueError(
-                "algorithm.reset.enabled=true is only supported for td3, "
-                f"not {self.name!r}. set algorithm.reset.enabled=false"
-            )
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -249,14 +200,13 @@ class MatchedConfig:
 
 @dataclass(frozen=True)
 class EvoRainbowAlgoConfig:
-    """Configuration for EvoRainbow (RL agent + CEM + surrogate fitness)."""
+    """Configuration for EvoRainbow (TD3 + CEM + surrogate fitness)."""
 
-    agent: AgentName = "td3"
     horizon: int = 1000
     embedding_dim: int = 300
     pop_size: int = 5
     cem: CEMConfig = field(default_factory=CEMConfig)
-    rl: RLConfig = field(default_factory=TD3RLConfig)
+    rl: TD3RLConfig = field(default_factory=TD3RLConfig)
     rl_to_ea: RLToEAConfig = field(default_factory=RLToEAConfig)
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
@@ -264,17 +214,6 @@ class EvoRainbowAlgoConfig:
     matched: MatchedConfig = field(default_factory=MatchedConfig)
 
     def __post_init__(self) -> None:
-        _check_choice("algorithm.agent", self.agent, AgentName)
-        if self.shadow.enabled and self.agent != "td3":
-            raise ValueError(
-                "algorithm.shadow.enabled=true is only supported for "
-                f"agent=td3, not {self.agent!r}"
-            )
-        if self.shadow.surrogate and self.eval.mode != "critic":
-            raise ValueError(
-                "algorithm.shadow.surrogate=true needs eval.mode=critic, "
-                f"got {self.eval.mode!r}"
-            )
         if self.horizon < 1:
             raise ValueError(f"horizon={self.horizon}; must be >= 1")
         if self.embedding_dim < 1:
@@ -385,10 +324,6 @@ class WandbConfig:
     tags: tuple[str, ...] = ()
 
 
-def _agent_name(algo: RLAlgoConfig | EvoRainbowAlgoConfig) -> str:
-    return algo.name if isinstance(algo, RLAlgoConfig) else algo.agent
-
-
 @dataclass(frozen=True)
 class RunConfig:
     """Top-level training configuration resolved from Hydra."""
@@ -433,11 +368,6 @@ class RunConfig:
                 "checkpoint.dir with algorithm.matched: a matched run stops "
                 "before the budget fractions are reached"
             )
-        if self.checkpoint.enabled and _agent_name(self.algorithm) != "td3":
-            raise ValueError(
-                "checkpoint.dir is only supported for td3 agents, "
-                f"not {_agent_name(self.algorithm)!r}"
-            )
         if isinstance(self.algorithm, RLAlgoConfig) and (
             self.algorithm.reset.enabled
         ):
@@ -456,10 +386,11 @@ class RunConfig:
 
 @dataclass(frozen=True)
 class OfflineConfig:
-    """Offline E1 measurement on one checkpoint, outside any budget."""
+    """Offline measurement on one checkpoint, outside any budget."""
 
     checkpoint: str
     out: str
+    measurement: MeasurementName = "signals"
     sigmas: tuple[float, ...] = (0.02, 0.05, 0.1, 0.2)
     n_perturbations: int = 40
     n_states: int = 2000
@@ -470,13 +401,16 @@ class OfflineConfig:
     fqe_steps: int = 100_000
     fqe_batch_size: int = 256
     step_sigmas: tuple[float, ...] = (0.02, 0.05, 0.1)
+    pair_sigmas: tuple[float, ...] = (0.05, 0.1)
+    n_pairs: int = 20
     max_envs: int = 256
 
     def __post_init__(self) -> None:
-        if not self.sigmas:
-            raise ValueError("sigmas must have at least 1 entry")
-        for sigma in (*self.sigmas, *self.step_sigmas):
-            _check_positive("sigmas/step_sigmas entry", sigma)
+        _check_choice("measurement", self.measurement, MeasurementName)
+        if not self.sigmas or not self.pair_sigmas:
+            raise ValueError("sigmas and pair_sigmas need at least 1 entry")
+        for sigma in (*self.sigmas, *self.step_sigmas, *self.pair_sigmas):
+            _check_positive("sigmas/step_sigmas/pair_sigmas entry", sigma)
         for name in (
             "n_perturbations",
             "n_states",
@@ -486,6 +420,7 @@ class OfflineConfig:
             "prefix_h",
             "fqe_steps",
             "fqe_batch_size",
+            "n_pairs",
             "max_envs",
         ):
             _check_min(name, getattr(self, name), 1)

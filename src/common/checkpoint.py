@@ -10,7 +10,6 @@ import equinox as eqx
 import jax
 import numpy as np
 
-from agents.base import RLAgent
 from agents.td3 import TD3
 from common.replay_buffer import ReplayBuffer
 from config import CheckpointConfig, RunConfig, TD3RLConfig
@@ -138,15 +137,11 @@ class Checkpointer:
 
 
 def make_checkpointer(
-    run_cfg: RunConfig, agent: RLAgent, buffer: ReplayBuffer
+    run_cfg: RunConfig, agent: TD3, buffer: ReplayBuffer
 ) -> Checkpointer | None:
     """Checkpointer for a TD3 agent, or None when checkpoint.dir is unset."""
     if not run_cfg.checkpoint.enabled:
         return None
-    if not isinstance(agent, TD3):
-        raise TypeError(
-            f"checkpoints require a TD3 agent, got {type(agent).__name__}"
-        )
     return Checkpointer(run_cfg.checkpoint, run_cfg, agent, buffer)
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import gymnasium as gym
 import jax
 
-from agents.base import RLAgent
+from agents.td3 import TD3
 from common.replay_buffer import ReplayBuffer
 from config import RunConfig
 from metrics.degeneration import DegenerationProbe
@@ -26,14 +26,14 @@ class Diagnostics:
         self._truth_schedule = Schedule(run_cfg.probe.interval)
 
     def measure_deg(
-        self, agent: RLAgent, buffer: ReplayBuffer, env_steps: int
+        self, agent: TD3, buffer: ReplayBuffer, env_steps: int
     ) -> dict[str, float]:
         """Measure deg/* now, regardless of the schedule."""
         deg_key, _ = jax.random.split(metric_key(self._seed, env_steps))
         return self._deg.measure(agent, buffer, deg_key)
 
     def maybe_measure(
-        self, agent: RLAgent, buffer: ReplayBuffer, env_steps: int
+        self, agent: TD3, buffer: ReplayBuffer, env_steps: int
     ) -> dict[str, float]:
         """Measure whichever probes crossed a new interval boundary."""
         deg_due = self._deg_schedule.due(env_steps)

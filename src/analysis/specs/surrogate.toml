@@ -1,0 +1,75 @@
+# Final-score analysis of the surrogate suite (seeds 10-19), comparisons as
+# pre-registered before the runs. td3, erl and gate seeds 10-14 come from
+# the measure suite. hboot ran as suite main with algorithm.eval.p_real=0.
+
+[wandb]
+entity = "w1ndrunn3rr-wroc-aw-univeristy-of-science-and-technology"
+project = "critic_uphill"
+# a run name found under several tags resolves to the first tag listed:
+# td3, erl and gate seeds 15-19 ran in this suite and again, with checkpoints,
+# for the offline measurements. The logged runs carry the older tag names.
+tags = [
+  "critic-uphill-surrogate-v1",
+  "critic-uphill-e2-v1",
+  "critic-uphill-measure-v1",
+  "critic-uphill-e1-v1",
+  "critic-uphill-e1-s15-v1",
+]
+
+[conditions]
+td3 = "td3"
+erl = "evorainbow-td3-full"
+critic = "evorainbow-td3-critic-p0"
+gate = "evorainbow-td3-critic"
+h200 = "evorainbow-td3-prefix-h200"
+hboot = "evorainbow-td3-hboot"
+h100 = "evorainbow-td3-prefix-h100"
+h400 = "evorainbow-td3-prefix-h400"
+matched = "evorainbow-td3-prefix-h200-matched"
+
+[analysis]
+reference = "td3"
+alpha = 0.05
+# equivalence margin on the td3-normalized IQM difference
+margin = 0.10
+budget = 1_000_000
+rng_seed = 20261124
+primary = [["critic", "gate"], ["critic", "td3"], ["h200", "td3"]]
+secondary = [
+  ["erl", "td3"],
+  ["hboot", "critic"],
+  ["hboot", "h200"],
+  ["matched", "erl"],
+  ["matched", "h200"],
+  ["h100", "h200"],
+  ["h400", "h200"],
+  ["h400", "h100"],
+]
+history_keys = [
+  "perf/eval_rl",
+  "surr/rank_corr",
+  "surr/dist_corr",
+  "surr/critic_share",
+  "perf/champion_beats_actor",
+  "budget/real_frac",
+]
+surrogate_keys = [
+  "surr/rank_corr",
+  "surr/dist_corr",
+  "surr/critic_share",
+  "perf/champion_beats_actor",
+  "budget/real_frac",
+]
+# warmup (rl.warmup_steps) plus the first generation
+surrogate_after_steps = 11_000
+
+[[groups]]
+name = "core"
+envs = ["HalfCheetah-v5", "Hopper-v5", "Walker2d-v5", "Ant-v5"]
+tested = true
+
+[[groups]]
+name = "swimmer"
+envs = ["Swimmer-v5"]
+conditions = ["td3", "erl", "critic", "gate", "h200", "hboot"]
+tested = false

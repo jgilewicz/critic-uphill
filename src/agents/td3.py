@@ -16,7 +16,7 @@ from common.td3 import (
     make_td3_train,
 )
 from common.utils import genetic_soft_update, make_adam
-from config import RLConfig, TD3RLConfig
+from config import TD3RLConfig
 from modules.deep_modules import ActorHead, Critic, SharedStateEmbedding
 
 _SHADOW_STREAM = 104_729
@@ -47,14 +47,10 @@ class TD3(RLAgent):
         action_limit: float,
         embedding_dim: int,
         *,
-        rl_cfg: RLConfig,
+        rl_cfg: TD3RLConfig,
         key: jax.Array,
         shadow: bool = False,
     ) -> None:
-        if not isinstance(rl_cfg, TD3RLConfig):
-            raise TypeError(
-                f"TD3 requires TD3RLConfig, got {type(rl_cfg).__name__}"
-            )
         super().__init__(
             obs_dim,
             action_dim,

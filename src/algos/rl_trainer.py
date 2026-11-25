@@ -3,7 +3,7 @@ from __future__ import annotations
 import jax
 import numpy as np
 
-from agents import TD3, make_agent
+from agents import TD3
 from common.checkpoint import make_checkpointer
 from common.replay_buffer import ReplayBuffer
 from common.reset import ResetController
@@ -47,8 +47,7 @@ class RLTrainer:
         self._buffer = ReplayBuffer(
             algo_cfg.rl.buffer_capacity, dims.obs_dim, dims.action_dim
         )
-        self._agent = make_agent(
-            algo_cfg.name,
+        self._agent = TD3(
             dims.obs_dim,
             dims.action_dim,
             dims.action_limit,
@@ -65,10 +64,6 @@ class RLTrainer:
     def _make_resetter(self, algo_cfg: RLAlgoConfig) -> ResetController | None:
         if not algo_cfg.reset.enabled:
             return None
-        if not isinstance(self._agent, TD3):
-            raise TypeError(
-                f"reset requires a TD3 agent, got {type(self._agent).__name__}"
-            )
         return ResetController(
             algo_cfg.reset,
             self._agent,

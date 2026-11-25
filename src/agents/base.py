@@ -12,7 +12,7 @@ from jax.flatten_util import ravel_pytree
 
 from common.replay_buffer import ReplayBuffer
 from common.utils import critic_point
-from config import RLConfig
+from config import TD3RLConfig
 from modules.deep_modules import Critic, SharedStateEmbedding
 
 
@@ -85,7 +85,7 @@ class RLAgent(abc.ABC):
         action_limit: float,
         embedding_dim: int,
         *,
-        rl_cfg: RLConfig,
+        rl_cfg: TD3RLConfig,
         key: jax.Array,
     ) -> None:
         del rl_cfg, key

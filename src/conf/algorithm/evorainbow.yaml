@@ -6,18 +6,11 @@
 # - Twin Critic: [obs+act->400->LN->leaky_relu->300->LN->leaky_relu->1],
 #   output layer weight and bias scaled by 0.1
 # - Separate embedding optimizer (lr 1e-3) and grad-norm clip 10 on all nets
-# - In agent=sac mode, rl defaults come from algorithm/sac.yaml (unless
-#   overridden on CLI). Because evorainbow.yaml defines TD3's rl schema,
-#   overriding SAC-only rl keys under EvoRainbow requires Hydra's + prefix
-#   (e.g. +algorithm.rl.alpha_lr=1e-4). CEM evolves GaussianActorHead via its
-#   deterministic path, genetic soft update targets the online actor only,
-#   and surrogates query online Q1.
 # - Per-env overrides (cem.damp, rl_to_ea.period, ea_to_rl.tau, eval.p_real)
 #   live in algorithm/env/<env.id>.yaml, applied automatically from env.id
 #   and individually overridable from the CLI.
 
 name: evorainbow
-agent: td3  # RL agent backend: td3 | sac
 
 horizon: 1000
 embedding_dim: 300
@@ -61,13 +54,11 @@ eval:
   critic_states: 50_000
   p_real: 0.5
 
-# Shadow twin critic (agent=td3): own init and targets, TD-trained on the
+# Shadow twin critic as a metric: own init and targets, TD-trained on the
 # critic's batches against the min of its own target heads at the target
-# actor, never in the actor loss. surrogate=true scores eval.mode=critic
-# with the shadow's first head instead of Q1.
+# actor, never in the actor loss or in selection
 shadow:
   enabled: false
-  surrogate: false
 
 # Matched run (both > 0): stop after `generations` generations (warmup
 # included) with exactly `rl_updates` RL updates spread over the
