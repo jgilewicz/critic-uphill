@@ -27,7 +27,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 - `src/environments/`: MuJoCo v5 registry (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5` only, others fail fast) and `EnvPool` (steps only active envs, no auto-reset).
 - `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
 - `src/common/`:
-  - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`.
+  - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`. `add` donates the buffer arrays (in-place scatter), so never keep `buffer.data` across an `add`.
   - `td3.py`: Pure jitted TD3 training loop (`make_td3_train`). Optional `ShadowState` (`init_shadow`) in `TD3State.shadow`: TD-trained on the same batches and next action, own targets, never in the actor loss. `make_fqe_train`: same twin-critic TD update for a frozen policy (offline FQE).
   - `rollout.py`: `Budget`, `rollout_single_episode`, `rollout_population`.
   - `training.py`: `run_warmup`, `print_summary`.

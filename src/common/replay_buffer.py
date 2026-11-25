@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import NamedTuple
 
 import jax
@@ -22,7 +23,9 @@ BufferData = tuple[
 ]
 
 
-@jax.jit
+# donate: update the ring in place instead of copying all rows per add, so
+# BufferData read before an add is deleted afterwards, never hold it across one
+@partial(jax.jit, donate_argnums=0)
 def _scatter(
     data: BufferData,
     indices: jnp.ndarray,
