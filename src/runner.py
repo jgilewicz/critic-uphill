@@ -12,11 +12,13 @@ from algos import EvoRainbowTrainer, RLTrainer
 from config import (
     RL_CONFIG_CLASSES,
     CEMConfig,
+    CheckpointConfig,
     DegConfig,
     EAToRLConfig,
     EnvConfig,
     EvalConfig,
     EvoRainbowAlgoConfig,
+    MatchedConfig,
     ProbeConfig,
     RLAlgoConfig,
     RLConfig,
@@ -40,6 +42,7 @@ _ALLOWED_TOP_KEYS = frozenset(
         "deg",
         "probe",
         "wandb",
+        "checkpoint",
         "algorithm",
     }
 )
@@ -104,10 +107,14 @@ def _build_algorithm(
     if name in RL_CONFIG_CLASSES:
         rl = _build_rl_config(str(name), _pop_section(algo, "rl", str(name)))
         reset = _build_reset_config(algo.pop("reset", {}))
+        shadow = _build_section(
+            ShadowConfig, algo.pop("shadow", {}), "algorithm.shadow"
+        )
         payload: dict[str, Any] = {
             "name": name,
             "rl": rl,
             "reset": reset,
+            "shadow": shadow,
             **algo,
         }
         _check_unknown_keys(RLAlgoConfig, payload, f"algorithm ({name})")
@@ -147,6 +154,11 @@ def _build_algorithm(
                 _pop_section(algo, "shadow", "evorainbow"),
                 "algorithm.shadow",
             ),
+            "matched": _build_section(
+                MatchedConfig,
+                _pop_section(algo, "matched", "evorainbow"),
+                "algorithm.matched",
+            ),
             **algo,
         }
         _check_unknown_keys(
@@ -165,6 +177,16 @@ def _build_wandb_config(raw: dict[str, Any]) -> WandbConfig:
     if "tags" in wb:
         wb["tags"] = tuple(str(t) for t in wb["tags"])
     return WandbConfig(**wb)
+
+
+def _build_checkpoint_config(raw: dict[str, Any]) -> CheckpointConfig:
+    checkpoint = dict(raw)
+    _check_unknown_keys(CheckpointConfig, checkpoint, "checkpoint")
+    if "fractions" in checkpoint:
+        checkpoint["fractions"] = tuple(
+            float(x) for x in checkpoint["fractions"]
+        )
+    return CheckpointConfig(**checkpoint)
 
 
 def _build_deg_config(raw: dict[str, Any]) -> DegConfig:
@@ -261,11 +283,12 @@ def _apply_env_preset(cfg: DictConfig) -> None:
             cfg.algorithm[section][field] = preset[section][field]
 
 
-def _clear_preset_p_real_for_full(
-    raw_algo: dict[str, Any], cfg: DictConfig
-) -> None:
+def _clear_preset_p_real(raw_algo: dict[str, Any], cfg: DictConfig) -> None:
     eval_raw = raw_algo.get("eval")
-    if not isinstance(eval_raw, dict) or eval_raw.get("mode") != "full":
+    if not isinstance(eval_raw, dict) or eval_raw.get("mode") not in (
+        "full",
+        "prefix",
+    ):
         return
     if _was_overridden("algorithm.eval.p_real"):
         return
@@ -286,7 +309,7 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
 
     env = _build_section(EnvConfig, raw["env"], "env")
     eval_env = _build_section(EnvConfig, raw["eval_env"], "eval_env")
-    _clear_preset_p_real_for_full(raw["algorithm"], cfg)
+    _clear_preset_p_real(raw["algorithm"], cfg)
 
     return RunConfig(
         env=env,
@@ -295,6 +318,7 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
         deg=_build_deg_config(raw["deg"]),
         probe=_build_section(ProbeConfig, raw["probe"], "probe"),
         wandb=_build_wandb_config(raw["wandb"]),
+        checkpoint=_build_checkpoint_config(raw["checkpoint"]),
         seed=int(raw["seed"]),
         total_steps=int(raw["total_steps"]),
         protocol=int(raw["protocol"]),
@@ -313,7 +337,8 @@ def run_training(cfg: DictConfig) -> float:
             f"ea_to_rl.tau={algo.ea_to_rl.tau} | p_real={algo.eval.p_real} | "
             f"period={algo.rl_to_ea.period} | "
             f"shadow={algo.shadow.enabled} | "
-            f"shadow_surrogate={algo.shadow.surrogate}"
+            f"shadow_surrogate={algo.shadow.surrogate} | "
+            f"matched={algo.matched.generations}/{algo.matched.rl_updates}"
         )
     run = wandb.init(
         project=run_cfg.wandb.project,

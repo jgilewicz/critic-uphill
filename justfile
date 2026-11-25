@@ -42,3 +42,9 @@ smoke algo="evorainbow" env="Hopper-v5" *overrides:
       total_steps=3000 algorithm.rl.warmup_steps=1000 \
       eval.interval=1000 eval.episodes=1 wandb.enabled=false \
       {{overrides}}
+
+# offline E1 measurement of one checkpoint dir; extra tokens are Hydra overrides
+#   just offline checkpoints/run/p050 results/run_p050.json
+offline checkpoint out *overrides:
+    uv run python -m measure_offline \
+      checkpoint={{checkpoint}} out={{out}} {{overrides}}

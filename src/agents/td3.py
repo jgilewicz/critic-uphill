@@ -71,7 +71,7 @@ class TD3(RLAgent):
         critic_opt = make_adam(rl_cfg.critic_lr)
         self._optimizers = (embedding_opt, actor_opt, critic_opt)
         self.state: TD3State = self._init_state(key)
-        hyperparams = TD3Hyperparams(
+        self.hyperparams = TD3Hyperparams(
             gamma=rl_cfg.gamma,
             tau=rl_cfg.tau,
             policy_noise=rl_cfg.policy_noise,
@@ -81,7 +81,7 @@ class TD3(RLAgent):
             batch_size=rl_cfg.batch_size,
         )
         self._train_fn = make_td3_train(
-            hyperparams,
+            self.hyperparams,
             embedding_optimizer=embedding_opt,
             actor_optimizer=actor_opt,
             critic_optimizer=critic_opt,

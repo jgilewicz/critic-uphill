@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
-EvalMode = Literal["full", "critic", "hboot"]
+EvalMode = Literal["full", "critic", "hboot", "prefix"]
 AgentName = Literal["td3", "sac"]
 # top-1 by Q1, Q2 and shadow, plus the nearest head (min dist_H)
 SHADOW_PROBE_PICKS = 4
@@ -112,6 +112,18 @@ class ResetConfig:
 
 
 @dataclass(frozen=True)
+class ShadowConfig:
+    """Shadow twin critic: TD-trained, never in the actor loss."""
+
+    enabled: bool = False
+    surrogate: bool = False
+
+    def __post_init__(self) -> None:
+        if self.surrogate and not self.enabled:
+            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
+
+
+@dataclass(frozen=True)
 class RLAlgoConfig:
     """Configuration for standalone off-policy RL agents (td3 | sac)."""
 
@@ -120,9 +132,20 @@ class RLAlgoConfig:
     embedding_dim: int = 300
     rl: RLConfig = field(default_factory=TD3RLConfig)
     reset: ResetConfig = field(default_factory=ResetConfig)
+    shadow: ShadowConfig = field(default_factory=ShadowConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.name", self.name, AgentName)
+        if self.shadow.enabled and self.name != "td3":
+            raise ValueError(
+                "algorithm.shadow.enabled=true is only supported for td3, "
+                f"not {self.name!r}"
+            )
+        if self.shadow.surrogate:
+            raise ValueError(
+                "algorithm.shadow.surrogate=true needs a population, "
+                "use algorithm=evorainbow"
+            )
         if self.reset.enabled and self.name != "td3":
             raise ValueError(
                 "algorithm.reset.enabled=true is only supported for td3, "
@@ -193,23 +216,35 @@ class EvalConfig:
             )
         if not 0.0 <= self.p_real <= 1.0:
             raise ValueError(f"eval.p_real={self.p_real}; must be in [0, 1]")
-        if self.mode == "full" and self.p_real != 0.0:
+        if self.mode in ("full", "prefix") and self.p_real != 0.0:
             raise ValueError(
                 f"eval.p_real={self.p_real} is only valid for eval.mode in "
-                "('critic', 'hboot'), not 'full'"
+                f"('critic', 'hboot'), not {self.mode!r}"
             )
 
 
 @dataclass(frozen=True)
-class ShadowConfig:
-    """Shadow twin critic: TD-trained, never in the actor loss."""
+class MatchedConfig:
+    """Stop at a fixed generation count with a fixed total of RL updates.
 
-    enabled: bool = False
-    surrogate: bool = False
+    0/0 is off (run to the step budget). Generations include warmup.
+    """
+
+    generations: int = 0
+    rl_updates: int = 0
 
     def __post_init__(self) -> None:
-        if self.surrogate and not self.enabled:
-            raise ValueError("shadow.surrogate=true needs shadow.enabled=true")
+        _check_min("matched.generations", self.generations, 0)
+        _check_min("matched.rl_updates", self.rl_updates, 0)
+        if (self.generations == 0) != (self.rl_updates == 0):
+            raise ValueError(
+                f"matched.generations={self.generations} and "
+                f"matched.rl_updates={self.rl_updates}: set both or neither"
+            )
+
+    @property
+    def enabled(self) -> bool:
+        return self.generations > 0
 
 
 @dataclass(frozen=True)
@@ -226,6 +261,7 @@ class EvoRainbowAlgoConfig:
     ea_to_rl: EAToRLConfig = field(default_factory=EAToRLConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
     shadow: ShadowConfig = field(default_factory=ShadowConfig)
+    matched: MatchedConfig = field(default_factory=MatchedConfig)
 
     def __post_init__(self) -> None:
         _check_choice("algorithm.agent", self.agent, AgentName)
@@ -247,7 +283,7 @@ class EvoRainbowAlgoConfig:
             )
         if self.pop_size < 2:
             raise ValueError(f"pop_size={self.pop_size}; must be >= 2")
-        if self.eval.mode == "hboot" and self.eval.h > self.horizon:
+        if self.eval.mode in ("hboot", "prefix") and self.eval.h > self.horizon:
             raise ValueError(
                 f"eval.h={self.eval.h} exceeds horizon={self.horizon}"
             )
@@ -309,6 +345,36 @@ class ProbeConfig:
 
 
 @dataclass(frozen=True)
+class CheckpointConfig:
+    """Offline-analysis checkpoints at fractions of the step budget."""
+
+    dir: str | None = None
+    fractions: tuple[float, ...] = (0.1, 0.5, 1.0)
+    buffer_tail: int = 200_000
+    generations: int = 4
+
+    def __post_init__(self) -> None:
+        if not self.fractions:
+            raise ValueError("checkpoint.fractions must have at least 1 entry")
+        if list(self.fractions) != sorted(set(self.fractions)):
+            raise ValueError(
+                f"checkpoint.fractions={list(self.fractions)} must be "
+                "strictly increasing"
+            )
+        for fraction in self.fractions:
+            if not 0.0 < fraction <= 1.0:
+                raise ValueError(
+                    f"checkpoint.fractions entry {fraction} not in (0, 1]"
+                )
+        _check_min("checkpoint.buffer_tail", self.buffer_tail, 1)
+        _check_min("checkpoint.generations", self.generations, 1)
+
+    @property
+    def enabled(self) -> bool:
+        return self.dir is not None
+
+
+@dataclass(frozen=True)
 class WandbConfig:
     """Weights & Biases logging configuration."""
 
@@ -317,6 +383,10 @@ class WandbConfig:
     entity: str | None = None
     name: str | None = None
     tags: tuple[str, ...] = ()
+
+
+def _agent_name(algo: RLAlgoConfig | EvoRainbowAlgoConfig) -> str:
+    return algo.name if isinstance(algo, RLAlgoConfig) else algo.agent
 
 
 @dataclass(frozen=True)
@@ -329,6 +399,7 @@ class RunConfig:
     deg: DegConfig
     probe: ProbeConfig
     wandb: WandbConfig
+    checkpoint: CheckpointConfig
     seed: int
     total_steps: int
     protocol: int
@@ -344,8 +415,7 @@ class RunConfig:
                 f"the {candidates} perturbations measured by deg"
             )
         if (
-            isinstance(self.algorithm, EvoRainbowAlgoConfig)
-            and self.algorithm.shadow.enabled
+            self.algorithm.shadow.enabled
             and self.probe.enabled
             and self.probe.n_perturbations < SHADOW_PROBE_PICKS + 1
         ):
@@ -353,6 +423,20 @@ class RunConfig:
                 f"probe.n_perturbations={self.probe.n_perturbations} leaves "
                 f"no random pick next to the {SHADOW_PROBE_PICKS} shadow "
                 f"probe picks. use >= {SHADOW_PROBE_PICKS + 1}"
+            )
+        if (
+            self.checkpoint.enabled
+            and isinstance(self.algorithm, EvoRainbowAlgoConfig)
+            and self.algorithm.matched.enabled
+        ):
+            raise ValueError(
+                "checkpoint.dir with algorithm.matched: a matched run stops "
+                "before the budget fractions are reached"
+            )
+        if self.checkpoint.enabled and _agent_name(self.algorithm) != "td3":
+            raise ValueError(
+                "checkpoint.dir is only supported for td3 agents, "
+                f"not {_agent_name(self.algorithm)!r}"
             )
         if isinstance(self.algorithm, RLAlgoConfig) and (
             self.algorithm.reset.enabled
@@ -368,3 +452,45 @@ class RunConfig:
                     f"total_steps={self.total_steps}. lower them or raise "
                     "total_steps"
                 )
+
+
+@dataclass(frozen=True)
+class OfflineConfig:
+    """Offline E1 measurement on one checkpoint, outside any budget."""
+
+    checkpoint: str
+    out: str
+    sigmas: tuple[float, ...] = (0.02, 0.05, 0.1, 0.2)
+    n_perturbations: int = 40
+    n_states: int = 2000
+    truth_heads: int = 20
+    truth_episodes: int = 30
+    prefix_seeds: int = 5
+    prefix_h: int = 200
+    fqe_steps: int = 100_000
+    fqe_batch_size: int = 256
+    step_sigmas: tuple[float, ...] = (0.02, 0.05, 0.1)
+    max_envs: int = 256
+
+    def __post_init__(self) -> None:
+        if not self.sigmas:
+            raise ValueError("sigmas must have at least 1 entry")
+        for sigma in (*self.sigmas, *self.step_sigmas):
+            _check_positive("sigmas/step_sigmas entry", sigma)
+        for name in (
+            "n_perturbations",
+            "n_states",
+            "truth_heads",
+            "truth_episodes",
+            "prefix_seeds",
+            "prefix_h",
+            "fqe_steps",
+            "fqe_batch_size",
+            "max_envs",
+        ):
+            _check_min(name, getattr(self, name), 1)
+        if self.truth_heads > self.n_perturbations:
+            raise ValueError(
+                f"truth_heads={self.truth_heads} exceeds the "
+                f"n_perturbations={self.n_perturbations} per sigma"
+            )

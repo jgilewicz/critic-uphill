@@ -68,7 +68,7 @@ def _stack_levels(
 
 
 @eqx.filter_jit
-def _measure(
+def measure_terms(
     embedding: SharedStateEmbedding,
     critic: Critic,
     head: Any,
@@ -136,7 +136,7 @@ def _perturbation_stats(
     return stats
 
 
-def _term_metrics(
+def term_metrics(
     terms: DegenerationTerms, prefix: str, levels: np.ndarray
 ) -> dict[str, float]:
     delta_s = np.asarray(terms.delta_s)
@@ -174,7 +174,7 @@ class DegenerationProbe:
         states: jax.Array,
         key: jax.Array,
     ) -> DegenerationTerms:
-        return _measure(
+        return measure_terms(
             agent.embedding,
             critic,
             agent.actor_head,
@@ -193,7 +193,7 @@ class DegenerationProbe:
         states = buffer.sample_states(states_key, cfg.n_states)
         levels = np.repeat(np.arange(len(cfg.sigmas)), cfg.n_perturbations)
         terms = self._terms(agent, agent.critic1, states, perturb_key)
-        metrics = _term_metrics(terms, "deg", levels)
+        metrics = term_metrics(terms, "deg", levels)
         sample = DegenerationSample(
             terms.heads, np.asarray(terms.delta_s), np.asarray(terms.t2)
         )
@@ -206,8 +206,8 @@ class DegenerationProbe:
             # same perturb_key: Q2 and shadow score the same perturbed heads
             q2 = self._terms(agent, agent.critic2, states, perturb_key)
             sh = self._terms(agent, agent.shadow_critic, states, perturb_key)
-            metrics |= _term_metrics(q2, "deg_q2", levels)
-            metrics |= _term_metrics(sh, "shadow", levels)
+            metrics |= term_metrics(q2, "deg_q2", levels)
+            metrics |= term_metrics(sh, "shadow", levels)
             sample = replace(
                 sample,
                 delta_q2=np.asarray(q2.delta_s),

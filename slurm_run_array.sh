@@ -16,12 +16,25 @@
 #   0-9   td3
 #   10-19 td3-reset
 #
-# Suite: shadow (task ID = condition_index * 10 + seed, array 0-19)
-#   0-9   evorainbow-td3-critic (shadow trained, Q1 surrogate)
-#   10-19 evorainbow-td3-shadow (shadow trained, shadow surrogate)
+# Suite: e1 (array 0-29), shadow critic as a metric, checkpoints saved to
+# <PD>/checkpoints/<TAG>/<run> at 10%, 50%, 100% of the budget
+#   0-9   td3
+#   10-19 evorainbow-td3-full (ERL)
+#   20-29 evorainbow-td3-critic (SC-ERL, per-env p_real gate)
+#
+# Suite: e2 (array 0-49), shadow critic as a metric
+#   0-9   evorainbow-td3-critic-p0 (Q1 surrogate always)
+#   10-19 evorainbow-td3-prefix-h100
+#   20-29 evorainbow-td3-prefix-h200
+#   30-39 evorainbow-td3-prefix-h400
+#   40-49 evorainbow-td3-prefix-h200-matched (needs MATCH_GENERATIONS and
+#         MATCH_UPDATES: median generations and RL updates of the e1 ERL
+#         runs in this env)
 #
 # Example usage:
 #   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-79 slurm_run_array.sh
+#   SUITE=e1 SEEDS="10 11 12 13 14" TARGET_ENV=Hopper-v5 \
+#     sbatch --array=0-14 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
 
 #SBATCH -N 1
@@ -58,22 +71,36 @@ RESET=(
   "td3-reset|algorithm=td3-reset"
 )
 
-SHADOW=(
-  "evorainbow-td3-critic|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic algorithm.shadow.enabled=true"
-  "evorainbow-td3-shadow|algorithm=evorainbow algorithm.agent=td3 algorithm.eval.mode=critic algorithm.shadow.enabled=true algorithm.shadow.surrogate=true"
+ER_TD3="algorithm=evorainbow algorithm.agent=td3 algorithm.shadow.enabled=true"
+E1=(
+  "td3|algorithm=td3 algorithm.shadow.enabled=true"
+  "evorainbow-td3-full|${ER_TD3} algorithm.eval.mode=full"
+  "evorainbow-td3-critic|${ER_TD3} algorithm.eval.mode=critic"
+)
+
+PREFIX="${ER_TD3} algorithm.eval.mode=prefix"
+E2=(
+  "evorainbow-td3-critic-p0|${ER_TD3} algorithm.eval.mode=critic algorithm.eval.p_real=0"
+  "evorainbow-td3-prefix-h100|${PREFIX} algorithm.eval.h=100"
+  "evorainbow-td3-prefix-h200|${PREFIX} algorithm.eval.h=200"
+  "evorainbow-td3-prefix-h400|${PREFIX} algorithm.eval.h=400"
+  "evorainbow-td3-prefix-h200-matched|${PREFIX} algorithm.eval.h=200"
 )
 
 case "${SUITE}" in
 main) CONDITIONS=("${MAIN[@]}") ;;
 reset) CONDITIONS=("${RESET[@]}") ;;
-shadow) CONDITIONS=("${SHADOW[@]}") ;;
+e1) CONDITIONS=("${E1[@]}") ;;
+e2) CONDITIONS=("${E2[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset' or 'shadow'." >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset', 'e1' or 'e2'." >&2
   exit 1
   ;;
 esac
 
-SEEDS=(0 1 2 3 4 5 6 7 8 9)
+# SEEDS="10 11 12 13 14" runs other seeds: task ID = condition_index *
+# number of seeds + position of the seed in SEEDS
+read -r -a SEEDS <<<"${SEEDS:-0 1 2 3 4 5 6 7 8 9}"
 N_SEEDS=${#SEEDS[@]}
 
 TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
@@ -88,6 +115,12 @@ NAME="${CONDITION%%|*}"
 read -r -a OVERRIDES <<<"${CONDITION#*|} ${EXTRA:-}"
 ENV_SLUG="${ENV//\//_}"
 RUN_NAME="${NAME}_${ENV_SLUG}_s${SEED}"
+if [[ "${NAME}" == *-matched ]]; then
+  OVERRIDES+=(
+    "algorithm.matched.generations=${MATCH_GENERATIONS:?set MATCH_GENERATIONS (median e1 ERL generations in ${ENV})}"
+    "algorithm.matched.rl_updates=${MATCH_UPDATES:?set MATCH_UPDATES (median e1 ERL RL updates in ${ENV})}"
+  )
+fi
 
 echo "Task ${TASK_ID} | ${NAME} | ${ENV} | seed ${SEED}"
 
@@ -107,11 +140,15 @@ fi
 export WANDB_MODE="${WANDB_MODE:-online}"
 PD_ROOT="/lustre/pd03/${SLURM_JOB_ACCOUNT:-hpc-jakgil6519-1780267238}"
 if [[ -d "${PD_ROOT}" && -w "${PD_ROOT}" ]]; then
-  export WANDB_DIR="${PD_ROOT}/wandb_logs/${RUN_NAME}"
+  DATA_ROOT="${PD_ROOT}"
 else
-  export WANDB_DIR="${PROJECT_DIR}/wandb_logs/${RUN_NAME}"
+  DATA_ROOT="${PROJECT_DIR}"
 fi
+export WANDB_DIR="${DATA_ROOT}/wandb_logs/${RUN_NAME}"
 mkdir -p logs "${WANDB_DIR}"
+if [[ "${SUITE}" == e1 ]]; then
+  OVERRIDES+=("checkpoint.dir=${DATA_ROOT}/checkpoints/${TAG}/${RUN_NAME}")
+fi
 
 if "${VENV}/python" -m train \
   "${OVERRIDES[@]}" \

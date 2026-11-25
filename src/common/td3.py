@@ -347,3 +347,63 @@ def make_td3_train(
         return eqx.combine(dynamic, static), stats
 
     return train
+
+
+FQETrainFn = Callable[
+    [ShadowState, TD3Networks, BufferData, jax.Array, jax.Array],
+    ShadowState,
+]
+
+
+def make_fqe_train(
+    cfg: TD3Hyperparams, optimizer: optax.GradientTransformation
+) -> FQETrainFn:
+    """Compile FQE: TD3 twin-critic updates for a frozen policy.
+
+    Same target as TD3 (min twin, clipped target noise) with the policy's
+    embedding and actor as the target actor. Target critics move by tau
+    every policy_freq steps, as in TD3.
+    """
+
+    @eqx.filter_jit
+    def train(
+        fqe: ShadowState,
+        policy: TD3Networks,
+        data: BufferData,
+        num_steps: jax.Array,
+        key: jax.Array,
+    ) -> ShadowState:
+        dynamic, static = eqx.partition(fqe, eqx.is_array)
+        size = jnp.asarray(data[0].shape[0])
+
+        def soft_update(dyn: Any) -> Any:
+            cur = eqx.combine(dyn, static)
+            target = genetic_soft_update(cur.target, cur.online, cfg.tau)
+            return eqx.filter(cur._replace(target=target), eqx.is_array)
+
+        def body(
+            step: jax.Array, carry: tuple[Any, jax.Array]
+        ) -> tuple[Any, jax.Array]:
+            dynamic, key = carry
+            key, sample_key, noise_key = jax.random.split(key, 3)
+            batch = sample_batch(data, size, sample_key, cfg.batch_size)
+            next_action = _next_action(cfg, policy, batch, noise_key)
+            updated = _shadow_update(
+                cfg,
+                optimizer,
+                eqx.combine(dynamic, static),
+                batch,
+                next_action,
+            )
+            dynamic = jax.lax.cond(
+                step % cfg.policy_freq == 0,
+                soft_update,
+                lambda dyn: dyn,
+                eqx.filter(updated, eqx.is_array),
+            )
+            return dynamic, key
+
+        dynamic, _ = jax.lax.fori_loop(0, num_steps, body, (dynamic, key))
+        return eqx.combine(dynamic, static)
+
+    return train

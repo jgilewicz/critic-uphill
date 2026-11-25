@@ -1,0 +1,28 @@
+# Offline E1 measurement of one checkpoint dir (<checkpoint.dir>/pXXX)
+checkpoint: ???
+out: ???
+
+# actor-head perturbations: n_perturbations per sigma, relative to leaf std
+sigmas: [0.02, 0.05, 0.1, 0.2]
+n_perturbations: 40
+# buffer-tail states scored by Q1, Q2, shadow and FQE
+n_states: 2000
+# perturbations per sigma with real episodes: top-1 of each signal + random
+truth_heads: 20
+# truth: full episodes on seed set B, paired with the checkpoint actor
+truth_episodes: 30
+# seed set A: prefix rollouts for own-state Q1 and prefix return
+prefix_seeds: 5
+prefix_h: 200
+fqe_steps: 100_000
+fqe_batch_size: 256
+# gradient steps sized like the expected perturbation norm at these sigmas
+step_sigmas: [0.02, 0.05, 0.1]
+# environments stepped in parallel
+max_envs: 256
+
+hydra:
+  run:
+    dir: outputs/offline/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: false

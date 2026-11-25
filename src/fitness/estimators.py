@@ -292,6 +292,53 @@ class HStepBootstrapFitness:
         return _hboot_scores(self._agent, heads, real.prefix, self._gamma)[0]
 
 
+class PrefixFitness:
+    """Score by the undiscounted return of the first h real steps."""
+
+    uses_real_steps: bool = True
+
+    def __init__(
+        self,
+        pool: EnvPool,
+        agent: RLAgent,
+        buffer: ReplayBuffer,
+        budget: Budget,
+        *,
+        h: int,
+    ) -> None:
+        self._pool = pool
+        self._agent = agent
+        self._buffer = buffer
+        self._budget = budget
+        self._h = h
+
+    def evaluate(
+        self,
+        heads: Any,
+        key: jax.Array,
+        *,
+        seed: int,
+        active_mask: np.ndarray | None = None,
+    ) -> FitnessResult:
+        """Run up to h real steps per individual and sum the rewards."""
+        del key
+        rollout = rollout_population(
+            self._pool,
+            lambda states: self._agent.act_population(heads, states),
+            self._buffer,
+            self._budget,
+            max_steps=self._h,
+            discount=1.0,
+            seed=seed,
+            active_mask=active_mask,
+        )
+        return FitnessResult(
+            fitness=jnp.asarray(rollout.returns, dtype=jnp.float32),
+            steps=rollout.total_steps,
+            real_mask=np.zeros(self._pool.num_envs, dtype=bool),
+        )
+
+
 class IndividualControlFitness:
     """Per-individual gate: full episode w.p. p_real, else surrogate."""
 
@@ -395,6 +442,8 @@ def build_fitness_estimator(
     )
     if eval_cfg.mode == "full":
         return full
+    if eval_cfg.mode == "prefix":
+        return PrefixFitness(pool, agent, buffer, budget, h=eval_cfg.h)
     if eval_cfg.mode == "critic":
         surrogate: SurrogateEstimator = CriticBufferFitness(
             agent,
