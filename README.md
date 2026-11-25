@@ -128,7 +128,7 @@ Any Hydra key can be appended as an override. Configs live in `src/conf/` and ar
 - MuJoCo v5: `HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`, `Humanoid-v5`.
 - DMC suite through `shimmy`: `dmc-cheetah-run`, `dmc-quadruped-run`, `dmc-humanoid-run`, `dmc-dog-run` (`dmc-<domain>-<task>`, no slashes or underscores because ids end up in run names and file names).
 - DMC adapter (`DmcStateEnv`): observation dict concatenated in sorted-key order as one float32 vector, actions in `[-1, 1]` mapped affinely onto the task bounds (`quadruped` has non-unit bounds), 1000-step episodes ending by truncation only (a termination raises), no action repeat, `reset(seed=...)` seeds the task's RNG.
-- State only: `MUJOCO_GL=disable` is set (unless already set) before `dm_control` is imported, so no GL backend is loaded on headless nodes.
+- State only: `MUJOCO_GL=disable` is set (overriding any inherited value) before `dm_control` is imported, so no GL backend is loaded on headless nodes.
 - Pinned `mujoco==3.6.0` and `dm_control==1.0.38`, the newest release that accepts it. Newer `dm_control` needs `mujoco>=3.7`, and `mujoco==4.0.1` changes fixed-seed MuJoCo v5 trajectories.
 
 **Defaults** (`src/conf/algorithm/{td3,evorainbow}.yaml`): `horizon=1000`, `embedding_dim=300`, `gamma=0.99`, `tau=0.005`, `batch_size=128`, `warmup_steps=10_000`, `train_ratio=1.0`, `actor_lr=critic_lr=1e-3`, grad-norm clip `10`. EvoRainbow adds `pop_size=5`, `cem.sigma_init=1e-3`, `cem.damp_limit=1e-5`, `cem.elitism=false`.
