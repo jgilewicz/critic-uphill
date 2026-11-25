@@ -8,7 +8,8 @@
 # - Separate embedding optimizer (lr 1e-3) and grad-norm clip 10 on all nets
 # - Per-env overrides (cem.damp, rl_to_ea.period, ea_to_rl.tau, eval.p_real)
 #   live in algorithm/env/<env.id>.yaml, applied automatically from env.id
-#   and individually overridable from the CLI.
+#   and individually overridable from the CLI. Envs without a file (DMC)
+#   keep the values below.
 
 name: evorainbow
 

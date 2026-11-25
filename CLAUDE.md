@@ -14,7 +14,7 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 
 ## Stack and Quality Tools
 
-- Python 3.12+, JAX + Equinox + Optax, Gymnasium MuJoCo v5, Hydra, wandb.
+- Python 3.12+, JAX + Equinox + Optax, Gymnasium MuJoCo v5, DMC suite via shimmy (`mujoco==3.6.0`, `dm_control==1.0.38`, `shimmy==2.0.1`), Hydra, wandb.
 - Package manager: `uv`. Linters/typecheck: `ruff check .`, `ruff format --check .`, `ty check src`.
 - No pytest suite yet: verify with `just check` and `just smoke`.
 
@@ -22,9 +22,9 @@ Extends `~/.claude/CLAUDE.md`. Overrides the global "functional JAX style" rule:
 
 - `src/train.py`: Thin Hydra entrypoint delegating to `runner.run_training`.
 - `src/measure_offline.py`: Thin Hydra entrypoint (`conf/offline.yaml`, `OfflineConfig`) running `measurement=signals|extra|pairs` (`SignalMeasurement`, `ExtraMeasurement`, `PairMeasurement`) on one checkpoint dir and writing JSON.
-- `src/runner.py`: Validates Hydra `DictConfig` into `config.RunConfig`, applies `algorithm/env/<env.id>.yaml` presets (unless CLI-overridden), initializes wandb (`env_steps` metric, final eval in summary `perf/eval_final`), and dispatches `RLTrainer` or `EvoRainbowTrainer`.
+- `src/runner.py`: Validates Hydra `DictConfig` into `config.RunConfig`, applies `algorithm/env/<env.id>.yaml` presets (unless CLI-overridden, envs without a file such as DMC keep the `evorainbow.yaml` values), initializes wandb (`env_steps` metric, final eval in summary `perf/eval_final`), and dispatches `RLTrainer` or `EvoRainbowTrainer`.
 - `src/config.py`: Frozen dataclasses (`TD3RLConfig`, `ResetConfig`, `ShadowConfig`, `RLAlgoConfig`, `CEMConfig`, `RLToEAConfig`, `EAToRLConfig`, `EvalConfig`, `MatchedConfig`, `EvoRainbowAlgoConfig`, `DegConfig`, `ProbeConfig`, `CheckpointConfig`, `RunConfig`, plus `OfflineConfig` for `conf/offline.yaml`) mirrored 1:1 by `src/conf/config.yaml`, `src/conf/algorithm/{td3,td3-reset,evorainbow}.yaml`, and `src/conf/algorithm/env/<env>.yaml`. Unknown keys fail fast.
-- `src/environments/`: MuJoCo v5 registry (`HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5` only, others fail fast) and `EnvPool` (steps only active envs, no auto-reset).
+- `src/environments/`: registry (MuJoCo v5 `HalfCheetah-v5`, `Hopper-v5`, `Walker2d-v5`, `Ant-v5`, `Swimmer-v5`, `Humanoid-v5` in `mujoco_env.py`, DMC `dmc-{cheetah,quadruped,humanoid,dog}-run` in `dmc_env.py`, others fail fast) and `EnvPool` (steps only active envs, no auto-reset). `DmcStateEnv` wraps shimmy: sorted-key float32 flat obs, actions `[-1, 1]` rescaled to the task bounds, truncation only (termination raises), `MUJOCO_GL=disable` set before the lazy `dm_control` import. Env ids must not contain `_` (run-name regex).
 - `src/modules/`: Equinox `SharedStateEmbedding`, `ActorHead`, `Critic`, plus `CEM` with pure jitted `_cem_ask`/`_cem_tell`.
 - `src/common/`:
   - `replay_buffer.py`: `ReplayBuffer`, `Transition`, `sample_batch`.

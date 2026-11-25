@@ -1,6 +1,9 @@
 #!/bin/bash -l
-# critic-uphill benchmark array on WCSS Lem (MuJoCo v5).
-# Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5
+# critic-uphill benchmark array on WCSS Lem (MuJoCo v5 and DMC suite).
+# Envs: HalfCheetah-v5, Hopper-v5, Walker2d-v5, Ant-v5, Swimmer-v5, Humanoid-v5,
+#       dmc-cheetah-run, dmc-quadruped-run, dmc-humanoid-run, dmc-dog-run
+# (DMC tasks run without a GL backend: environments/dmc_env.py sets
+# MUJOCO_GL=disable, nothing to export here)
 #
 # Suite: main (task ID = condition_index * 10 + seed, array 0-39)
 #   0-9   td3

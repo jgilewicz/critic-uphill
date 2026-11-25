@@ -6,7 +6,10 @@ from dataclasses import dataclass
 import gymnasium as gym
 import numpy as np
 
-from environments.mujoco_env import ALLOWED_ENVS, make_mujoco_env
+from environments.dmc_env import DMC_ENVS, make_dmc_env
+from environments.mujoco_env import MUJOCO_ENVS, make_mujoco_env
+
+ALLOWED_ENVS: tuple[str, ...] = (*MUJOCO_ENVS, *DMC_ENVS)
 
 
 @dataclass(frozen=True)
@@ -19,16 +22,18 @@ class EnvDims:
 
 
 def validate_env_id(env_id: str) -> None:
-    """Raise ValueError unless env_id is a supported MuJoCo v5 task."""
+    """Raise ValueError unless env_id is a supported MuJoCo or DMC task."""
     if env_id not in ALLOWED_ENVS:
         allowed = ", ".join(ALLOWED_ENVS)
         raise ValueError(f"Unsupported env {env_id!r}; choose from: {allowed}")
 
 
 def make_env(env_id: str) -> gym.Env:
-    """Create a single validated MuJoCo v5 environment."""
+    """Create a single validated MuJoCo v5 or DMC environment."""
     validate_env_id(env_id)
-    env = make_mujoco_env(env_id)
+    env = (
+        make_dmc_env(env_id) if env_id in DMC_ENVS else make_mujoco_env(env_id)
+    )
     _check_spaces(env, env_id)
     return env
 
