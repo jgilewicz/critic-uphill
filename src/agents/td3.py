@@ -9,6 +9,7 @@ from jax.flatten_util import ravel_pytree
 from agents.base import RLAgent
 from common.replay_buffer import ReplayBuffer
 from common.td3 import (
+    FQESettings,
     TD3Hyperparams,
     TD3State,
     init_shadow,
@@ -144,6 +145,15 @@ class TD3(RLAgent):
         if self.state.shadow is None:
             return None
         return self.state.shadow.online[0]
+
+    @property
+    def fqe(self) -> FQESettings:
+        """Offline FQE reuses the agent's TD3 critic setup."""
+        return FQESettings(
+            self.hyperparams,
+            self.rl_cfg.critic_hidden_dims,
+            self.rl_cfg.critic_lr,
+        )
 
     def init_cem_head(self, key: jax.Array) -> jax.Array:
         """Sample an unscaled ActorHead vector to initialize CEM's mean."""

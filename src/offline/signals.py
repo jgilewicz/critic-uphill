@@ -8,8 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 from jax.flatten_util import ravel_pytree
 
-from agents.td3 import TD3
-from modules.deep_modules import Critic, SharedStateEmbedding
+from agents.base import OfflineAgent
+from modules.protocols import QCritic, StateEmbedding
 from offline.rollouts import HeadRunner
 
 Signals = dict[str, np.ndarray]
@@ -17,7 +17,7 @@ Signals = dict[str, np.ndarray]
 
 @eqx.filter_jit
 def _action_sq_dist(
-    embedding: SharedStateEmbedding,
+    embedding: StateEmbedding,
     actor: Any,
     heads: Any,
     states: jax.Array,
@@ -49,8 +49,8 @@ class SignalScorer:
 
     def __init__(
         self,
-        agent: TD3,
-        critics: dict[str, Critic],
+        agent: OfflineAgent,
+        critics: dict[str, QCritic],
         states: jax.Array,
         runner: HeadRunner,
         *,

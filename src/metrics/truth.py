@@ -6,7 +6,7 @@ import gymnasium as gym
 import jax
 import numpy as np
 
-from agents.base import RLAgent
+from agents.base import OfflineAgent
 from common.rollout import evaluation_episode
 from config import ProbeConfig
 from metrics.degeneration import DegenerationSample
@@ -26,7 +26,7 @@ class TruthProbe:
         self._cfg = cfg
 
     def _returns(
-        self, agent: RLAgent, head: Any, seeds: np.ndarray
+        self, agent: OfflineAgent, head: Any, seeds: np.ndarray
     ) -> np.ndarray:
         return np.array(
             [
@@ -42,7 +42,7 @@ class TruthProbe:
 
     def _gains(
         self,
-        agent: RLAgent,
+        agent: OfflineAgent,
         sample: DegenerationSample,
         picks: list[int],
         seeds: np.ndarray,
@@ -63,7 +63,7 @@ class TruthProbe:
         )
 
     def measure(
-        self, agent: RLAgent, sample: DegenerationSample, key: jax.Array
+        self, agent: OfflineAgent, sample: DegenerationSample, key: jax.Array
     ) -> dict[str, float]:
         """Top-1 by dS plus uniform others, paired with the actor."""
         rng = np.random.default_rng(
@@ -89,7 +89,7 @@ class TruthProbe:
 
     def _measure_shadow(
         self,
-        agent: RLAgent,
+        agent: OfflineAgent,
         sample: DegenerationSample,
         delta_q2: np.ndarray,
         delta_shadow: np.ndarray,

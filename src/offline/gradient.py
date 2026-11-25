@@ -8,16 +8,16 @@ import jax.numpy as jnp
 import numpy as np
 from jax.flatten_util import ravel_pytree
 
-from agents.td3 import TD3
+from agents.base import OfflineAgent
 from common.utils import critic_point
-from modules.deep_modules import Critic, SharedStateEmbedding
+from modules.protocols import QCritic, StateEmbedding
 from offline.rollouts import HeadRunner
 
 
 @eqx.filter_jit
 def _q1_head_grad(
-    embedding: SharedStateEmbedding,
-    critic: Critic,
+    embedding: StateEmbedding,
+    critic: QCritic,
     head: Any,
     states: jax.Array,
 ) -> jax.Array:
@@ -47,7 +47,7 @@ class GradientProbe:
 
     def __init__(
         self,
-        agent: TD3,
+        agent: OfflineAgent,
         runner: HeadRunner,
         *,
         seeds: np.ndarray,

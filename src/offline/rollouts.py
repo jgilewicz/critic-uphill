@@ -9,13 +9,13 @@ import numpy as np
 
 from common.utils import critic_point
 from environments import make_env
-from modules.deep_modules import Critic, SharedStateEmbedding
+from modules.protocols import QCritic, StateEmbedding
 
 
 @eqx.filter_jit
 def _act_and_q(
-    embedding: SharedStateEmbedding,
-    critic: Critic,
+    embedding: StateEmbedding,
+    critic: QCritic,
     heads: Any,
     states: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
@@ -50,8 +50,8 @@ class HeadRunner:
 
     def run(
         self,
-        embedding: SharedStateEmbedding,
-        critic: Critic,
+        embedding: StateEmbedding,
+        critic: QCritic,
         heads: Any,
         seeds: np.ndarray,
         *,
@@ -87,8 +87,8 @@ class HeadRunner:
 
     def _run_chunk(
         self,
-        embedding: SharedStateEmbedding,
-        critic: Critic,
+        embedding: StateEmbedding,
+        critic: QCritic,
         heads: Any,
         seeds: np.ndarray,
         *,

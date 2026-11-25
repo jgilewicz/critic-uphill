@@ -8,11 +8,11 @@ import jax.numpy as jnp
 import numpy as np
 
 from common.replay_buffer import BufferData
-from common.td3 import init_shadow, make_fqe_train
+from common.td3 import TargetPolicy, init_shadow, make_fqe_train
 from common.utils import make_adam
 from metrics.degeneration import measure_terms, term_metrics
 from metrics.stats import spearman
-from modules.deep_modules import Critic
+from modules.protocols import QCritic
 from offline.gradient import GradientProbe
 from offline.setup import OfflineSetup
 from offline.signals import Signals, SignalScorer
@@ -76,25 +76,25 @@ class SignalMeasurement:
         self._steps = {"prefix": 0, "truth": 0}
         self._seconds: dict[str, float] = {}
 
-    def _fit_fqe(self, data: BufferData) -> Critic:
+    def _fit_fqe(self, data: BufferData) -> QCritic:
         """Fresh twin critic fit by TD to the frozen checkpoint actor."""
         agent, cfg = self._agent, self._cfg
+        settings = agent.fqe
         init_key, train_key = jax.random.split(self._setup.fqe_key)
-        optimizer = make_adam(agent.rl_cfg.critic_lr)
+        optimizer = make_adam(settings.critic_lr)
+        hyperparams = settings.hyperparams._replace(
+            batch_size=cfg.fqe_batch_size
+        )
         fqe = init_shadow(
             agent.obs_dim,
             agent.action_dim,
             key=init_key,
-            hidden_dims=agent.rl_cfg.critic_hidden_dims,
+            hidden_dims=settings.hidden_dims,
             optimizer=optimizer,
         )
-        train = make_fqe_train(
-            agent.hyperparams._replace(batch_size=cfg.fqe_batch_size),
-            optimizer,
-        )
-        fqe = train(
-            fqe, agent.state.online, data, jnp.asarray(cfg.fqe_steps), train_key
-        )
+        policy = TargetPolicy(agent.embedding, agent.actor_head, hyperparams)
+        train = make_fqe_train(hyperparams, optimizer)
+        fqe = train(fqe, policy, data, jnp.asarray(cfg.fqe_steps), train_key)
         return fqe.online[0]
 
     def _truth_gains(self, heads: Any, actor_returns: np.ndarray) -> np.ndarray:
@@ -113,7 +113,7 @@ class SignalMeasurement:
     def _perturbations(
         self,
         scorer: SignalScorer,
-        critics: dict[str, Critic],
+        critics: dict[str, QCritic],
         states: jax.Array,
         actor_returns: np.ndarray,
     ) -> tuple[dict[str, float], dict[str, Any]]:

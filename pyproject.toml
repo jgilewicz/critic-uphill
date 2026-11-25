@@ -32,6 +32,7 @@ packages = [
     "src/metrics",
     "src/modules",
     "src/offline",
+    "src/xqc",
 ]
 
 [tool.ruff]
@@ -44,3 +45,12 @@ extend-select = ["E501", "C901"]
 max-complexity = 8
 
 [tool.ty.rules]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]

@@ -11,14 +11,15 @@ import numpy as np
 from jax.flatten_util import ravel_pytree
 
 from common.replay_buffer import ReplayBuffer
+from common.td3 import FQESettings
 from common.utils import critic_point
 from config import TD3RLConfig
-from modules.deep_modules import Critic, SharedStateEmbedding
+from modules.protocols import QCritic, StateEmbedding
 
 
 @eqx.filter_jit
 def _act_deterministic(
-    embedding: SharedStateEmbedding,
+    embedding: StateEmbedding,
     actor: Any,
     state: jax.Array,
 ) -> jax.Array:
@@ -27,8 +28,8 @@ def _act_deterministic(
 
 @eqx.filter_jit
 def _q1_at_actor(
-    critic: Critic,
-    embedding: SharedStateEmbedding,
+    critic: QCritic,
+    embedding: StateEmbedding,
     actor: Any,
     state: jax.Array,
 ) -> jax.Array:
@@ -37,7 +38,7 @@ def _q1_at_actor(
 
 @eqx.filter_jit
 def _act_population(
-    embedding: SharedStateEmbedding,
+    embedding: StateEmbedding,
     heads: Any,
     states: jax.Array,
 ) -> jax.Array:
@@ -47,8 +48,8 @@ def _act_population(
 
 @eqx.filter_jit
 def _q1_population_sum(
-    critic: Critic,
-    embedding: SharedStateEmbedding,
+    critic: QCritic,
+    embedding: StateEmbedding,
     heads: Any,
     states: jax.Array,
 ) -> jax.Array:
@@ -63,8 +64,8 @@ def _q1_population_sum(
 
 @eqx.filter_jit
 def _q1_population_states(
-    critic: Critic,
-    embedding: SharedStateEmbedding,
+    critic: QCritic,
+    embedding: StateEmbedding,
     heads: Any,
     states: jax.Array,
 ) -> jax.Array:
@@ -73,50 +74,60 @@ def _q1_population_states(
     return critic_point(critic, states, actions)[:, 0]
 
 
-class RLAgent(abc.ABC):
-    """Abstract off-policy RL agent compatible with RLTrainer and EvoRainbow."""
+class OfflineAgent(abc.ABC):
+    """Read-only agent view used by offline measurement and diagnostics.
+
+    Exposes the actor as embedding Z(s) plus a head and the critic the actor
+    follows as critic1, with batched deterministic actions and Q helpers.
+    """
 
     _unravel_head: Callable[[jax.Array], Any]
 
     def __init__(
-        self,
-        obs_dim: int,
-        action_dim: int,
-        action_limit: float,
-        embedding_dim: int,
-        *,
-        rl_cfg: TD3RLConfig,
-        key: jax.Array,
+        self, obs_dim: int, action_dim: int, action_limit: float
     ) -> None:
-        del rl_cfg, key
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.action_limit = action_limit
-        self.embedding_dim = embedding_dim
 
     @property
     @abc.abstractmethod
-    def embedding(self) -> SharedStateEmbedding:
+    def embedding(self) -> StateEmbedding:
         """Shared online state encoder Z(s)."""
 
     @property
     @abc.abstractmethod
     def actor_head(self) -> Any:
-        """Online RL actor head PyTree evolved by CEM."""
-
-    @abc.abstractmethod
-    def set_actor_head(self, head: Any) -> None:
-        """Replace the online RL actor head PyTree."""
+        """Online actor head PyTree."""
 
     @property
     @abc.abstractmethod
-    def critic1(self) -> Critic:
-        """Online Q1 critic used by surrogate fitness estimators."""
+    def critic1(self) -> QCritic:
+        """Critic the actor follows, used by surrogate fitness and signals."""
 
     @property
-    def shadow_critic(self) -> Critic | None:
+    @abc.abstractmethod
+    def critic2(self) -> QCritic:
+        """Second critic scored as signal q2."""
+
+    @property
+    def signal_mapping(self) -> dict[str, str]:
+        """Which network each critic signal of the measurement refers to."""
+        return {
+            "q1": "online critic1",
+            "q2": "online critic2",
+            "shadow": "first shadow critic head (None without a shadow)",
+        }
+
+    @property
+    def shadow_critic(self) -> QCritic | None:
         """First head of the shadow critic, None without one."""
         return None
+
+    @property
+    @abc.abstractmethod
+    def fqe(self) -> FQESettings:
+        """FQE hyperparameters of the offline measurement."""
 
     @property
     def unravel_head(self) -> Callable[[jax.Array], Any]:
@@ -124,23 +135,15 @@ class RLAgent(abc.ABC):
         return self._unravel_head
 
     def actor_head_flat(self) -> jax.Array:
-        """Flatten the current online RL actor head parameters."""
+        """Flatten the current online actor head parameters."""
         return ravel_pytree(self.actor_head)[0]
-
-    @abc.abstractmethod
-    def init_cem_head(self, key: jax.Array) -> jax.Array:
-        """Return a flattened unscaled head to initialize CEM's mean."""
-
-    @abc.abstractmethod
-    def act(self, state: np.ndarray, key: jax.Array) -> np.ndarray:
-        """Sample an exploration action."""
 
     def act_with_head(
         self,
         head: Any,
         state: np.ndarray,
         *,
-        embedding: SharedStateEmbedding | None = None,
+        embedding: StateEmbedding | None = None,
     ) -> np.ndarray:
         """Compute the deterministic action of any head over Z(s).
 
@@ -172,7 +175,7 @@ class RLAgent(abc.ABC):
         states: jax.Array,
         *,
         chunk_size: int = 4096,
-        critic: Critic | None = None,
+        critic: QCritic | None = None,
     ) -> jax.Array:
         """Mean Q(s, head(Z(s))) over states for each head.
 
@@ -194,6 +197,36 @@ class RLAgent(abc.ABC):
         return _q1_population_states(
             self.critic1, self.embedding, heads, jnp.asarray(states)
         )
+
+
+class RLAgent(OfflineAgent):
+    """Abstract off-policy RL agent compatible with RLTrainer and EvoRainbow."""
+
+    def __init__(
+        self,
+        obs_dim: int,
+        action_dim: int,
+        action_limit: float,
+        embedding_dim: int,
+        *,
+        rl_cfg: TD3RLConfig,
+        key: jax.Array,
+    ) -> None:
+        del rl_cfg, key
+        super().__init__(obs_dim, action_dim, action_limit)
+        self.embedding_dim = embedding_dim
+
+    @abc.abstractmethod
+    def set_actor_head(self, head: Any) -> None:
+        """Replace the online RL actor head PyTree."""
+
+    @abc.abstractmethod
+    def init_cem_head(self, key: jax.Array) -> jax.Array:
+        """Return a flattened unscaled head to initialize CEM's mean."""
+
+    @abc.abstractmethod
+    def act(self, state: np.ndarray, key: jax.Array) -> np.ndarray:
+        """Sample an exploration action."""
 
     @abc.abstractmethod
     def update(

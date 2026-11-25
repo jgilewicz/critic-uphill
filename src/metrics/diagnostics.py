@@ -3,7 +3,7 @@ from __future__ import annotations
 import gymnasium as gym
 import jax
 
-from agents.td3 import TD3
+from agents.base import OfflineAgent
 from common.replay_buffer import ReplayBuffer
 from config import RunConfig
 from metrics.degeneration import DegenerationProbe
@@ -14,11 +14,11 @@ from metrics.truth import TruthProbe
 class Diagnostics:
     """Schedules the degeneration probe (block 3) and truth probe (block 4)."""
 
-    def __init__(self, run_cfg: RunConfig, env: gym.Env) -> None:
+    def __init__(
+        self, run_cfg: RunConfig, env: gym.Env, *, shadow: bool
+    ) -> None:
         self._seed = run_cfg.seed
-        self._deg = DegenerationProbe(
-            run_cfg.deg, shadow=run_cfg.algorithm.shadow.enabled
-        )
+        self._deg = DegenerationProbe(run_cfg.deg, shadow=shadow)
         self._deg_schedule = Schedule(run_cfg.deg.interval)
         self._truth = (
             TruthProbe(env, run_cfg.probe) if run_cfg.probe.enabled else None
@@ -26,14 +26,14 @@ class Diagnostics:
         self._truth_schedule = Schedule(run_cfg.probe.interval)
 
     def measure_deg(
-        self, agent: TD3, buffer: ReplayBuffer, env_steps: int
+        self, agent: OfflineAgent, buffer: ReplayBuffer, env_steps: int
     ) -> dict[str, float]:
         """Measure deg/* now, regardless of the schedule."""
         deg_key, _ = jax.random.split(metric_key(self._seed, env_steps))
         return self._deg.measure(agent, buffer, deg_key)
 
     def maybe_measure(
-        self, agent: TD3, buffer: ReplayBuffer, env_steps: int
+        self, agent: OfflineAgent, buffer: ReplayBuffer, env_steps: int
     ) -> dict[str, float]:
         """Measure whichever probes crossed a new interval boundary."""
         deg_due = self._deg_schedule.due(env_steps)

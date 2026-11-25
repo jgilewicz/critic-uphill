@@ -30,11 +30,17 @@
 #         MATCH_UPDATES: median generations and RL updates of the measure ERL
 #         runs in this env)
 #
+# Suite: xqc (task ID = seed position in SEEDS, one seed per task, array
+# 0-(number of seeds - 1)), checkpoints like measure. The 1M-step buffers need
+# more memory than the header default: submit_suite.sh passes --mem=48gb
+#   0-9   xqc
+#
 # Example usage:
 #   TARGET_ENV=Hopper-v5 TAG=main-v1 sbatch --array=0-39 slurm_run_array.sh
 #   SUITE=measure SEEDS="10 11 12 13 14" TARGET_ENV=Hopper-v5 \
 #     sbatch --array=0-14 slurm_run_array.sh
 #   ./scripts/submit_suite.sh main HalfCheetah-v5 Hopper-v5
+#   SEEDS="0 1 2" ./scripts/submit_suite.sh xqc Hopper-v5
 
 #SBATCH -N 1
 #SBATCH -c 2
@@ -73,6 +79,10 @@ MEASURE=(
   "evorainbow-td3-critic|${ER_TD3} algorithm.eval.mode=critic"
 )
 
+XQC=(
+  "xqc|algorithm=xqc"
+)
+
 PREFIX="${ER_TD3} algorithm.eval.mode=prefix"
 SURROGATE=(
   "evorainbow-td3-critic-p0|${ER_TD3} algorithm.eval.mode=critic algorithm.eval.p_real=0"
@@ -87,8 +97,9 @@ main) CONDITIONS=("${MAIN[@]}") ;;
 reset) CONDITIONS=("${RESET[@]}") ;;
 measure) CONDITIONS=("${MEASURE[@]}") ;;
 surrogate) CONDITIONS=("${SURROGATE[@]}") ;;
+xqc) CONDITIONS=("${XQC[@]}") ;;
 *)
-  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset', 'measure' or 'surrogate'." >&2
+  echo "ERROR: Unknown SUITE '${SUITE}'. Choose 'main', 'reset', 'measure', 'surrogate' or 'xqc'." >&2
   exit 1
   ;;
 esac
@@ -141,7 +152,7 @@ else
 fi
 export WANDB_DIR="${DATA_ROOT}/wandb_logs/${RUN_NAME}"
 mkdir -p logs "${WANDB_DIR}"
-if [[ "${SUITE}" == measure ]]; then
+if [[ "${SUITE}" == measure || "${SUITE}" == xqc ]]; then
   OVERRIDES+=("checkpoint.dir=${DATA_ROOT}/checkpoints/${TAG}/${RUN_NAME}")
 fi
 

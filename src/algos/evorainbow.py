@@ -48,7 +48,9 @@ class EvoRainbowTrainer:
             seed=run_cfg.seed + _EVAL_SEED_OFFSET,
             gamma=algo_cfg.rl.gamma,
         )
-        self._diagnostics = Diagnostics(run_cfg, self._perf.env)
+        self._diagnostics = Diagnostics(
+            run_cfg, self._perf.env, shadow=algo_cfg.shadow.enabled
+        )
         self._surrogate_metrics = SurrogateMetrics()
         self._champion: Champion | None = None
         self._individual_evals = 0

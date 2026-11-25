@@ -5,6 +5,7 @@ from typing import Any, Literal, get_args
 
 EvalMode = Literal["full", "critic", "hboot", "prefix"]
 AgentName = Literal["td3"]
+XQCName = Literal["xqc"]
 MeasurementName = Literal["signals", "extra", "pairs"]
 # top-1 by Q1, Q2 and shadow, plus the nearest head (min dist_H)
 SHADOW_PROBE_PICKS = 4
@@ -107,6 +108,59 @@ class RLAlgoConfig:
         if self.embedding_dim < 1:
             raise ValueError(
                 f"embedding_dim={self.embedding_dim}; must be >= 1"
+            )
+
+
+@dataclass(frozen=True)
+class XQCConfig:
+    """XQC hyperparameters of the original code (commit 9a6832b)."""
+
+    name: XQCName = "xqc"
+    horizon: int = 1000
+    actor_hidden_dims: tuple[int, ...] = (256, 256, 256, 256)
+    critic_hidden_dims: tuple[int, ...] = (512, 512, 512, 512)
+    actor_lr: float = 3e-4
+    critic_lr: float = 3e-4
+    lr_end: float = 3e-5
+    policy_delay: int = 3
+    tau: float = 0.005
+    init_temperature: float = 0.01
+    min_v: float = -5.0
+    max_v: float = 5.0
+    num_bins: int = 101
+    updates_per_step: int = 2
+    batch_size: int = 256
+    start_training: int = 5000
+    buffer_capacity: int = 1_000_000
+
+    def __post_init__(self) -> None:
+        _check_choice("algorithm.name", self.name, XQCName)
+        for name in ("actor_hidden_dims", "critic_hidden_dims"):
+            dims = getattr(self, name)
+            if not dims or min(dims) < 1:
+                raise ValueError(f"{name}={dims}; need >= 1 positive entry")
+        for name in ("actor_lr", "critic_lr", "lr_end", "init_temperature"):
+            _check_positive(name, getattr(self, name))
+        if not 0.0 < self.tau <= 1.0:
+            raise ValueError(f"tau={self.tau}; must be in (0, 1]")
+        if self.min_v >= self.max_v:
+            raise ValueError(
+                f"min_v={self.min_v} must be below max_v={self.max_v}"
+            )
+        for name in (
+            "horizon",
+            "policy_delay",
+            "updates_per_step",
+            "batch_size",
+            "buffer_capacity",
+        ):
+            _check_min(name, getattr(self, name), 1)
+        _check_min("num_bins", self.num_bins, 2)
+        _check_min("start_training", self.start_training, 0)
+        if self.start_training >= self.buffer_capacity:
+            raise ValueError(
+                f"start_training={self.start_training} must be below "
+                f"buffer_capacity={self.buffer_capacity}"
             )
 
 
@@ -338,7 +392,7 @@ class RunConfig:
     seed: int
     total_steps: int
     protocol: int
-    algorithm: RLAlgoConfig | EvoRainbowAlgoConfig
+    algorithm: RLAlgoConfig | EvoRainbowAlgoConfig | XQCConfig
 
     def __post_init__(self) -> None:
         if self.total_steps < 1:
@@ -350,7 +404,8 @@ class RunConfig:
                 f"the {candidates} perturbations measured by deg"
             )
         if (
-            self.algorithm.shadow.enabled
+            not isinstance(self.algorithm, XQCConfig)
+            and self.algorithm.shadow.enabled
             and self.probe.enabled
             and self.probe.n_perturbations < SHADOW_PROBE_PICKS + 1
         ):
@@ -367,6 +422,14 @@ class RunConfig:
             raise ValueError(
                 "checkpoint.dir with algorithm.matched: a matched run stops "
                 "before the budget fractions are reached"
+            )
+        if (
+            isinstance(self.algorithm, XQCConfig)
+            and self.algorithm.start_training >= self.total_steps
+        ):
+            raise ValueError(
+                f"algorithm.start_training={self.algorithm.start_training} "
+                f"never trains within total_steps={self.total_steps}"
             )
         if isinstance(self.algorithm, RLAlgoConfig) and (
             self.algorithm.reset.enabled
