@@ -25,11 +25,11 @@ types:
 # everything: lint-check, types
 check: lint-check types
 
-# train one algorithm (td3 | sac | evorainbow); extra tokens are Hydra overrides
+# train one algorithm (td3 | td3-reset | evorainbow); extra tokens are Hydra overrides
 #   just train td3 Hopper-v5
-#   just train sac HalfCheetah-v5
+#   just train td3-reset HalfCheetah-v5
 #   just train evorainbow Swimmer-v5 algorithm.eval.mode=critic
-#   just train evorainbow Hopper-v5 algorithm.agent=sac seed=3
+#   just train evorainbow Hopper-v5 algorithm.shadow.enabled=true seed=3
 train algo="evorainbow" env="HalfCheetah-v5" *overrides:
     uv run python -m train \
       algorithm={{algo}} env.id={{env}} eval_env.id={{env}} \
@@ -43,8 +43,28 @@ smoke algo="evorainbow" env="Hopper-v5" *overrides:
       eval.interval=1000 eval.episodes=1 wandb.enabled=false \
       {{overrides}}
 
-# offline E1 measurement of one checkpoint dir; extra tokens are Hydra overrides
+# offline measurement of one checkpoint dir (signals | extra | pairs)
 #   just offline checkpoints/run/p050 results/run_p050.json
+#   just offline checkpoints/run/p100 results/pairs.json measurement=pairs
 offline checkpoint out *overrides:
     uv run python -m measure_offline \
       checkpoint={{checkpoint}} out={{out}} {{overrides}}
+
+# tables and verdicts from offline measurement JSONs
+#   just analyze-offline data/signals data/tables
+#   just analyze-offline data/signals data/tables --extra data/extra --pairs data/pairs
+analyze-offline signals out *args:
+    uv run python -m analysis.offline \
+      --signals {{signals}} --out {{out}} {{args}}
+
+# cache finished wandb runs (histories + perf/eval_final) of a suite spec
+fetch-runs spec="src/analysis/specs/surrogate.toml" cache="data/runs":
+    uv run python -m analysis.wandb_runs --spec {{spec}} --cache {{cache}}
+
+# final-score statistics of a suite, SLURM logs fill in runs without perf/eval_final
+#   just analyze-final data/surrogate.json
+#   just analyze-final data/surrogate.json logs/slurm-*.out
+analyze-final out *logs:
+    uv run python -m analysis.final_scores \
+      --spec src/analysis/specs/surrogate.toml --cache data/runs \
+      --out {{out}} --logs {{logs}}

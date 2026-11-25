@@ -185,7 +185,7 @@ class DegenerationProbe:
         )
 
     def measure(
-        self, agent: RLAgent, buffer: ReplayBuffer, key: jax.Array
+        self, agent: TD3, buffer: ReplayBuffer, key: jax.Array
     ) -> dict[str, float]:
         """Measure deg/* on buffer states, using no environment steps."""
         cfg = self._cfg
@@ -198,7 +198,7 @@ class DegenerationProbe:
             terms.heads, np.asarray(terms.delta_s), np.asarray(terms.t2)
         )
         if self._shadow:
-            if not isinstance(agent, TD3) or agent.shadow_critic is None:
+            if agent.shadow_critic is None:
                 raise TypeError(
                     "deg shadow probe needs a TD3 agent built with "
                     "shadow=True, set algorithm.shadow.enabled=true"

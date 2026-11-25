@@ -1,6 +1,12 @@
-# Offline E1 measurement of one checkpoint dir (<checkpoint.dir>/pXXX)
+# Offline measurement of one checkpoint dir (<checkpoint.dir>/pXXX)
 checkpoint: ???
 out: ???
+# signals: every signal vs truth on perturbed heads and the population,
+#   deg terms and the gradient probe
+# extra: Q1 terms (dS, t1, t2) of the same perturbed heads and the gradient
+#   noise floor (buffer vs fresh states)
+# pairs: antithetic +-eps head pairs scored by Q1 and by truth
+measurement: signals
 
 # actor-head perturbations: n_perturbations per sigma, relative to leaf std
 sigmas: [0.02, 0.05, 0.1, 0.2]
@@ -18,6 +24,9 @@ fqe_steps: 100_000
 fqe_batch_size: 256
 # gradient steps sized like the expected perturbation norm at these sigmas
 step_sigmas: [0.02, 0.05, 0.1]
+# pairs: n_pairs +-eps draws per sigma, relative to leaf std
+pair_sigmas: [0.05, 0.1]
+n_pairs: 20
 # environments stepped in parallel
 max_envs: 256
 

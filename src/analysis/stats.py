@@ -1,96 +1,132 @@
+from __future__ import annotations
+
 import numpy as np
 
 N_BOOT = 10_000
-# env -> condition -> per-seed scores; seeds are not paired across conditions
-Cells = dict[str, dict[str, np.ndarray]]
+# seed -> values pooled over checkpoints or pairs of that seed
+SeedValues = dict[int, list[float]]
 
 
-def iqm(x: np.ndarray, axis: int = -1) -> np.ndarray:
-    lo, hi = np.percentile(x, [25, 75], axis=axis, keepdims=True)
-    inside = (x >= lo) & (x <= hi)
-    return np.sum(np.where(inside, x, 0), axis=axis) / inside.sum(axis=axis)
+def seed_bootstrap(
+    by_seed: SeedValues, rng: np.random.Generator
+) -> tuple[float, float, float]:
+    """Median of pooled values and its 95% percentile CI over seeds."""
+    seeds = [s for s, v in by_seed.items() if np.isfinite(v).any()]
+    if not seeds:
+        return np.nan, np.nan, np.nan
+    pooled = np.concatenate([by_seed[s] for s in seeds])
+    point = float(np.nanmedian(pooled))
+    stats = np.empty(N_BOOT)
+    for b in range(N_BOOT):
+        pick = rng.choice(seeds, len(seeds), replace=True)
+        stats[b] = np.nanmedian(np.concatenate([by_seed[s] for s in pick]))
+    lo, hi = np.nanpercentile(stats, [2.5, 97.5])
+    return point, float(lo), float(hi)
 
 
-def normalize(cells: Cells) -> Cells:
-    # per env: 0 = worst condition mean, 1 = best condition mean
-    out: Cells = {}
-    for env, by_cond in cells.items():
-        means = [v.mean() for v in by_cond.values()]
-        lo, hi = min(means), max(means)
-        if hi == lo:
-            raise ValueError(
-                f"{env}: every condition has mean {lo}, cannot normalize. "
-                "drop the env or check the scores"
-            )
-        out[env] = {c: (v - lo) / (hi - lo) for c, v in by_cond.items()}
+def spearman(x: np.ndarray, y: np.ndarray) -> float:
+    """Spearman correlation with average ranks for ties."""
+
+    def ranks(v: np.ndarray) -> np.ndarray:
+        _, inv, counts = np.unique(v, return_inverse=True, return_counts=True)
+        ends = np.cumsum(counts)
+        return ((2 * ends - counts - 1) / 2.0)[inv.reshape(-1)]
+
+    rx, ry = ranks(x), ranks(y)
+    if rx.std() == 0 or ry.std() == 0:
+        return np.nan
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def ols_slope(x: np.ndarray, y: np.ndarray) -> float:
+    xc = x - x.mean()
+    return float(xc @ (y - y.mean()) / (xc @ xc))
+
+
+def iqm(x: np.ndarray) -> float:
+    """Interquartile mean: mean of the middle 50% of sorted values."""
+    x = np.sort(np.asarray(x, dtype=float))
+    cut = int(0.25 * len(x))
+    return float(x[cut : len(x) - cut].mean())
+
+
+def resample(strata: list[np.ndarray], rng: np.random.Generator) -> np.ndarray:
+    """N_BOOT stratified resamples, seeds drawn independently per stratum."""
+    idx = [rng.integers(0, len(x), (N_BOOT, len(x))) for x in strata]
+    return np.concatenate([x[i] for x, i in zip(strata, idx)], axis=1)
+
+
+def boot_iqm(strata: list[np.ndarray], rng: np.random.Generator) -> np.ndarray:
+    draws = np.sort(resample(strata, rng), axis=1)
+    cut = int(0.25 * draws.shape[1])
+    return draws[:, cut : draws.shape[1] - cut].mean(axis=1)
+
+
+def ci(point: float, draws: np.ndarray) -> dict[str, float]:
+    lo, hi = np.percentile(draws, [2.5, 97.5])
+    return {"point": point, "lo": float(lo), "hi": float(hi)}
+
+
+def iqm_ci(strata: list[np.ndarray], rng: np.random.Generator) -> dict:
+    out: dict = ci(iqm(np.concatenate(strata)), boot_iqm(strata, rng))
+    out["n"] = int(sum(len(x) for x in strata))
     return out
 
 
-def pooled(cells: Cells, cond: str) -> np.ndarray:
-    return np.concatenate([by_cond[cond] for by_cond in cells.values()])
+def iqm_diff(
+    a: list[np.ndarray],
+    b: list[np.ndarray],
+    rng: np.random.Generator,
+    family_alpha: float,
+) -> dict[str, float]:
+    """IQM(a) - IQM(b), bootstrap CI, two-sided p, Bonferroni CI.
 
-
-def boot_iqm(
-    cells: Cells, conds: list[str], rng: np.random.Generator
-) -> dict[str, np.ndarray]:
-    # stratified by env, seeds resampled independently per (env, condition)
-    out = {}
-    for c in conds:
-        draws = []
-        for by_cond in cells.values():
-            v = by_cond[c]
-            idx = rng.integers(0, len(v), (N_BOOT, len(v)))
-            draws.append(v[idx])
-        out[c] = iqm(np.concatenate(draws, axis=1))
+    family_alpha is alpha / number of tests, so lo_bonf/hi_bonf bound the
+    Holm-adjusted interval from outside.
+    """
+    point = iqm(np.concatenate(a)) - iqm(np.concatenate(b))
+    d = boot_iqm(a, rng) - boot_iqm(b, rng)
+    below = (np.sum(d <= 0) + 1) / (N_BOOT + 1)
+    above = (np.sum(d >= 0) + 1) / (N_BOOT + 1)
+    out = ci(point, d)
+    out["p"] = float(min(1.0, 2 * min(below, above)))
+    tail = 100 * family_alpha / 2
+    lo, hi = np.percentile(d, [tail, 100 - tail])
+    out["lo_bonf"], out["hi_bonf"] = float(lo), float(hi)
     return out
 
 
-def ci(draws: np.ndarray, level: float = 0.95) -> list[float]:
-    tail = (1 - level) / 2 * 100
-    return np.percentile(draws, [tail, 100 - tail]).tolist()
-
-
-def prob_greater(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    gt = (a[..., :, None] > b[..., None, :]).mean(axis=(-1, -2))
-    eq = (a[..., :, None] == b[..., None, :]).mean(axis=(-1, -2))
-    return gt + 0.5 * eq
-
-
-def prob_greater_ci(
-    cells: Cells, a: str, b: str, rng: np.random.Generator
-) -> dict[str, float | list[float]]:
-    # P(A > B) for a random seed pair within an env, averaged over envs
-    point = np.mean([prob_greater(d[a], d[b]) for d in cells.values()])
-    draws = []
-    for d in cells.values():
-        va, vb = d[a], d[b]
-        ia = rng.integers(0, len(va), (N_BOOT, len(va)))
-        ib = rng.integers(0, len(vb), (N_BOOT, len(vb)))
-        draws.append(prob_greater(va[ia], vb[ib]))
-    return {"p": float(point), "ci": ci(np.mean(draws, axis=0))}
-
-
-def p_superiority(diff_draws: np.ndarray) -> float:
-    # two-sided percentile-bootstrap p for H0: diff = 0
-    below = (1 + np.sum(diff_draws <= 0)) / (1 + len(diff_draws))
-    above = (1 + np.sum(diff_draws >= 0)) / (1 + len(diff_draws))
-    return float(min(1.0, 2 * min(below, above)))
-
-
-def p_equivalence(diff_draws: np.ndarray, margin: float) -> float:
-    # TOST: both one-sided tests must reject |diff| >= margin
-    n = len(diff_draws)
-    upper = (1 + np.sum(diff_draws >= margin)) / (1 + n)
-    lower = (1 + np.sum(diff_draws <= -margin)) / (1 + n)
-    return float(max(upper, lower))
-
-
-def holm(pvalues: list[float]) -> list[float]:
-    order = np.argsort(pvalues)
-    m = len(pvalues)
-    adjusted = np.empty(m)
-    running = 0.0
+def holm(ps: list[float], alpha: float) -> list[bool]:
+    order = np.argsort(ps)
+    reject = [False] * len(ps)
     for rank, i in enumerate(order):
-        running = max(running, (m - rank) * pvalues[i])
-        adjusted[i] = min(1.0, running)
-    return adjusted.tolist()
+        if ps[i] > alpha / (len(ps) - rank):
+            break
+        reject[i] = True
+    return reject
+
+
+def prob_improvement(
+    a: list[np.ndarray], b: list[np.ndarray], rng: np.random.Generator
+) -> dict[str, float]:
+    """P(a run of A beats a run of B), averaged over strata, with CI."""
+
+    def p_of(xa: list[np.ndarray], xb: list[np.ndarray]) -> np.ndarray:
+        per_env = []
+        for x, y in zip(xa, xb):
+            gt = (x[..., :, None] > y[..., None, :]).mean(axis=(-1, -2))
+            eq = (x[..., :, None] == y[..., None, :]).mean(axis=(-1, -2))
+            per_env.append(gt + 0.5 * eq)
+        return np.mean(per_env, axis=0)
+
+    point = float(p_of(a, b))
+    da = [x[rng.integers(0, len(x), (N_BOOT, len(x)))] for x in a]
+    db = [y[rng.integers(0, len(y), (N_BOOT, len(y)))] for y in b]
+    return ci(point, p_of(da, db))
+
+
+def mean_ci(x: np.ndarray, rng: np.random.Generator) -> dict:
+    draws = x[rng.integers(0, len(x), (N_BOOT, len(x)))]
+    out: dict = ci(float(x.mean()), draws.mean(axis=1))
+    out["n"] = int(len(x))
+    return out

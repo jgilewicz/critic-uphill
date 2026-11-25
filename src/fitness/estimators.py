@@ -142,10 +142,7 @@ class FullEpisodeFitness:
 
 
 class CriticBufferFitness:
-    """Score each individual by mean Q1(s, pi_i(s)) on replay buffer states.
-
-    With shadow=True the shadow critic's first head scores instead of Q1.
-    """
+    """Score each individual by mean Q1(s, pi_i(s)) on replay buffer states."""
 
     uses_real_steps: bool = False
 
@@ -155,22 +152,14 @@ class CriticBufferFitness:
         buffer: ReplayBuffer,
         *,
         critic_states: int,
-        shadow: bool = False,
     ) -> None:
-        if shadow and agent.shadow_critic is None:
-            raise ValueError(
-                "shadow surrogate needs an agent with a shadow critic, "
-                "set algorithm.shadow.enabled=true"
-            )
         self._agent = agent
         self._buffer = buffer
         self._critic_states = critic_states
-        self._shadow = shadow
 
     def _scores(self, heads: Any, key: jax.Array) -> jax.Array:
         states = self._buffer.sample_states(key, self._critic_states)
-        critic = self._agent.shadow_critic if self._shadow else None
-        return self._agent.q1_population_mean(heads, states, critic=critic)
+        return self._agent.q1_population_mean(heads, states)
 
     def evaluate(
         self,
@@ -425,7 +414,6 @@ def build_fitness_estimator(
     *,
     horizon: int,
     gamma: float,
-    shadow: bool = False,
 ) -> FitnessEstimator:
     """Construct the configured fitness estimator with per-individual gating."""
     full = FullEpisodeFitness(
@@ -449,7 +437,6 @@ def build_fitness_estimator(
             agent,
             buffer,
             critic_states=eval_cfg.critic_states,
-            shadow=shadow,
         )
     else:
         surrogate = HStepBootstrapFitness(

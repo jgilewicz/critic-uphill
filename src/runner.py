@@ -6,11 +6,10 @@ from typing import Any, cast
 
 import wandb
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import DictConfig, OmegaConf
 
 from algos import EvoRainbowTrainer, RLTrainer
 from config import (
-    RL_CONFIG_CLASSES,
     CEMConfig,
     CheckpointConfig,
     DegConfig,
@@ -21,12 +20,12 @@ from config import (
     MatchedConfig,
     ProbeConfig,
     RLAlgoConfig,
-    RLConfig,
     ResetConfig,
     RLToEAConfig,
     RunConfig,
     RunEvalConfig,
     ShadowConfig,
+    TD3RLConfig,
     WandbConfig,
 )
 from environments import validate_env_id
@@ -61,18 +60,12 @@ def _check_unknown_keys(
         )
 
 
-def _build_rl_config(agent_name: str, raw: dict[str, Any]) -> RLConfig:
-    cfg_cls = RL_CONFIG_CLASSES.get(agent_name)
-    if cfg_cls is None:
-        choices = tuple(RL_CONFIG_CLASSES)
-        raise ValueError(
-            f"Unsupported algorithm.agent={agent_name!r}; choose from {choices}"
-        )
+def _build_rl_config(raw: dict[str, Any]) -> TD3RLConfig:
     raw = dict(raw)
-    _check_unknown_keys(cfg_cls, raw, f"{agent_name}.rl")
+    _check_unknown_keys(TD3RLConfig, raw, "algorithm.rl")
     dims = raw.pop("critic_hidden_dims")
     raw["critic_hidden_dims"] = tuple(int(d) for d in dims)
-    return cfg_cls(**raw)
+    return TD3RLConfig(**raw)
 
 
 def _pop_section(
@@ -104,8 +97,8 @@ def _build_algorithm(
 ) -> RLAlgoConfig | EvoRainbowAlgoConfig:
     algo = dict(raw)
     name = algo.pop("name", None)
-    if name in RL_CONFIG_CLASSES:
-        rl = _build_rl_config(str(name), _pop_section(algo, "rl", str(name)))
+    if name == "td3":
+        rl = _build_rl_config(_pop_section(algo, "rl", "td3"))
         reset = _build_reset_config(algo.pop("reset", {}))
         shadow = _build_section(
             ShadowConfig, algo.pop("shadow", {}), "algorithm.shadow"
@@ -125,8 +118,7 @@ def _build_algorithm(
                 "algorithm.reset is only supported for standalone td3. "
                 "use algorithm=td3-reset"
             )
-        agent = str(algo.get("agent", "td3"))
-        rl = _build_rl_config(agent, _pop_section(algo, "rl", "evorainbow"))
+        rl = _build_rl_config(_pop_section(algo, "rl", "evorainbow"))
         er_payload: dict[str, Any] = {
             "rl": rl,
             "cem": _build_section(
@@ -165,7 +157,7 @@ def _build_algorithm(
             EvoRainbowAlgoConfig, er_payload, "algorithm (evorainbow)"
         )
         return EvoRainbowAlgoConfig(**er_payload)
-    choices = (*RL_CONFIG_CLASSES, "evorainbow")
+    choices = ("td3", "evorainbow")
     raise ValueError(
         f"Unsupported algorithm.name={name!r}; choose from {choices}"
     )
@@ -242,31 +234,6 @@ def _was_overridden(key: str) -> bool:
     )
 
 
-def _apply_agent_rl_defaults(cfg: DictConfig) -> None:
-    if cfg.algorithm.name != "evorainbow":
-        return
-    agent = str(cfg.algorithm.get("agent", ""))
-    if agent not in RL_CONFIG_CLASSES:
-        choices = tuple(RL_CONFIG_CLASSES)
-        raise ValueError(
-            f"Unsupported algorithm.agent={agent!r}; choose from {choices}"
-        )
-    if agent == "td3":
-        return
-    agent_yaml = _CONF_ALGO_DIR / f"{agent}.yaml"
-    agent_cfg = cast("DictConfig", OmegaConf.load(agent_yaml))
-    agent_rl = agent_cfg.rl
-    with open_dict(cfg.algorithm.rl):
-        for key in list(cfg.algorithm.rl.keys()):
-            if key not in agent_rl and not _was_overridden(
-                f"algorithm.rl.{key}"
-            ):
-                del cfg.algorithm.rl[key]
-        for key, value in agent_rl.items():
-            if not _was_overridden(f"algorithm.rl.{key}"):
-                cfg.algorithm.rl[key] = value
-
-
 def _apply_env_preset(cfg: DictConfig) -> None:
     if cfg.algorithm.name != "evorainbow":
         return
@@ -300,7 +267,6 @@ def build_run_config(cfg: DictConfig) -> RunConfig:
     """Validate Hydra DictConfig and convert it into a frozen RunConfig."""
     validate_env_id(str(cfg.env.id))
     validate_env_id(str(cfg.eval_env.id))
-    _apply_agent_rl_defaults(cfg)
     _apply_env_preset(cfg)
     raw = cast("dict[str, Any]", OmegaConf.to_container(cfg, resolve=True))
     unknown = sorted(set(raw) - _ALLOWED_TOP_KEYS)
@@ -332,12 +298,11 @@ def run_training(cfg: DictConfig) -> float:
     if isinstance(run_cfg.algorithm, EvoRainbowAlgoConfig):
         algo = run_cfg.algorithm
         print(
-            f"config | env={run_cfg.env.id} | agent={algo.agent} | "
+            f"config | env={run_cfg.env.id} | "
             f"mode={algo.eval.mode} | damp={algo.cem.damp} | "
             f"ea_to_rl.tau={algo.ea_to_rl.tau} | p_real={algo.eval.p_real} | "
             f"period={algo.rl_to_ea.period} | "
             f"shadow={algo.shadow.enabled} | "
-            f"shadow_surrogate={algo.shadow.surrogate} | "
             f"matched={algo.matched.generations}/{algo.matched.rl_updates}"
         )
     run = wandb.init(
@@ -365,5 +330,6 @@ def run_training(cfg: DictConfig) -> float:
     except BaseException:
         run.finish(exit_code=1)
         raise
+    run.summary["perf/eval_final"] = eval_reward
     run.finish()
     return eval_reward
