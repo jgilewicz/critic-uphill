@@ -276,7 +276,7 @@ just analyze-final data/surrogate.json logs/slurm-*.out   # older runs: final ev
 
 ## Suites on the cluster
 
-`slurm_run_array.sh` runs one condition and seed per array task on WCSS Lem (`lem-gpu`, 1 GPU). Task ID = condition index × number of seeds + seed position. `SEEDS` (default `0 1 2 3 4 5 6 7 8 9`) changes the seed list. `scripts/submit_suite.sh <suite> <env>...` submits one array per env with tag `critic-uphill-<suite>-v1`.
+`slurm_run_array.sh` runs one condition and seed per array task on WCSS Lem (`lem-gpu`, 1 GPU, 2 cores: a job keeps about one core busy, and billing counts allocated cores). Task ID = condition index × number of seeds + seed position. `SEEDS` (default `0 1 2 3 4 5 6 7 8 9`) changes the seed list. `scripts/submit_suite.sh <suite> <env>...` submits one array per env with tag `critic-uphill-<suite>-v1`.
 
 | Suite | Array | Conditions | Purpose |
 |---|---|---|---|
